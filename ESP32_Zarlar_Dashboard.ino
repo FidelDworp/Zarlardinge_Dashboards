@@ -1,12 +1,11 @@
-/* ESP32 WROOM - Zarlar Dashboard Server
+/* ESP32_Zarlar_Dashboard = Server voor alle ROOM pages op ESP32 WROOM controller
  * Author: Fidel Dworp
- * Date: 26 jan 2026 21:00
+ * Rev.Date: 26 feb 2026 20:00
  * 
  * Standalone webserver voor Zarlar dashboard
  * - Particle Photon: JSON fetch met correcte labels
  * - ESP32 controllers: iFrame embedded UI
- * 
- * ACCESS: http://192.168.1.3/ of http://zarlar.local/
+ * Use Fixed IP: 192.168.0.60 of http://zarlar.local/
  */
 
 #include <WiFi.h>
@@ -24,9 +23,9 @@ const char* MDNS_NAME = "zarlar";          // → http://zarlar.local/
 // TIP: Stel statische DHCP reservering in op je router voor beste resultaten
 
 // Optie 1: Statische IP adressen (werkt altijd, indien correct geconfigureerd)
-const char* ECO_URL_IP = "http://192.168.0.125/";      // Huidig DHCP adres
-const char* TESTROOM_URL_IP = "http://192.168.0.147/"; // Huidig DHCP adres  
-const char* HVAC_URL_IP = "http://192.168.0.212/";     // Huidig DHCP adres
+const char* ECO_URL_IP = "http://192.168.0.71/";      // Huidig DHCP adres
+const char* TESTROOM_URL_IP = "http://192.168.0.80/"; // Huidig DHCP adres  
+const char* HVAC_URL_IP = "http://192.168.0.70/";     // Huidig DHCP adres
 
 // Optie 2: Bonjour/mDNS namen (werkt niet in alle browsers!)
 const char* ECO_URL_MDNS = "http://eco.local/";
@@ -96,10 +95,14 @@ void setup() {
   Serial.println("║  24 januari 2026             ║");
   Serial.println("╚══════════════════════════════╝\n");
   
-  // WiFi verbinden
+  // WiFi verbinden met FIXED IP!
   WiFi.mode(WIFI_STA);
+  IPAddress static_ip(192, 168, 0, 60);
+  IPAddress gateway(192, 168, 0, 1);
+  IPAddress subnet(255, 255, 255, 0);
+  WiFi.config(static_ip, gateway, subnet, gateway);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  
+
   Serial.print("Verbinden met WiFi");
   int retries = 0;
   while (WiFi.status() != WL_CONNECTED && retries < 30) {
