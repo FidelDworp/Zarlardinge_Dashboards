@@ -426,7 +426,12 @@ String getMainPage() {
     "}"
     "function open(i){"
     "  var c=C[i];"
-    "  document.getElementById('pt').textContent='▸ '+c.n;"
+
+    "  var pu=c.t===0?'':`http://${c.ip}/`;"
+    "  document.getElementById('pt').innerHTML=pu?"
+    "    `<a href='${pu}' target='_blank' style='color:#f0a500;text-decoration:none'>▸ ${c.n} ↗</a>`:"
+    "    '▸ '+c.n;"
+    
     "  var p=document.getElementById('portal');"
     "  if(c.t===0){"
     "    p.innerHTML='<div class=\"empty\" style=\"color:#f0c040\">⏳ Laden '+c.n+'...</div>';"
