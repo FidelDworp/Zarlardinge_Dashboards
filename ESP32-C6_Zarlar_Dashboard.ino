@@ -1,5 +1,5 @@
 /* ============================================================
-   Zarlar Dashboard v2.3
+   Zarlar Dashboard v2.4
    ESP32-C6 (30-pin) @ 192.168.0.60 — http://zarlar.local
    Filip Delannoy
 
@@ -22,6 +22,8 @@
      mDNS      : http://zarlar.local
      AP SSID   : Zarlar-Setup (bij geen WiFi)
 
+   16mar26        v2.4  HOME/UIT knop: broadcast naar alle actieve rooms via /set_home?v=N.
+                        home_mode_global persistent in NVS. Nul heap-impact.
    11mar26 15:00  v2.3  WiFi sleep uitgeschakeld (betere bereikbaarheid Safari/iPhone).
                         AP + captive portal toegevoegd voor setup zonder flash.
                         HTML vereenvoudigd voor minder heap gebruik.
@@ -111,6 +113,7 @@ const char* NVS_WIFI_PASS   = "wifi_pass";
 const char* NVS_POLL_MIN    = "poll_min";
 const char* NVS_MAX_ROWS    = "max_rows";
 const char* NVS_ROOM_SCRIPT = "room_script";
+const char* NVS_HOME_GLOBAL = "home_global"; // v2.4: globale HOME/UIT toestand
 
 // ============================================================
 // GLOBALS
@@ -129,6 +132,7 @@ unsigned long last_poll_cycle  = 0;
 int           poll_index       = 0;
 bool          polling_active   = false;
 unsigned long poll_step_timer  = 0;
+bool          home_mode_global = false; // v2.4: globale HOME/UIT toestand voor alle rooms
 
 // ============================================================
 // NVS LADEN / OPSLAAN
@@ -140,6 +144,7 @@ void loadNVS() {
   poll_minutes    = preferences.getInt(NVS_POLL_MIN, 10);
   max_rows        = preferences.getInt(NVS_MAX_ROWS, 10000);
   room_script_url = preferences.getString(NVS_ROOM_SCRIPT, "");
+  home_mode_global = preferences.getBool(NVS_HOME_GLOBAL, false); // v2.4
   for (int i = 0; i < NUM_CONTROLLERS; i++) {
     String ka = "c" + String(i) + "_act";
     String ku = "c" + String(i) + "_url";
@@ -263,6 +268,31 @@ void pollESP32Controller(int i) {
   }
 }
 
+
+
+// ============================================================
+// HOME/UIT BROADCAST — v2.4
+// Stuurt /set_home?v=N naar alle actieve TYPE_ROOM controllers
+// Stack-only: zelfde HTTPClient patroon als pollESP32Controller
+// Korte timeouts (1s/2s) → snelle failure bij offline rooms
+// ============================================================
+void setAllRoomsHomeMode(int mode) {
+  for (int i = 0; i < NUM_CONTROLLERS; i++) {
+    if (!controllers[i].active) continue;
+    if (controllers[i].type != TYPE_ROOM) continue;
+    if (strlen(controllers[i].ip) == 0) continue;
+    char url[48];
+    snprintf(url, sizeof(url), "http://%s/set_home?v=%d", controllers[i].ip, mode);
+    HTTPClient http;
+    http.begin(url);
+    http.setTimeout(2000);
+    http.setConnectTimeout(1000);
+    int code = http.GET();
+    Serial.printf("[HOME] %s → %s (HTTP %d)\n", controllers[i].name, mode ? "HOME" : "UIT", code);
+    http.end();
+  }
+}
+
 // ============================================================
 // LOG NAAR GOOGLE SHEETS
 // ============================================================
@@ -277,7 +307,12 @@ void logControllerToSheets(int i) {
   http.begin(url.c_str());
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(10000);
-  int code = http.POST(controllers[i].last_json);
+
+  // Injecteer "room":"R-TESTROOM" vooraan in de bestaande JSON string:
+  String j = controllers[i].last_json;
+  j = "{\"room\":\"" + String(controllers[i].name) + "\"," + j.substring(1);
+  int code = http.POST(j);
+
   if (code == 200 || code == 302) {
     Serial.printf("  [Sheets] %s OK ✓\n", controllers[i].name);
   } else {
@@ -285,6 +320,8 @@ void logControllerToSheets(int i) {
   }
   http.end();
 }
+
+
 
 // ============================================================
 // POLL CYCLUS — gespreid 2s per controller
@@ -373,13 +410,19 @@ String getMainPage() {
     "#portal iframe{width:100%;height:700px;border:none;display:block;background:#fff}"
     "#portal .empty{padding:40px;text-align:center;color:#555}"
     "@media(max-width:600px){.btn{min-width:100px}#portal iframe{height:450px}}"
+    ".hbtn{padding:4px 10px;border-radius:3px;font-size:11px;cursor:pointer;font-family:monospace}"
+    ".hbtn.on{background:#1a3a1a;color:#2ecc40;border:1px solid #2ecc40}"
+    ".hbtn.off{background:#1c2128;color:#666;border:1px solid #444}"
     "</style></head><body>"
     "<div class='hdr'><span class='hdr-t'>⬡ ZARLAR</span>"
     "<span class='hdr-r' id='clk'>192.168.0.60</span></div>"
     "<div class='nav'>"
     "<a href='/'>Dashboard</a>"
     "<a href='/settings'>⚙ Settings</a>"
-    "<a href='/info'>Info</a></div>"
+    "<a href='/info'>Info</a>"
+    "<button id='hb' class='hbtn ");
+  h += home_mode_global ? "on' onclick='setH(0)'>● HOME" : "off' onclick='setH(1)'>○ UIT";
+  h += F("</button></div>"
     "<div class='wrap'>"
     "<div class='sec'><div class='sec-t'>▸ Systeem</div>"
     "<div class='grid' id='gs'></div></div>"
@@ -479,6 +522,7 @@ String getMainPage() {
     "setInterval(pollStatus,15000);"
     "setInterval(function(){document.getElementById('clk').textContent="
     "'192.168.0.60 | '+new Date().toLocaleTimeString('nl-BE');},1000);"
+    "function setH(v){fetch('/set_home_global?v='+v).then(function(){var b=document.getElementById('hb');b.className='hbtn '+(v?'on':'off');b.textContent=v?'● HOME':'○ UIT';b.onclick=function(){setH(v?0:1);};});}"
     "</script></body></html>");
   return h;
 }
@@ -633,6 +677,17 @@ void setupWebServer() {
       "</body></html>");
     delay(2000);
     ESP.restart();
+  });
+
+  server.on("/set_home_global", HTTP_GET, []() {
+    int v = server.hasArg("v") ? constrain(server.arg("v").toInt(), 0, 1) : 0;
+    home_mode_global = (v == 1);
+    preferences.begin(NVS_NS, false);
+    preferences.putBool(NVS_HOME_GLOBAL, home_mode_global);
+    preferences.end();
+    server.send(200, "text/plain", "OK");  // Respond direct — browser fetch() is klaar
+    setAllRoomsHomeMode(v);               // Dan pas rooms aanspreken
+    Serial.printf("[HOME] Globale toestand → %s\n", v ? "HOME" : "UIT");
   });
 
   // Captive portal redirects
