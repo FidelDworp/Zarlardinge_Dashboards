@@ -8,7 +8,7 @@
 
 ### 1.1 Wat is Zarlar?
 
-Een volledig zelfgebouwd thuisautomatiseringssysteem op basis van drie ESP32-C6 controllers, elk met een eigen AsyncWebServer en Matter-integratie via WiFi. Een vierde apparaat — het **Zarlar Dashboard** op 192.168.0.60 — fungeert als centrale dataverzamelaar: het pollt de JSON-endpoints van alle controllers en POST de data naar Google Sheets via Google Apps Script.
+Een volledig zelfgebouwd thuisautomatiseringssysteem op basis van drie ESP32-C6 controllers, elk met een eigen AsyncWebServer en Matter-integratie via WiFi. Een vierde apparaat — het **Zarlar Dashboard** op 192.168.0.60 — fungeert als centrale dataverzamelaar: het pollt de JSON-endpoints van alle controllers en POST de data naar Google Sheets via Google Apps Script. Het Dashboard heeft ook één Matter-endpoint: een HOME/UIT schakelaar (`MatterOnOffPlugin`) die alle room-controllers aanstuurt.
 
 ```
 [ROOM 192.168.0.80] ──┐
@@ -16,6 +16,9 @@ Een volledig zelfgebouwd thuisautomatiseringssysteem op basis van drie ESP32-C6 
 [ECO  192.168.0.71] ──┘
          │
          └──→ Apple Home (via Matter/WiFi)
+                    ↕
+              Dashboard Matter
+              HOME/UIT toggle
 ```
 
 **Belangrijk leermoment:** de HVAC-controller deed vroeger zelf de HTTPS POST naar Google Sheets. Dit mislukte structureel (te lang, heap-druk). De POST is nu volledig gedelegeerd aan het Zarlar Dashboard. Elke controller publiceert alleen zijn `/json` endpoint — het dashboard doet de rest.
@@ -27,9 +30,9 @@ Een volledig zelfgebouwd thuisautomatiseringssysteem op basis van drie ESP32-C6 
 | **HVAC** | 192.168.0.70 | 58:8C:81:32:29:54 | v1.18 | ✅ Productie, stabiel |
 | **ECO Boiler** | 192.168.0.71 | 58:8C:81:32:2B:D4 | v1.22 | ✅ Productie, stabiel |
 | **ROOM** | 192.168.0.80 | 58:8C:81:5D:B0:88 | v2.10 | ✅ Matter + heap stabiel |
-| **Zarlar Dashboard** | 192.168.0.60 | — | — | Verzamelt JSON, POST naar Google |
+| **Zarlar Dashboard** | 192.168.0.60 | — | v3.0 | ✅ Matter HOME/UIT, WiFi tester |
 
-### 1.3 Partitietabel (identiek voor alle drie)
+### 1.3 Partitietabel (identiek voor ALLE vier controllers)
 
 Bestand: `partitions_16mb.csv` — plaatsen naast het `.ino` bestand in de schetsmap.
 
@@ -43,13 +46,16 @@ Bestand: `partitions_16mb.csv` — plaatsen naast het `.ino` bestand in de schet
 
 ⚠️ **Nooit `huge_app` gebruiken** — had maar één app-slot en brak OTA. `app0` + `app1` elk 6 MB → OTA volledig werkend.
 
-### 1.4 Arduino IDE instellingen
+⚠️ **Nooit een 4MB controller gebruiken voor het Dashboard** — de `partitions_16mb.csv` past niet op 4MB flash. Dit veroorzaakte een bootloop (`partition size 0x600000 exceeds flash chip size 0x400000`). Het Dashboard gebruikt nu een 32-pin 16MB controller, identiek aan de andere drie.
+
+### 1.4 Arduino IDE instellingen (alle vier controllers)
 
 | Instelling | Waarde |
 |---|---|
 | Board | ESP32C6 Dev Module |
+| Flash Size | **16 MB** |
 | Partition Scheme | Custom → `partitions_16mb.csv` uit schetsmap |
-| Flash Size | 16 MB |
+| USB CDC On Boot | **Enabled** (verplicht voor Serial over USB-C) |
 | Upload (eerste keer) | USB |
 | Upload (daarna) | OTA via Arduino IDE → Sketch → Upload via OTA |
 
@@ -65,6 +71,8 @@ Elke sketch begint met:
 #define Serial Serial0
 ```
 **Positie is kritiek:** staat hij ná de `#include` statements → 100+ cascade-compilatiefouten.
+
+⚠️ **`#define Serial Serial0` mag NIET aanwezig zijn zonder Matter.** Zonder Matter stuurt deze define de output naar UART0 (fysieke pins) in plaats van USB CDC — Serial monitor blijft leeg. Alleen toevoegen als Matter effectief geïntegreerd is.
 
 De **versieheader** als blokcommentaar bevat datum, versienummer en beschrijving per wijziging. Let op: schrijf **`* /`** (met spatie) als je `*/` bedoelt in de tekst — anders breekt de blokcommentaar.
 
@@ -88,6 +96,9 @@ De ESP32-C6 heeft 512 KB SRAM. Matter + WiFi reserveren ~130–140 KB. De 16 MB 
 - `http.getString()` → **`http.getStream()` + `DeserializationOption::Filter`** — elimineert ~1 KB String-allocatie per poll
 - `buildJson()` / log-JSON → **pure `snprintf` naar static `char buf[]`** — nul heap-alloc
 
+**`WebServer` vs `AsyncWebServer`:**
+Het Dashboard gebruikt `WebServer` (blocking) — dit is bewust gekozen. Voor een dashboard zonder zware gelijktijdige belasting is `WebServer` beter: minder heap (~10KB verschil), minder complex, bewezen stabiel. `AsyncWebServer` heeft hier geen voordeel.
+
 ### 2.3 DS18B20 / OneWireNg
 
 | Regel | Detail |
@@ -109,6 +120,7 @@ De ESP32-C6 heeft 512 KB SRAM. Matter + WiFi reserveren ~130–140 KB. De 16 MB 
 | `nvs_flash_erase()` niet vanuit async handler | Gebruik vlag: `matter_nuclear_reset_requested = true` → uitvoeren in `loop()` |
 | Matter reset bij endpoint-wijziging | Type of volgorde wijzigen → pairing wissen vóór herpairing |
 | `MatterOnOffLight` vs `MatterOnOffPlugin` | Lichten: `OnOffLight`. Logische schakelaars: `OnOffPlugin`. |
+| Pairing code niet alleen via Serial | Serial is onbetrouwbaar op ESP32-C6 via USB. Toon pairing code altijd ook in de webUI (`/settings`). |
 
 **Auto-recovery bij corrupt NVS** (toepassen bij Matter-initialisatie):
 ```cpp
@@ -120,6 +132,13 @@ if (!Matter.isDeviceCommissioned() && Matter.getManualPairingCode().length() < 5
   ESP.restart();
 }
 ```
+
+**matterNuclearReset() patroon** (settings bewaard, Matter-NVS gewist):
+1. Laad alle config-keys naar lokale RAM-variabelen
+2. `nvs_flash_erase()` — wist volledige NVS partitie
+3. `nvs_flash_init()` — herinitialiseer NVS
+4. Schrijf config-keys terug naar eigen namespace
+5. `ESP.restart()`
 
 ### 2.5 AsyncWebServer handlers
 
@@ -165,7 +184,7 @@ if (heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) < 25000) {
 ```
 Crash-info tonen in `/settings`: laatste reden + teller + resetknop.
 
-### 2.9 Serial commando's (alle drie sketches)
+### 2.9 Serial commando's (alle vier sketches)
 
 | Commando | Effect |
 |---|---|
@@ -177,6 +196,7 @@ Crash-info tonen in `/settings`: laatste reden + teller + resetknop.
 
 | Namespace | Eigenaar | Mag aanraken? |
 |---|---|---|
+| `zarlar` | Dashboard sketch | ✅ |
 | `room-config` | ROOM sketch | ✅ |
 | `hvac-config` | HVAC sketch | ✅ |
 | `eco-config` | ECO sketch | ✅ |
@@ -184,6 +204,22 @@ Crash-info tonen in `/settings`: laatste reden + teller + resetknop.
 | `chip-factory` | Matter intern | ❌ Niet aanraken |
 | `chip-config` | Matter intern | ❌ Niet aanraken |
 | `chip-counters` | Matter intern | ❌ Niet aanraken |
+
+### 2.11 Serial monitor — bekende valkuilen ESP32-C6
+
+- **Serial blijft leeg na boot:** `USB CDC On Boot` staat op `Disabled` in Arduino IDE → zetten op `Enabled`
+- **Serial blijft leeg na boot (2):** `#define Serial Serial0` aanwezig zonder Matter → verwijderen
+- **Serial mist boot-berichten:** sketch print te snel na reset, monitor opent te laat → `delay(3000)` na `Serial.begin(115200)` in `setup()`
+- **Captive portal werkt niet op Mac Safari:** `onNotFound` alleen volstaat niet — expliciete handlers nodig voor Apple/Android/Windows detectie-URLs (zie §6.5)
+
+### 2.12 WiFi scan — lessen
+
+- `WiFi.channel(k)` kan `0` teruggeven voor bepaalde netwerken → `ch < 1` filter verwijdert geldige netwerken
+- ESP32-C6 is **2.4GHz-only** → geen channel-filter nodig
+- TCP-ping naar gateway: gebruik **port 53 (DNS)** — altijd open. Port 80 (HTTP) is vaak gesloten op routers
+- RSSI-waarden zijn negatief → in JavaScript is `c.r` falsy als `r === 0` maar truthy als `r === -62`. Gebruik `c.r !== 0` als conditie, niet `c.r`
+- `Math.abs(c.r)` voor weergave — minteken weglaten vermijdt layout-problemen
+- `font-size` < 11px wordt onderdrukt door iOS Safari — gebruik minimum 11px. Voeg `-webkit-text-size-adjust:none` toe aan body
 
 ---
 
@@ -201,124 +237,27 @@ Crash-info tonen in `/settings`: laatste reden + teller + resetknop.
 ### 3.2 Heap-baseline (v1.18)
 
 ```
-Runtime: ~20% free    Largest block: ~32 KB  ✅ acceptabel
+Setup:   free=~180KB  largest=~55KB
+Runtime: largest_block stabiel >35KB  ✅
 ```
 
-### 3.3 Verwarmingslogica — beslissingsvolgorde per circuit
+### 3.3 Matter endpoints (v1.18)
 
-```
-1. Override actief (< 10 min)?         → relay = override_state, stop
-2. Circuit OFFLINE?                     → relay = TSTAT only
-3. Iemand THUIS (home_status = 1)?      → relay = TSTAT OR HTTP
-4. Niemand thuis                        → relay = HTTP only
-```
+| # | Type | Variabele | Opmerking |
+|---|---|---|---|
+| EP1 | MatterTemperatureSensor | `sch_temps[0]` | Boiler top |
+| EP2–EP8 | MatterOnOffPlugin | `circuits[0..6]` | Kringen 1–7 |
+| EP9 | MatterFan | `vent_percent` | Ventilatie % |
 
-### 3.4 Ventilatie
+### 3.4 RSSI key in /json
 
-`effective_vent = max(vent_rooms, vent_override_active ? vent_override_percent : 0)`
+| Key | Label |
+|---|---|
+| `ac` | RSSI (dBm) |
 
-Deze formule staat op **4 plaatsen** — altijd consistent houden:
-1. `pollRooms()` → PWM-pin
-2. `buildLogJson()` → JSON key `x`
-3. `/set_vent` handler
-4. `update_matter_sensors()`
+### 3.5 Openstaande punten HVAC
 
-Override vervalt automatisch na 3 uur. Bij vervallen: terugval naar `vent_percent` (rooms), niet naar 0.
-
-### 3.5 TSTAT snelcheck
-
-`checkTstatPins()` in `loop()` elke 100ms: leest MCP-pins 10/11/12, flankdetectie via `tstat_last_state[7]`, relay onmiddellijk bij wijziging. Override heeft voorrang.
-
-### 3.6 Sliding window duty% (v1.16)
-
-- 12 slots × 20 min = **4u rollend gemiddelde** per circuit
-- `duty_4h` → naar JSON/Sheets (keys `i`..`o`)
-- `duty_cycle` (cumulatief since boot) → live UI weergave
-- `dc_last_poll` voor correcte delta-meting (niet cumulatief)
-- `dc_slots_filled` voor correcte noemer bij lege ring
-
-### 3.7 ECO pomplogica state machine (in HVAC)
-
-| State | Duur | Overgang |
-|---|---|---|
-| `ECO_IDLE` | — | → `ECO_PUMP_WON` of `ECO_PUMP_SCH` bij `should_start` |
-| `ECO_PUMP_SCH` | 1 min | → `ECO_WAIT_SCH` na timeout, of `IDLE` bij `should_stop` |
-| `ECO_WAIT_SCH` | 1 min | → `ECO_PUMP_WON` als nog `should_start`, anders `IDLE` |
-| `ECO_PUMP_WON` | 1 min | → `ECO_WAIT_WON` na timeout, of `IDLE` bij `should_stop` |
-| `ECO_WAIT_WON` | 2 min | → `ECO_PUMP_SCH` als nog `should_start`, anders `IDLE` |
-
-- **Start (OR):** `ETopH > eco_max_temp` (90°C) OF `EQtot > eco_threshold` (15 kWh)
-- **Stop (OR):** `ETopH < eco_min_temp` (80°C) OF `EQtot < (eco_threshold − eco_hysteresis)`
-- **Fair share:** `last_pump_was_sch` wisselt startvolgorde automatisch
-
-⚠️ **TODO:** `kwh_transferred` is hardcoded `0.5` kWh per pompbeurt — echte berekening ontbreekt.
-
-### 3.8 Matter endpoints (v1.18, 9 van max 12)
-
-| # | Type | Variabele |
-|---|---|---|
-| EP1 | TemperatureSensor | SCH boiler top |
-| EP2–7 | OnOffPlugin | circuits[0..5] |
-| EP8 | OnOffPlugin | circuit[6] |
-| EP9 | Fan | ventilatie (snelheid + aan/uit) |
-
-### 3.9 HVAC /json output (keys a..ae → naar Zarlar → Google Sheets)
-
-| Key | Sheet | Label | Eenheid |
-|-----|-------|-------|---------|
-| `a` | B | uptime_sec | s |
-| `b` | C | ETopH_sch | °C |
-| `c` | D | ETopL_sch | °C |
-| `d` | E | EMidH_sch | °C |
-| `e` | F | EMidL_sch | °C |
-| `f` | G | EBotH_sch | °C |
-| `g` | H | EBotL_sch | °C |
-| `h` | I | EAv_sch | °C |
-| `i`..`o` | J..P | BB/WP/BK/ZP/EP/KK/IK duty4h | % |
-| `p`..`v` | Q..W | R1..R7 relay | 0/1 |
-| `w` | X | HeatDem | kW |
-| `x` | Y | Vent effectief | % |
-| `y` | Z | SCH_pomp | 0/1 |
-| `z` | AA | SCH_kWh ⚠️ TODO | kWh |
-| `aa` | AB | WON_pomp | 0/1 |
-| `ab` | AC | WON_kWh ⚠️ TODO | kWh |
-| `ac` | AD | RSSI | dBm |
-| `ad` | AE | FreeHeap% | % |
-| `ae` | AF | LargestBlock | KB |
-
-### 3.10 Wat HVAC leest van andere controllers
-
-**Van Room (via HTTP poll):**
-
-| JSON key | HVAC variabele | Betekenis |
-|---|---|---|
-| `b` | `heat_request` | Kamer vraagt verwarming (Heating_on) |
-| `g` | `vent_request` | Gevraagd ventilatie% |
-| `c` | `setpoint` | Ingesteld setpoint °C |
-| `e` | `room_temp` | Kamertemperatuur °C (Temp1 DHT22) |
-| `v` | `home_status` | 1 = iemand thuis |
-
-**Van ECO (via HTTP poll):**
-
-| JSON key | HVAC variabele | Betekenis |
-|---|---|---|
-| `b` | `eco_boiler.temp_top` | ETopH — bovenste sensor hoog °C |
-| `g` | `eco_boiler.temp_bottom` | EBotL — onderste sensor laag °C |
-| `h` | `eco_boiler.temp_avg` | EAv — gemiddelde °C |
-| `i` | `eco_boiler.qtot` | EQtot — energieinhoud kWh |
-
-### 3.11 Versiehistorie
-
-| Datum | Versie | Wijziging |
-|---|---|---|
-| 17 mrt 26 | v1.18 | ECO JSON keys: ETopH→b, EBotL→g, EAv→h, EQtot→i |
-| 17 mrt 26 | v1.17 | Room JSON keys: heat_request y→b, vent_request z→g, setpoint aa→c, room_temp h→e, home_status af→v |
-| 13 mrt 26 | v1.16 | Sliding window duty% 4u per circuit |
-| 13 mrt 26 | v1.15 | TSTAT snelcheck 100ms, ventilatie max()-logica, CSS fix, NVS snprintf |
-| 13 mrt 26 | v1.14 | Circuit override: relay onmiddellijk via mcp.digitalWrite |
-| 12 mrt 26 | v1.13 | ArduinoJson v7 fix, buildLogJson snprintf, getStream+filter |
-| 12 mrt 26 | v1.12 | Matter 14→9 endpoints, /json compacte keys, chunked streaming |
-| 12 mrt 26 | v1.9–11 | Heap-optimalisaties: char[], circuits[7], snprintf |
+- **kWh-berekening**: echte `Q = m × Cp × ΔT / 3600` per pompbeurt implementeren
 
 ---
 
@@ -352,15 +291,17 @@ Override vervalt automatisch na 3 uur. Bij vervallen: terugval naar `vent_percen
 | `m` | N | dT (Tsun−Tboil) | °C |
 | `n` | O | pwm_value | 0–255 |
 | `o` | P | pump_relay | 0/1 |
-| `p` | Q | RSSI | dBm |
+| `p` | Q | **RSSI** | dBm |
 | `q` | R | FreeHeap% | % |
 | `r` | S | MaxAllocHeap | KB |
 | `s` | T | MinFreeHeap | KB |
 
+⚠️ **ECO gebruikt key `p` voor RSSI** — alle andere controllers gebruiken `ac`. Kritiek voor Dashboard RSSI-extractie.
+
 ### 4.3 Openstaande punten ECO
 
 - **Heap-analyse**: baseline meten, ArduinoJson v7 check, `String(i)` NVS-keys → `snprintf`
-- **kWh-berekening** (⚠️ TODO ook in HVAC): echte `Q = m × Cp × ΔT / 3600` berekening per pompbeurt implementeren in ECO sketch, resultaat doorgeven via `/json`
+- **kWh-berekening**: echte `Q = m × Cp × ΔT / 3600` per pompbeurt
 - **Reactietijden**: IO-pinnen direct aansturen vanuit webUI-handlers
 - **Versieheader**: `* /` met spatie in commentaar
 
@@ -439,7 +380,13 @@ Let op: Matter reset + herpairing vereist bij endpoint-volgorde wijziging.
 | `espHsvColor_t` vs `HsvColor_t` | `MatterColorLight` = `HsvColor_t` |
 | Pixels buiten `pixels_num` bij boot | `updateLength(30)` + `clear()` + `show()` eerst, dan `updateLength(pixels_num)` |
 
-### 5.6 ROOM /json output (keys a..ai → naar Zarlar → Google Sheets)
+### 5.6 RSSI key in /json
+
+| Key | Label |
+|---|---|
+| `ac` | RSSI (dBm) |
+
+### 5.7 ROOM /json output (keys a..ai → naar Zarlar → Google Sheets)
 
 | Key | Sheet | Label | Eenheid |
 |-----|-------|-------|---------|
@@ -475,7 +422,7 @@ Let op: Matter reset + herpairing vereist bij endpoint-volgorde wijziging.
 | `ah` | AJ | Tds2 | °C |
 | `ai` | AK | Tds3 | °C |
 
-### 5.7 Openstaande punten ROOM
+### 5.8 Openstaande punten ROOM
 
 **Prioriteit 1 — Aparte tegels:**
 Thermostat naar EP9, losse `MatterTemperatureSensor` als EP1. Matter reset vereist. Referentie: `Oude_MATTER_ROOM_3mar.ino`.
@@ -492,16 +439,110 @@ Elke pagina vervangt `<style>...</style>` door `<link rel="stylesheet" href="/st
 
 ---
 
-## 6. Schimmelbescherming via vochtigheid
+## 6. Zarlar Dashboard — specifiek
+
+### 6.1 Hardware
+
+| Component | Detail |
+|---|---|
+| Static IP | 192.168.0.60 |
+| Board | ESP32-C6 Dev Module, 32-pin, **16MB flash** |
+| WebServer | `WebServer` (blocking) — bewust, niet `AsyncWebServer` |
+| Sketch | `ESP32_C6_Zarlar_Dashboard_17mar_wifi.ino` v3.0 |
+
+### 6.2 Wat het Dashboard doet
+
+- Pollt alle actieve ESP32 controllers elke N minuten via HTTP GET `/json`
+- POST data naar Google Sheets via Google Apps Script
+- Serveert web-UI op `http://192.168.0.60/`
+- Stuurt HOME/UIT broadcast naar alle actieve ROOM controllers
+- WiFi Strength Tester op `/wifi`
+- Matter HOME/UIT toggle (1 endpoint: `MatterOnOffPlugin`)
+
+### 6.3 NVS namespace: `zarlar`
+
+| Key | Type | Inhoud |
+|---|---|---|
+| `wifi_ssid` | String | WiFi netwerknaam |
+| `wifi_pass` | String | WiFi wachtwoord |
+| `poll_min` | Int | Poll interval in minuten |
+| `room_script` | String | Google Apps Script URL voor ROOM controllers |
+| `home_global` | Bool | HOME/UIT toestand (persistent) |
+| `c0_act`..`c21_act` | Bool | Controller actief/inactief |
+| `c0_url`..`c21_url` | String | Google Sheets URL per S-controller |
+
+### 6.4 Controller tabel — RSSI keys
+
+| Controller | Type | RSSI key in /json |
+|---|---|---|
+| S-HVAC | TYPE_SYSTEM | `ac` |
+| S-ECO | TYPE_SYSTEM | **`p`** ← afwijkend! |
+| R-* (alle rooms) | TYPE_ROOM | `ac` |
+| P-* (Photon) | TYPE_PHOTON | — (geen polling) |
+
+### 6.5 Captive portal — OS-specifieke handlers
+
+Voor correcte werking op alle platformen zijn expliciete handlers vereist:
+
+```cpp
+auto cpRedirect = []() {
+  if (ap_mode) {
+    server.sendHeader("Location", "http://" + WiFi.softAPIP().toString() + "/settings");
+    server.send(302, "text/plain", "");
+  } else {
+    server.send(404, "text/plain", "404");
+  }
+};
+server.on("/hotspot-detect.html",       HTTP_GET, cpRedirect); // macOS/iOS Safari
+server.on("/library/test/success.html", HTTP_GET, cpRedirect); // macOS ouder
+server.on("/generate_204",              HTTP_GET, cpRedirect); // Android Chrome
+server.on("/connecttest.txt",           HTTP_GET, cpRedirect); // Windows
+server.onNotFound(cpRedirect);
+```
+
+### 6.6 Matter endpoint Dashboard
+
+| # | Type | Variabele | Opmerking |
+|---|---|---|---|
+| EP1 | MatterOnOffPlugin | `home_mode_global` | HOME=aan, WEG=uit |
+
+**Synchronisatie-punten:**
+- Boot: `matter_home.setOnOff(home_mode_global)` na `Matter.begin()`
+- Apple Home → Dashboard: callback schrijft naar NVS + roept `setAllRoomsHomeMode()` aan
+- Dashboard webUI → Matter: `matter_home.setOnOff()` in `/set_home_global` handler
+- Loop sync elke 5s: `matter_home.setOnOff(home_mode_global)` als veiligheidsnet
+
+### 6.7 WiFi Strength Tester (`/wifi`)
+
+Endpoints:
+- `/wifi` — HTML pagina
+- `/wifi_json` — `{"r":-62,"q":76}` (~22 bytes, `char buf` op stack, geen String)
+- `/wifi_snap?start=1` — start TCP-ping + async WiFi scan
+- `/wifi_snap` (poll) — geeft scanresultaat wanneer klaar
+
+Heap-impact: 3 primitieven (`bool` + 2× `int` = 6 bytes permanent).
+
+Scan-resultaat: alle netwerken behalve eigen SSID, max 4, gesorteerd sterkste eerst. ESP32-C6 is 2.4GHz-only → geen channel-filter.
+
+### 6.8 Openstaande punten Dashboard
+
+- **Heap-baseline meten** na Matter-activatie (eerste flash op 16MB controller)
+- **OTA testen** — nog niet gedaan op Dashboard
+- **Matter pairing** uitvoeren en testen met Apple Home
+
+---
+
+## 7. Schimmelbescherming via vochtigheid
 
 Elke ROOM controller meet lokaal de luchtvochtigheid. Bij overschrijding van een drempelwaarde beslist de room controller autonoom om ventilatie te vragen via JSON key `g` (Vent_percent). De HVAC neemt de hoogste ventilatievraag van alle zones en stuurt de centrale ventilator aan. De volledige schimmelbeschermingslogica zit in de room controllers — de HVAC is enkel uitvoerder.
 
 ---
 
-## 7. Bestanden
+## 8. Bestanden
 
 | Bestand | Beschrijving |
 |---|---|
+| `ESP32_C6_Zarlar_Dashboard_17mar_wifi.ino` | Dashboard v3.0 — Matter HOME/UIT, WiFi tester |
 | `ESP32_C6_MATTER_HVAC_v1.18.ino` | HVAC productieversie — huidig |
 | `HVAC_GoogleScript_v4.gs` | GAS HVAC — 31 kolommen A–AE |
 | `ESP32_C6_MATTER_ECO_v1.22.ino` | ECO productieversie — huidig |
@@ -509,22 +550,27 @@ Elke ROOM controller meet lokaal de luchtvochtigheid. Bij overschrijding van een
 | `ESP32-C6_MATTER_ROOM_15mar_2200.ino` | ROOM v2.10 — Matter + heap stabiel |
 | `ROOM_GoogleScript_v1_4.gs` | GAS ROOM — 37 kolommen A–AK |
 | `Oude_MATTER_ROOM_3mar.ino` | Referentie: werkende Matter endpoint-volgorde (aparte tegels) |
-| `partitions_16mb.csv` | Custom partitietabel voor alle controllers |
+| `partitions_16mb.csv` | Custom partitietabel voor alle vier controllers |
 | `Zarlar_Master_Overnamedocument.md` | Dit document |
 
 ---
 
-## 8. Instructies voor nieuwe sessie
+## 9. Instructies voor nieuwe sessie
 
 1. **Upload** de actuele sketch als bijlage + dit document
 2. **Vraag Claude** het document te lezen en samen te vatten vóór hij iets aanpast
-3. **Heap-baseline** laten meten als eerste stap
-4. **Versie per versie** werken met testmoment ertussen
-5. **Herinner Claude** bij aanvang:
+3. **Eerst een plan** — Claude mag pas beginnen coderen na expliciete goedkeuring
+4. **Heap-baseline** laten meten als eerste stap bij elke nieuwe functie
+5. **Versie per versie** werken met testmoment ertussen
+6. **Herinner Claude** bij aanvang:
    - `* /` met spatie in commentaar (geen `*/` in tekst)
    - Versieheader aanpassen bij elke wijziging
    - Bij JSON-structuurwijziging: alle consumers nalopen (HVAC, Zarlar, Google Script)
    - IO-pins altijd onmiddellijk aansturen — nooit wachten op pollcyclus
+   - `#define Serial Serial0` alleen aanwezig als Matter effectief geïntegreerd is
+   - ECO gebruikt RSSI key `p`, alle andere controllers gebruiken `ac`
+   - Dashboard gebruikt `WebServer` (blocking), niet `AsyncWebServer`
+   - Pairing code altijd in webUI tonen, niet alleen in Serial
 
 ---
 
