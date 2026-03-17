@@ -1,5 +1,5 @@
 /* ============================================================
-   Zarlar Dashboard v2.7
+   Zarlar Dashboard v2.9.1
    ESP32-C6 (32-pin 16MB) @ 192.168.0.60
    Filip Delannoy
 
@@ -22,44 +22,31 @@
      Toegang   : http://192.168.0.60/ (geen mDNS — voorbereiding Matter)
      AP SSID   : Zarlar-Setup (bij geen WiFi)
 
-   17mar26        v2.7  Matter-voorbereiding: #define Serial Serial0, mDNS verwijderd,
-                        board 4MB→16MB, partitions_16mb.csv. WiFi snap bugfixes:
-                        channel-filter weg (C6=2.4GHz only), RSSI-filter versoepeld
-                        (alle netwerken tonen), ping toont rood — bij geen respons.
+   MATTER-VOORBEREIDING (nog niet geactiveerd):
+     - mDNS verwijderd (Matter start eigen interne mDNS-stack)
+     - board 4MB→16MB, partitions_16mb.csv
+     - #define Serial Serial0 komt pas bij Matter-integratie
+
+   17mar26        v2.9.1 Bugfix: ECO RSSI-key "p" ipv "ac" (HVAC+ROOM="ac", ECO="p").
+   17mar26        v2.9  RSSI op dashboard-knoppen: key "ac" uit last_json, gekleurde
+                        waarde naast controllernaam. Photon-knoppen ongewijzigd.
+   17mar26        v2.8  Header hersteld. #define Serial Serial0 verwijderd (hoort
+                        pas bij Matter-integratie — breekt USB CDC zonder Matter).
+                        Ping: port 80→53 (DNS, altijd open op gateway).
+                        WiFi-scan SSID-namen: wit ipv grijs.
+   17mar26        v2.7  Matter-voorbereiding: mDNS verwijderd, board 4MB→16MB,
+                        partitions_16mb.csv. WiFi snap bugfixes: channel-filter weg,
+                        RSSI-filter versoepeld, ping toont rood — bij geen respons.
    17mar26        v2.6  WiFi Strength Tester: /wifi pagina. Realtime RSSI indicator +
                         compacte controller-tabel. Klik op naam = async WiFi-scan snapshot
-                        (RSSI, TCP-ping, sterkere 2.4GHz netwerken). 3 primitieve globals.
+                        (RSSI, TCP-ping, andere 2.4GHz netwerken). 3 primitieve globals.
    16mar26        v2.5  /info pagina verwijderd → inhoud naar /settings onderaan.
                         max_rows volledig verwijderd (logica verplaatst naar GAS).
                         (vrij) controllers verwijderd. NUM_CONTROLLERS 24→22.
-                        Controller volgorde: S-HVAC S-ECO S-OUTSIDE S-ACCESS FUT1 FUT2.
-                        R-TESTROOM naar achter in rooms-lijst.
-                        Portal hoogte: calc(100vh - 84px) voor volledig scherm op iPhone.
    16mar26        v2.4  HOME/UIT knop: broadcast naar alle actieve rooms via /set_home?v=N.
                         home_mode_global persistent in NVS. Nul heap-impact.
-   11mar26 15:00  v2.3  WiFi sleep uitgeschakeld (betere bereikbaarheid Safari/iPhone).
-                        AP + captive portal toegevoegd voor setup zonder flash.
-                        HTML vereenvoudigd voor minder heap gebruik.
-                        DNS fix: 8.8.8.8 (router gaf 0.0.0.0 voor Google).
-   11mar26 11:00  v2.2  DNS fix ingevoerd.
-   11mar26 09:00  v2.0  Volledig herschreven (16 controllers, status dots,
-                        Google Sheets logging, iFrame portal, NVS settings).
-   ============================================================ * /
-
-// ⚠️ Verplicht voor ESP32-C6 (RISC-V) — vóór alle #include statements
-#define Serial Serial0
-                        max_rows volledig verwijderd (logica verplaatst naar GAS).
-                        (vrij) controllers verwijderd. NUM_CONTROLLERS 24→22.
-                        Controller volgorde: S-HVAC S-ECO S-OUTSIDE S-ACCESS FUT1 FUT2.
-                        R-TESTROOM naar achter in rooms-lijst.
-                        Portal hoogte: calc(100vh - 84px) voor volledig scherm op iPhone.
-   16mar26        v2.4  HOME/UIT knop: broadcast naar alle actieve rooms via /set_home?v=N.
-                        home_mode_global persistent in NVS. Nul heap-impact.
-   11mar26 15:00  v2.3  WiFi sleep uitgeschakeld (betere bereikbaarheid Safari/iPhone).
-                        AP + captive portal toegevoegd voor setup zonder flash.
-                        HTML vereenvoudigd voor minder heap gebruik.
-                        DNS fix: 8.8.8.8 (router gaf 0.0.0.0 voor Google).
-   11mar26 11:00  v2.2  DNS fix ingevoerd.
+   11mar26 15:00  v2.3  WiFi sleep uitgeschakeld. AP + captive portal toegevoegd.
+                        HTML vereenvoudigd. DNS fix: 8.8.8.8.
    11mar26 09:00  v2.0  Volledig herschreven (16 controllers, status dots,
                         Google Sheets logging, iFrame portal, NVS settings).
    ============================================================ */
@@ -394,7 +381,7 @@ void handlePolling() {
 int wtPing() {
   WiFiClient c;
   unsigned long t = millis();
-  bool ok = c.connect(IPAddress(192,168,0,1), 80, 500);
+  bool ok = c.connect(IPAddress(192,168,0,1), 53, 500); // port 53 DNS — altijd open op gateway
   int ms = ok ? (int)(millis() - t) : -1;
   if (ok) c.stop();
   return ms;
@@ -542,7 +529,7 @@ String getWifiPage() {
     "    var ps=d.ping>=0?'<span class=\"'+pc(d.ping)+'\">'+d.ping+'</span>':'<span class=\"r\">—</span>';"
     "    sd+=' '+ps;"
     "    d.nets.forEach(function(n){"
-    "      sd+=' <span class=\"dim\">'+n.s+'</span><span class=\"'+rc(n.r)+'\"> '+n.r+'</span>';"
+    "      sd+=' <span style=\"color:#ccc\">'+n.s+'</span><span class=\"'+rc(n.r)+'\"> '+n.r+'</span>';"
     "    });"
     "  }"
     "  h+='<tr><td class=\"cn\" onclick=\"tog('+c.i+')\">'+c.n+'</td><td>'+sd+'</td></tr>';"
@@ -607,12 +594,20 @@ String getStatusJson() {
   String j = "[";
   for (int i = 0; i < NUM_CONTROLLERS; i++) {
     if (i > 0) j += ",";
+    // RSSI uit last_json: "ac" voor HVAC+ROOM, "p" voor ECO
+    int rssi = 0;
+    if (controllers[i].type != TYPE_PHOTON && controllers[i].last_json.length() > 0) {
+      const char* key = (strcmp(controllers[i].name, "S-ECO") == 0) ? "\"p\":" : "\"ac\":";
+      int idx = controllers[i].last_json.indexOf(key);
+      if (idx >= 0) rssi = controllers[i].last_json.substring(idx + strlen(key), idx + strlen(key) + 5).toInt();
+    }
     j += "{\"n\":\"" + String(controllers[i].name) + "\","
          "\"t\":" + String(controllers[i].type) + ","
          "\"ip\":\"" + String(controllers[i].ip) + "\","
          "\"pid\":\"" + String(controllers[i].photon_id) + "\","
          "\"a\":" + (controllers[i].active ? "1" : "0") + ","
-         "\"s\":" + String(controllers[i].status) + "}";
+         "\"s\":" + String(controllers[i].status) + ","
+         "\"r\":" + String(rssi) + "}";
   }
   j += "]";
   return j;
@@ -627,7 +622,7 @@ String getMainPage() {
     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
     "<title>Zarlar</title>"
     "<style>"
-    "body{margin:0;background:#111;color:#eee;font-family:monospace;font-size:14px}"
+    "body{margin:0;background:#111;color:#eee;font-family:monospace;font-size:14px;-webkit-text-size-adjust:none}"
     ".hdr{background:#1a1200;border-bottom:2px solid #f0a500;padding:10px 16px;"
          "display:flex;align-items:center;justify-content:space-between}"
     ".hdr-t{color:#f0a500;font-size:18px;letter-spacing:2px}"
@@ -645,7 +640,7 @@ String getMainPage() {
     ".btn{display:flex;align-items:center;gap:7px;padding:7px 12px;"
          "background:#1c2128;border:1px solid #333;border-radius:5px;"
          "cursor:pointer;font-family:monospace;font-size:12px;color:#ccc;"
-         "min-width:120px;transition:border-color .15s}"
+         "min-width:150px;transition:border-color .15s}"
     ".btn:hover{border-color:#f0a500;color:#f0a500}"
     ".btn.off{opacity:.4;cursor:default}"
     ".btn.off:hover{border-color:#333;color:#ccc}"
@@ -685,6 +680,7 @@ String getMainPage() {
     "'o':'BEAMvalue','p':'BEAMalert','q':'Night','r':'Bed','s':'R',"
     "'t':'G','u':'B','v':'Strength','w':'Quality','x':'FreeMem'};"
     "var SC=['#555','#f0c040','#2ecc40','#e74c3c'];"
+    "function rc(r){return r>=-60?'#2ecc40':r>=-70?'#f0c040':r>=-80?'#e05a00':'#e74c3c';}"
     "function dot(s){return '<span class=\"dot\" style=\"background:'+SC[s]+';box-shadow:0 0 5px '+SC[s]+';\"></span>';}"
     "function build(){"
     "  var gs=document.getElementById('gs');"
@@ -695,7 +691,8 @@ String getMainPage() {
     "    var b=document.createElement('button');"
     "    b.className='btn'+(c.a?'':' off');"
     "    b.id='b'+i;"
-    "    b.innerHTML=dot(c.s)+c.n;"
+    "    var rs=c.r!==0?'<span class=\"rs\" style=\"color:'+rc(c.r)+';font-size:11px\">'+Math.abs(c.r)+'</span>':'';"
+    "    b.innerHTML=dot(c.s)+c.n+rs;"
     "    b.title=c.ip||c.pid||'';"
     "    if(c.a)b.onclick=function(){open(i);};"
     "    if(c.t===0)gp.appendChild(b);"
@@ -709,6 +706,8 @@ String getMainPage() {
     "    if(!b)return;"
     "    var d=b.querySelector('.dot');"
     "    if(d)d.style.background=SC[c.s];"
+    "    var rs=b.querySelector('.rs');"
+    "    if(rs&&c.r!==0){rs.textContent=Math.abs(c.r);rs.style.color=rc(c.r);}"
     "  });"
     "}"
     "function open(i){"
@@ -955,7 +954,7 @@ void setup() {
   Serial.begin(115200);
   delay(3000);  // wacht op Serial monitor
   Serial.println("\n\n╔══════════════════════════════════╗");
-  Serial.println("║  Zarlar Dashboard v2.7           ║");
+  Serial.println("║  Zarlar Dashboard v2.9.1         ║");
   Serial.println("║  192.168.0.60 — zarlar.local     ║");
   Serial.println("╚══════════════════════════════════╝\n");
 
