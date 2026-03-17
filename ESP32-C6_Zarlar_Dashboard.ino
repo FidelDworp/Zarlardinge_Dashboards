@@ -1,13 +1,13 @@
 /* ============================================================
-   Zarlar Dashboard v2.5
-   ESP32-C6 (30-pin) @ 192.168.0.60 — http://zarlar.local
+   Zarlar Dashboard v2.7
+   ESP32-C6 (32-pin 16MB) @ 192.168.0.60
    Filip Delannoy
 
    BOARD INSTELLINGEN (Arduino IDE):
      Board        : ESP32-C6 Dev Module (espressif:arduino-esp32-master)
      Upload Speed : 921600
-     Flash Size   : 4MB
-     Partition    : Huge APP (3MB No OTA)
+     Flash Size   : 16MB
+     Partition    : Custom → partitions_16mb.csv (naast .ino)
 
    EERSTE GEBRUIK / FACTORY RESET:
      1. Upload sketch → verbindt automatisch met WiFi
@@ -19,10 +19,35 @@
    NETWERK:
      Fixed IP  : 192.168.0.60
      DNS       : 8.8.8.8 (Google — vereist voor HTTPS naar Google Sheets)
-     mDNS      : http://zarlar.local
+     Toegang   : http://192.168.0.60/ (geen mDNS — voorbereiding Matter)
      AP SSID   : Zarlar-Setup (bij geen WiFi)
 
+   17mar26        v2.7  Matter-voorbereiding: #define Serial Serial0, mDNS verwijderd,
+                        board 4MB→16MB, partitions_16mb.csv. WiFi snap bugfixes:
+                        channel-filter weg (C6=2.4GHz only), RSSI-filter versoepeld
+                        (alle netwerken tonen), ping toont rood — bij geen respons.
+   17mar26        v2.6  WiFi Strength Tester: /wifi pagina. Realtime RSSI indicator +
+                        compacte controller-tabel. Klik op naam = async WiFi-scan snapshot
+                        (RSSI, TCP-ping, sterkere 2.4GHz netwerken). 3 primitieve globals.
    16mar26        v2.5  /info pagina verwijderd → inhoud naar /settings onderaan.
+                        max_rows volledig verwijderd (logica verplaatst naar GAS).
+                        (vrij) controllers verwijderd. NUM_CONTROLLERS 24→22.
+                        Controller volgorde: S-HVAC S-ECO S-OUTSIDE S-ACCESS FUT1 FUT2.
+                        R-TESTROOM naar achter in rooms-lijst.
+                        Portal hoogte: calc(100vh - 84px) voor volledig scherm op iPhone.
+   16mar26        v2.4  HOME/UIT knop: broadcast naar alle actieve rooms via /set_home?v=N.
+                        home_mode_global persistent in NVS. Nul heap-impact.
+   11mar26 15:00  v2.3  WiFi sleep uitgeschakeld (betere bereikbaarheid Safari/iPhone).
+                        AP + captive portal toegevoegd voor setup zonder flash.
+                        HTML vereenvoudigd voor minder heap gebruik.
+                        DNS fix: 8.8.8.8 (router gaf 0.0.0.0 voor Google).
+   11mar26 11:00  v2.2  DNS fix ingevoerd.
+   11mar26 09:00  v2.0  Volledig herschreven (16 controllers, status dots,
+                        Google Sheets logging, iFrame portal, NVS settings).
+   ============================================================ * /
+
+// ⚠️ Verplicht voor ESP32-C6 (RISC-V) — vóór alle #include statements
+#define Serial Serial0
                         max_rows volledig verwijderd (logica verplaatst naar GAS).
                         (vrij) controllers verwijderd. NUM_CONTROLLERS 24→22.
                         Controller volgorde: S-HVAC S-ECO S-OUTSIDE S-ACCESS FUT1 FUT2.
@@ -134,7 +159,14 @@ unsigned long last_poll_cycle  = 0;
 int           poll_index       = 0;
 bool          polling_active   = false;
 unsigned long poll_step_timer  = 0;
-bool          home_mode_global = false; // v2.4: globale HOME/UIT toestand voor alle rooms
+bool          home_mode_global = false; // v2.4
+
+// ============================================================
+// WIFI TESTER — 3 primitieven, geen heap-groei
+// ============================================================
+static bool wt_scan_pending = false;  // async scan loopt
+static int  wt_snap_rssi    = 0;      // RSSI op klikmoment
+static int  wt_snap_ping    = -1;     // TCP-ping op klikmoment (ms)
 
 // ============================================================
 // NVS LADEN / OPSLAAN
@@ -214,8 +246,7 @@ void connectWiFi() {
     Serial.println("✓ WiFi verbonden: " + WiFi.localIP().toString());
     Serial.printf("  RSSI: %d dBm\n", WiFi.RSSI());
     Serial.println("✓ Sleep uitgeschakeld (altijd bereikbaar)");
-
-    if (MDNS.begin("zarlar")) Serial.println("  mDNS: http://zarlar.local");
+    // mDNS niet gestart — voorbereiding Matter (eigen interne mDNS-stack)
     ap_mode = false;
   } else {
     Serial.println("✗ WiFi mislukt → AP mode");
@@ -357,6 +388,219 @@ void handlePolling() {
 }
 
 // ============================================================
+// WIFI TESTER — TCP ping naar gateway (blocking, max 500ms)
+// Alleen aangeroepen op klikmoment, niet in de poll-loop
+// ============================================================
+int wtPing() {
+  WiFiClient c;
+  unsigned long t = millis();
+  bool ok = c.connect(IPAddress(192,168,0,1), 80, 500);
+  int ms = ok ? (int)(millis() - t) : -1;
+  if (ok) c.stop();
+  return ms;
+}
+
+// ============================================================
+// WIFI TESTER — /wifi_json  (~22 bytes, elke 1s door browser)
+// char buf op stack → geen String-allocatie
+// ============================================================
+void handleWifiJson() {
+  char buf[22];
+  int r = ap_mode ? 0 : WiFi.RSSI();
+  int q = ap_mode ? 0 : constrain(2 * (r + 100), 0, 100);
+  snprintf(buf, sizeof(buf), "{\"r\":%d,\"q\":%d}", r, q);
+  server.send(200, "application/json", buf);
+}
+
+// ============================================================
+// WIFI TESTER — /wifi_snap
+// ?start=1 : snapshot nemen + async scan starten
+// (poll)   : scan status / resultaat leveren
+// Resultaat String j is lokaal → wordt freed na send()
+// ============================================================
+void handleWifiSnap() {
+  if (ap_mode) { server.send(200, "application/json", "{\"status\":\"ap\"}"); return; }
+
+  if (server.hasArg("start")) {
+    wt_snap_rssi = WiFi.RSSI();
+    wt_snap_ping = wtPing();                    // max 500ms blokkerend, alleen hier
+    if (!wt_scan_pending) {
+      WiFi.scanNetworks(true);                  // async, keert direct terug
+      wt_scan_pending = true;
+    }
+    server.send(200, "application/json", "{\"status\":\"scanning\"}");
+    return;
+  }
+
+  if (!wt_scan_pending) {
+    server.send(200, "application/json", "{\"status\":\"idle\"}");
+    return;
+  }
+
+  int n = WiFi.scanComplete();
+  if (n == WIFI_SCAN_RUNNING) {
+    server.send(200, "application/json", "{\"status\":\"scanning\"}");
+    return;
+  }
+
+  // Scan klaar — bouw resultaat (lokale String, ~250 bytes max)
+  String j = "{\"status\":\"ok\",\"rssi\":";
+  j += wt_snap_rssi;
+  j += ",\"ping\":";
+  j += wt_snap_ping;
+  j += ",\"nets\":[";
+  String mySsid = WiFi.SSID();
+  int found = 0;
+  if (n > 0) {
+    // scanNetworks levert resultaten gesorteerd sterkste eerst
+    // ESP32-C6 is 2.4GHz-only → geen channel-filter nodig
+    for (int k = 0; k < n && found < 4; k++) {
+      if (WiFi.SSID(k) == mySsid) continue; // skip eigen netwerk
+      if (found++) j += ",";
+      j += "{\"s\":\""; j += WiFi.SSID(k); j += "\",\"r\":"; j += WiFi.RSSI(k); j += "}";
+    }
+  }
+  j += "]}";
+  WiFi.scanDelete();          // scan-buffer vrijgeven
+  wt_scan_pending = false;
+  server.send(200, "application/json", j);
+}
+
+// ============================================================
+// WIFI TESTER — /wifi HTML pagina
+// Statische delen in F() (flash), dynamisch deel = controller-lijst
+// ============================================================
+String getWifiPage() {
+  // --- Deel 1: statische HTML + CSS ---
+  String h = F("<!DOCTYPE html><html lang='nl'><head>"
+    "<meta charset='utf-8'>"
+    "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+    "<title>Zarlar WiFi</title>"
+    "<style>"
+    "body{margin:0;background:#111;color:#eee;font-family:monospace;font-size:13px}"
+    ".hdr{background:#1a1200;border-bottom:2px solid #f0a500;padding:10px 16px}"
+    ".hdr-t{color:#f0a500;font-size:18px;letter-spacing:2px}"
+    ".nav{background:#161b22;padding:8px 16px;display:flex;gap:6px;flex-wrap:wrap;"
+         "border-bottom:1px solid #333}"
+    ".nav a{color:#888;text-decoration:none;padding:4px 10px;border:1px solid #333;"
+            "border-radius:3px;font-size:11px}"
+    ".nav a.cur,.nav a:hover{color:#f0a500;border-color:#f0a500}"
+    ".wrap{padding:14px 16px}"
+    "#big{font-size:18pt;font-weight:bold;text-align:center;padding:14px 0 4px}"
+    ".bw{margin:0 0 16px;background:#222;border-radius:3px;height:8px}"
+    ".bi{height:8px;border-radius:3px;transition:width .5s,background .5s}"
+    "table{border-collapse:collapse;width:100%}"
+    "tr{border-bottom:1px solid #1a1a1a}"
+    "td{padding:5px 6px;font-size:12px;vertical-align:middle}"
+    ".cn{cursor:pointer;color:#aaa;white-space:nowrap;width:110px}"
+    ".cn:hover{color:#f0a500}"
+    ".g{color:#2ecc40}.y{color:#f0c040}.o{color:#e05a00}.r{color:#e74c3c}"
+    ".dim{color:#444}"
+    "</style></head><body>"
+    "<div class='hdr'><span class='hdr-t'>⬡ ZARLAR</span></div>"
+    "<div class='nav'>"
+    "<a href='/'>← Dashboard</a>"
+    "<a href='/settings'>⚙ Settings</a>"
+    "<a href='/wifi' class='cur'>📶 WiFi</a></div>"
+    "<div class='wrap'>"
+    "<div id='big'>—</div>"
+    "<div class='bw'><div class='bi' id='bar' style='width:0'></div></div>"
+    "<table id='tbl'></table>"
+    "</div>"
+    "<script>"
+    "var C=");
+
+  // --- Deel 2: actieve controller-lijst als JS-array ---
+  h += "[";
+  bool first = true;
+  for (int i = 0; i < NUM_CONTROLLERS; i++) {
+    if (controllers[i].type == TYPE_PHOTON) continue;   // Photons weglaten
+    if (!first) h += ",";
+    h += "{i:"; h += i; h += ",n:\""; h += controllers[i].name; h += "\"}";
+    first = false;
+  }
+  h += "];";
+
+  // --- Deel 3: JavaScript (statisch → flash) ---
+  h += F(
+    "var S={};"                                       // snapshots per controller-index
+
+    // Kleurklassen op basis van RSSI / ping / kwaliteit
+    "function rc(r){return r>=-60?'g':r>=-70?'y':r>=-80?'o':'r';}"
+    "function pc(p){return p<0?'r':p<8?'g':p<20?'y':p<40?'o':'r';}"
+    "var QC=['#2ecc40','#f0c040','#e05a00','#e74c3c'];"
+
+    // Tabel opbouwen vanuit C[] en S{}
+    "function build(){"
+    "var h='';"
+    "C.forEach(function(c){"
+    "  var d=S[c.i];"
+    "  var sd='<span class=\"dim\">—</span>';"        // geen snapshot
+    "  if(d===null)sd='<span class=\"dim\">…</span>';"  // scan loopt
+    "  else if(d){"
+    "    sd='<span class=\"'+rc(d.rssi)+'\">'+d.rssi+'</span>';"
+    "    var ps=d.ping>=0?'<span class=\"'+pc(d.ping)+'\">'+d.ping+'</span>':'<span class=\"r\">—</span>';"
+    "    sd+=' '+ps;"
+    "    d.nets.forEach(function(n){"
+    "      sd+=' <span class=\"dim\">'+n.s+'</span><span class=\"'+rc(n.r)+'\"> '+n.r+'</span>';"
+    "    });"
+    "  }"
+    "  h+='<tr><td class=\"cn\" onclick=\"tog('+c.i+')\">'+c.n+'</td><td>'+sd+'</td></tr>';"
+    "});"
+    "document.getElementById('tbl').innerHTML=h;"
+    "}"
+
+    // Toggle: klik = start snap, nog eens klikken = wis
+    "function tog(idx){"
+    "  if(S[idx]!==undefined){delete S[idx];build();return;}"
+    "  S[idx]=null;build();"
+    "  fetch('/wifi_snap?start=1').then(r=>r.json()).then(d=>{"
+    "    if(S[idx]===undefined)return;"
+    "    if(d.status==='scanning')poll(idx);"
+    "    else done(idx,d);"
+    "  });"
+    "}"
+
+    // Poll totdat scan klaar is
+    "function poll(idx){"
+    "  setTimeout(function(){"
+    "    if(S[idx]===undefined)return;"
+    "    fetch('/wifi_snap').then(r=>r.json()).then(d=>{"
+    "      if(S[idx]===undefined)return;"
+    "      if(d.status==='scanning')poll(idx);"
+    "      else done(idx,d);"
+    "    });"
+    "  },600);"
+    "}"
+
+    // Snapshot opslaan en tabel herbouwen
+    "function done(idx,d){"
+    "  if(S[idx]===undefined)return;"
+    "  if(d.status==='ok')S[idx]={rssi:d.rssi,ping:d.ping,nets:d.nets||[]};"
+    "  else delete S[idx];"
+    "  build();"
+    "}"
+
+    // RSSI-indicator: elke 1s updaten zolang pagina open is
+    "function updR(){"
+    "  fetch('/wifi_json').then(r=>r.json()).then(d=>{"
+    "    var ci=d.q>=70?0:d.q>=40?1:d.q>=20?2:3;"
+    "    var c=QC[ci];"
+    "    var el=document.getElementById('big');"
+    "    el.textContent=d.r+' dBm';el.style.color=c;"
+    "    var b=document.getElementById('bar');"
+    "    b.style.width=d.q+'%';b.style.background=c;"
+    "  }).catch(function(){});"
+    "}"
+
+    "build();"
+    "setInterval(updR,1000);"
+    "updR();"
+    "</script></body></html>");
+  return h;
+}
+
+// ============================================================
 // STATUS JSON
 // ============================================================
 String getStatusJson() {
@@ -419,6 +663,7 @@ String getMainPage() {
     "<div class='nav'>"
     "<a href='/'>Dashboard</a>"
     "<a href='/settings'>⚙ Settings</a>"
+    "<a href='/wifi'>📶 WiFi</a>"
     "<button id='hb' class='hbtn ");
   h += home_mode_global ? "on' onclick='setH(0)'>● HOME" : "off' onclick='setH(1)'>○ UIT";
   h += F("</button></div>"
@@ -562,7 +807,8 @@ String getSettingsPage() {
     "</style></head><body>"
     "<div class='hdr'><span class='hdr-t'>⬡ ZARLAR SETTINGS</span></div>"
     "<div class='nav'><a href='/'>← Dashboard</a>"
-    "<a href='/settings'>⚙ Settings</a></div>"
+    "<a href='/settings'>⚙ Settings</a>"
+    "<a href='/wifi'>📶 WiFi</a></div>"
     "<div class='wrap'><form action='/save_settings' method='get'>"
     "<div class='sec'><div class='sec-t'>▸ Netwerk</div><table>"
     "<tr><td>WiFi SSID</td><td><input type='text' name='wifi_ssid' value='";
@@ -676,15 +922,28 @@ void setupWebServer() {
     Serial.printf("[HOME] Globale toestand → %s\n", v ? "HOME" : "UIT");
   });
 
+  server.on("/wifi", HTTP_GET, []() {
+    server.send(200, "text/html; charset=utf-8", getWifiPage());
+  });
+  server.on("/wifi_json", HTTP_GET, []() { handleWifiJson(); });
+  server.on("/wifi_snap", HTTP_GET, []() { handleWifiSnap(); });
+
   // Captive portal redirects
-  server.onNotFound([]() {
+  // macOS/iOS checkt deze URLs om portal te detecteren
+  auto cpRedirect = []() {
     if (ap_mode) {
       server.sendHeader("Location", "http://" + WiFi.softAPIP().toString() + "/settings");
       server.send(302, "text/plain", "");
     } else {
       server.send(404, "text/plain", "404");
     }
-  });
+  };
+  server.on("/hotspot-detect.html",          HTTP_GET, cpRedirect); // macOS/iOS Safari
+  server.on("/library/test/success.html",    HTTP_GET, cpRedirect); // macOS ouder
+  server.on("/generate_204",                 HTTP_GET, cpRedirect); // Android Chrome
+  server.on("/connecttest.txt",              HTTP_GET, cpRedirect); // Windows
+
+  server.onNotFound(cpRedirect);
 
   server.begin();
 }
@@ -694,9 +953,9 @@ void setupWebServer() {
 // ============================================================
 void setup() {
   Serial.begin(115200);
-  delay(500);
+  delay(3000);  // wacht op Serial monitor
   Serial.println("\n\n╔══════════════════════════════════╗");
-  Serial.println("║  Zarlar Dashboard v2.5           ║");
+  Serial.println("║  Zarlar Dashboard v2.7           ║");
   Serial.println("║  192.168.0.60 — zarlar.local     ║");
   Serial.println("╚══════════════════════════════════╝\n");
 
