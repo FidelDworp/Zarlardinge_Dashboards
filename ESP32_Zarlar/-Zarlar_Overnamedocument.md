@@ -1,6 +1,6 @@
 # Zarlar Thuisautomatisering — Master Overnamedocument
 **ESP32-C6 · Arduino IDE · Matter · Google Sheets**
-*Filip Delannoy — Zarlardinge (BE) — bijgewerkt 17 maart 2026*
+*Filip Delannoy — Zarlardinge (BE) — bijgewerkt 18 maart 2026*
 
 ---
 
@@ -27,7 +27,7 @@ Een volledig zelfgebouwd thuisautomatiseringssysteem op basis van drie ESP32-C6 
 
 | Controller | IP | MAC | Versie | Status |
 |---|---|---|---|---|
-| **HVAC** | 192.168.0.70 | 58:8C:81:32:29:54 | v1.18 | ✅ Productie, stabiel |
+| **HVAC** | 192.168.0.70 | 58:8C:81:32:29:54 | v1.19 | ✅ Productie, stabiel |
 | **ECO Boiler** | 192.168.0.71 | 58:8C:81:32:2B:D4 | v1.22 | ✅ Productie, stabiel |
 | **ROOM** | 192.168.0.80 | 58:8C:81:5D:B0:88 | v2.10 | ✅ Matter + heap stabiel |
 | **Zarlar Dashboard** | 192.168.0.60 | — | v3.0 | ✅ Matter HOME/UIT, WiFi tester |
@@ -163,6 +163,20 @@ server.on("/actie", HTTP_GET, [](AsyncWebServerRequest *request) {
 });
 ```
 
+**Bewuste code duplicatie — drie plaatsen, één patroon:**
+
+In de HVAC sketch staat `mcp.digitalWrite(idx, on_off ? LOW : HIGH)` op drie afzonderlijke plaatsen:
+
+| Plaats | Trigger | Toegevoegd in |
+|---|---|---|
+| `/circuit_override_on` + `/circuit_override_off` handler | Bediening via webUI | v1.14 |
+| `onChangeOnOff` Matter callback | Bediening via Apple Home / HomeKit | v1.19 |
+| `/circuit_override_cancel` handler | Override annuleren via webUI | v1.14 |
+
+Dit is **bewuste duplicatie** — niet refactoren naar een centrale `applyRelay()` functie tenzij er een vierde pad bijkomt. Elk pad is onafhankelijk leesbaar. In embedded code is dat een voordeel: bij een probleem weet je exact waar te kijken zonder andere functies op te zoeken.
+
+⚠️ **Valkuil vóór v1.19:** de Matter `onChangeOnOff` callback zette enkel de override-vlag maar deed **geen** `mcp.digitalWrite()`. Gevolg: relais reageerden pas na de volgende `pollRooms()` cyclus (~10-60s vertraging) bij bediening vanuit Apple Home. Via de webUI werkte het al onmiddellijk. Fix: `circuits[i].heating_on = on_off` + `mcp.digitalWrite()` toegevoegd in de callback.
+
 ### 2.7 JSON key synchronisatie — kritiek leermoment
 
 Wanneer een JSON-structuur in een controller hernoemd wordt (bijv. van lange namen naar compacte a/b/c-keys), **falen alle consumers (HVAC, Zarlar, Google Script) stil** — JSON-keys retourneren gewoon 0 als ze niet gevonden worden, zonder foutmelding.
@@ -255,9 +269,17 @@ Runtime: largest_block stabiel >35KB  ✅
 |---|---|
 | `ac` | RSSI (dBm) |
 
-### 3.5 Openstaande punten HVAC
+### 3.5 Versiehistorie HVAC (recente wijzigingen)
+
+| Versie | Wijziging |
+|---|---|
+| v1.19 | Matter `onChangeOnOff` callback: `mcp.digitalWrite()` onmiddellijk toegevoegd — relais reageren nu direct vanuit Apple Home |
+| v1.18 | ECO JSON keys: ETopH→b, EBotL→g, EAv→h, EQtot→i |
+
+### 3.6 Openstaande punten HVAC
 
 - **kWh-berekening**: echte `Q = m × Cp × ΔT / 3600` per pompbeurt implementeren
+- **HTML compressie**: zelfde aanpak als ROOM v3.1 — witte pagina op iPhone bij ventilatieslider wijst op heap-krapte bij page reload
 
 ---
 
@@ -543,7 +565,7 @@ Elke ROOM controller meet lokaal de luchtvochtigheid. Bij overschrijding van een
 | Bestand | Beschrijving |
 |---|---|
 | `ESP32_C6_Zarlar_Dashboard_17mar_wifi.ino` | Dashboard v3.0 — Matter HOME/UIT, WiFi tester |
-| `ESP32_C6_MATTER_HVAC_v1.18.ino` | HVAC productieversie — huidig |
+| `ESP32_C6_MATTER_HVAC_v1.19.ino` | HVAC productieversie — huidig |
 | `HVAC_GoogleScript_v4.gs` | GAS HVAC — 31 kolommen A–AE |
 | `ESP32_C6_MATTER_ECO_v1.22.ino` | ECO productieversie — huidig |
 | `ECO_GoogleScript.gs` | GAS ECO — 20 kolommen A–T |
