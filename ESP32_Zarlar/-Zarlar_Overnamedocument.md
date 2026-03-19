@@ -169,9 +169,8 @@ Overzicht van alle aansluitingen die het Zarlar-shield moet voorzien per control
 | **T-BUS** (3-pin) | 3 | 3V3 + GND | ✅ | ✅ | ✅ | — | DS18B20 OneWire — één bus, meerdere sensoren |
 | **Pixel-line** (3-pin) | 3 | 5V + GND | ✅ | — | — | 〇 | NeoPixel data + 5V voeding |
 | **I2C** (4-pin) | 4 | 3V3 + GND | ✅ | ✅ | — | — | SDA + SCL, 4.7k pull-ups naar 3.3V |
-| **SPI** (6-pin) | 6 | 3V3 + GND | — | — | ✅ | — | MAX31865 PT1000: CS, MOSI, MISO, SCK |
-| **Relay OUT** (2-pin) | 2 | — | — | — | ✅ | — | IO1: pomprelais ECO (actief-laag) |
-| **PWM OUT** (2-pin) | 2 | — | — | ✅ | ✅ | — | HVAC: ventilator IO20 / ECO: pomp IO5 |
+| **SPI** (4-pin header) | 6 | 3V3 + GND | — | — | ✅ | — | IO20-23: CS, MOSI, MISO, SCK + 3V3 + GND |
+| **ECO Relay+PWM** (RJ45) | 8 | 3V3 + GND | — | — | ✅ | — | IO1: pomprelais, IO5: PWM circulatiepomp |
 | **UART** (3-pin) | 3 | 3V3 + GND | 〇 | — | — | — | Optie voor serieel randapparaat |
 
 #### Voltage-specificaties per connector
@@ -183,9 +182,8 @@ Overzicht van alle aansluitingen die het Zarlar-shield moet voorzien per control
 | T-BUS | 3V3 | 3.3V | DS18B20 werkt op 3.3V met 4.7k pull-up naar 3.3V. |
 | Pixel-line | **5V (VIN)** | 3.3V | NeoPixels (WS2812) vereisen 5V voeding; 3.3V data-signaal werkt. |
 | I2C | 3V3 | 3.3V | 4.7k pull-ups naar **3.3V** (niet 5V zoals op de oude Photon-shield). |
-| SPI | 3V3 of 5V | 3.3V | MAX31865 module heeft ingebouwde 3.3V LDO + level shifter — werkt op 3.3V én 5V voeding. SPI-signalen van ESP32-C6 (3.3V) zijn direct compatibel. |
-| Relay OUT | — | 3.3V drive | IO1 actief-laag: LOW = relais AAN. Vrijloop-diode op relay coil! |
-| PWM OUT | — | 3.3V | `ledcAttach()` — 1 kHz, 8-bit (0–255). Externe driver nodig voor motor. |
+| SPI | 3V3 + GND | 3.3V | MAX31865 module heeft ingebouwde 3.3V LDO + level shifter — werkt op 3.3V én 5V voeding. SPI-signalen van ESP32-C6 (3.3V) zijn direct compatibel. |
+| ECO Relay+PWM | 3V3 + GND | 3.3V | IO1 actief-laag: LOW = relais AAN (vrijloop-diode op relay coil!). IO5 PWM: `ledcAttach()` 1 kHz, 8-bit. |
 
 #### Toekomstige uitbreiding Dashboard
 
@@ -218,6 +216,8 @@ Het Dashboard-shield heeft momenteel geen IO-aansluitingen. Een **NeoPixel-matri
 | **I2C-2** | 5-pin JST SH (Qwiic) | VCC_5V + 3V3 + GND | SCL (IO11), SDA (IO13) |
 | **T-BUS** | 3-pin header | 3V3 + GND | DO (IO3) |
 | **Serial** | 4-pin header | 3V3 + GND | TX, RX |
+| **SPI ECO** | 4-pin header + 3V3 + GND | 3V3 + GND | IO20 CS, IO21 MOSI, IO22 MISO, IO23 SCK |
+| **ECO Relay+PWM** | RJ45 | 3V3 + GND | IO1 pomprelais, IO5 PWM circulatiepomp |
 | **Power IN** | 2-pin | 6–23V input | Via regelaar naar 5V |
 
 #### Passieve componenten
@@ -250,16 +250,31 @@ De I2C connector heeft VCC_5V op pin 1. De TSL2561 lux-sensor (ROOM) heeft max 3
 | TSL2561 (lux, ROOM) | 3.6V | 4-pin header pins 2–5 — VCC_5V onbereikbaar |
 | MCP23017 (HVAC I/O expander) | 5.5V | Volledige 5-pin header mogelijk |
 
-#### Reserve pads — ECO Boiler SPI
+#### ECO Boiler aansluitingen
 
-IO20, IO21, IO22, IO23 zijn uitgebroken als losse soldeereilanden. Dit zijn exact de SPI-pins voor de MAX31865 PT1000 module van de ECO Boiler. Voor ECO-gebruik: losse draden solderen op de pads.
+De reserve-pads aan de linkerzijde van het shield zijn uitgebroken en gelabeld voor ECO Boiler gebruik:
 
-| Pad | ECO-functie |
+**SPI — 4-pin header (IO20–IO23) + 3V3 + GND:**
+
+| Pin | Label | ECO-functie |
+|---|---|---|
+| IO20 | IO (CS) | SPI_CS → MAX31865 |
+| IO21 | IO (MOSI) | SPI_MOSI → MAX31865 |
+| IO22 | IO (MISO) | SPI_MISO → MAX31865 |
+| IO23 | IO (SCK) | SPI_SCK → MAX31865 |
+
+De 4-pin header heeft bijkomend 3V3 en GND voor de voeding van de MAX31865 module.
+
+**Relay + PWM — RJ45 connector (IO1 + IO5) + 3V3 + GND:**
+
+| Pin | ECO-functie |
 |---|---|
-| IO20 | SPI_CS (MAX31865) |
-| IO21 | SPI_MOSI |
-| IO22 | SPI_MISO |
-| IO23 | SPI_SCK |
+| IO1 | Pomprelais (actief-laag: LOW = AAN) |
+| IO5 | PWM circulatiepomp (0–255, 1 kHz) |
+| 3V3 | Voeding |
+| GND | Ground |
+
+⚠️ Vrijloop-diode verplicht op de relay coil. IO5 PWM vereist een externe driver voor de pomp.
 
 ---
 
