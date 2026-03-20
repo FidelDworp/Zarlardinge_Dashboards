@@ -1,6 +1,6 @@
 # Zarlar Thuisautomatisering — Master Overnamedocument
 **ESP32-C6 · Arduino IDE · Matter · Google Sheets**
-*Filip Delannoy — Zarlardinge (BE) — bijgewerkt 18 maart 2026*
+*Filip Delannoy — Zarlardinge (BE) — bijgewerkt 19 maart 2026*
 
 ---
 
@@ -27,13 +27,13 @@ Een volledig zelfgebouwd thuisautomatiseringssysteem op basis van drie ESP32-C6 
 
 | Controller | Naam | IP | MAC | Board | Versie | Status |
 |---|---|---|---|---|---|---|
-| **HVAC** | ESP32_HVAC.local | 192.168.0.70 | 58:8C:81:32:2B:90 | 32-pin clone (experimenteerbord) | v1.19 | ✅ Productie, stabiel |
-| **ECO Boiler** | ESP32_ECO Boiler | 192.168.0.71 | 58:8C:81:32:2B:D4 | 32-pin clone (blote controller) | v1.22 | ✅ Productie, stabiel |
+| **HVAC** | ESP32_HVAC.local | 192.168.0.70 | 58:8C:81:32:2B:90 | 32-pin clone | v1.19 | ✅ Productie, stabiel |
+| **ECO Boiler** | ESP32_ECO Boiler | 192.168.0.71 | 58:8C:81:32:2B:D4 | 32-pin clone | v1.22 | ✅ Productie, stabiel |
 | **ROOM / Eetplaats** | ESP32_EETPLAATS | 192.168.0.80 | 58:8C:81:32:2F:48 | 32-pin clone | v2.10 | ✅ Matter + heap stabiel |
-| **Testroom** | ESP32_EETPLAATS | 192.168.0.80 | 58:8C:81:32:29:54 | 32-pin clone (experimenteerbord, kromme pinnetjes) | v2.10 | 🔄 Zelfde IP als EETPL |
-| **Zarlar Dashboard** | ESP32_ZARLAR.local | 192.168.0.60 | A8:42:E3:4B:FA:BC | 30-pin clone (blote controller) | v3.0 | ✅ Matter HOME/UIT, WiFi tester |
+| **Testroom** | ESP32_EETPLAATS | 192.168.0.80 | 58:8C:81:32:29:54 | 32-pin clone (experimenteerbord) | v2.10 | 🔄 Zelfde IP als EETPL |
+| **Zarlar Dashboard** | ESP32_ZARLAR.local | 192.168.0.60 | A8:42:E3:4B:FA:BC | 32-pin clone | v3.0 | ✅ Matter HOME/UIT, WiFi tester |
 
-⚠️ **MAC-wissel HVAC:** het experimenteerbord (MAC `58:8C:81:32:29:54`) is eerder ook als HVAC-controller gebruikt. De huidige productie-HVAC draait op `58:8C:81:32:2B:90`. Bij twijfel: check het MAC-adres in de serial output bij boot.
+**MAC-adressen** zijn enkel nodig voor identificatie in de client-lijst van de router — niet functioneel voor de werking van het systeem. Alle controllers gebruiken vaste IP-adressen ingesteld via de `/settings` pagina.
 
 **Geplande controllers** (sketches nog niet geflasht):
 
@@ -62,7 +62,7 @@ Bestand: `partitions_16mb.csv` — plaatsen naast het `.ino` bestand in de schet
 
 ⚠️ **Nooit `huge_app` gebruiken** — had maar één app-slot en brak OTA. `app0` + `app1` elk 6 MB → OTA volledig werkend.
 
-⚠️ **Nooit een 4MB controller gebruiken voor het Dashboard** — de `partitions_16mb.csv` past niet op 4MB flash. Dit veroorzaakte een bootloop (`partition size 0x600000 exceeds flash chip size 0x400000`). Het Dashboard gebruikt nu een 32-pin 16MB controller, identiek aan de andere drie.
+⚠️ **Nooit een 4MB controller gebruiken** — de `partitions_16mb.csv` past niet op 4MB flash en veroorzaakt een bootloop (`partition size 0x600000 exceeds flash chip size 0x400000`). Alle Zarlar-controllers gebruiken uitsluitend **16MB** boards.
 
 ### 1.5 ESP32-C6 hardware — modules en boards
 
@@ -76,14 +76,18 @@ Alle Zarlar-controllers draaien op de **ESP32-C6-WROOM-1N16** module (Espressif)
 
 Voor locaties met zwakke WiFi-verbinding: **ESP32-C6-WROOM-1U** (identieke module, maar met U.FL/IPEX-connector voor externe antenne). Bereik interne antenne: ~20–50m indoors, ~80–200m buiten. Externe antenne: 2–3× beter indoors.
 
-#### Dev boards — twee formfactors in gebruik
+#### Dev boards — gestandaardiseerd op 32-pin
 
-| Type | Pins | Prijs | Aantallen | Opmerking |
-|---|---|---|---|---|
-| 32-pin clone | 32 | €2.52/stuk (AliExpress, 25 dec 2025) | 10 stuks, €65 | **Huidige productie** — clone, niet officieel Espressif |
-| 30-pin clone | 30 | €9/stuk (3 stuks, €27) | 3 stuks | Dashboard + reserve |
+Alle Zarlar-controllers die op een shield worden gemonteerd gebruiken het **32-pin clone board** (AliExpress, €2.52/stuk). Het shield is ontworpen voor de 32-pin footprint.
 
-⚠️ **Clone-boards:** de 10 stuks AliExpress-boards (€65, 25 dec 2025) zijn clones — niet officieel Espressif. Ze werken identiek maar hebben soms afwijkende pinlabels t.o.v. de officiële Espressif DevKitC-1. Gebruik altijd de pinout uit §3.1 / §5.1 van dit document, niet de opdruk op het board.
+| Type | Pins | Prijs | Gebruik |
+|---|---|---|---|
+| 32-pin clone | 32 | €2.52/stuk (AliExpress, 25 dec 2025, 10 stuks €65) | **Alle controllers op shield** |
+| 30-pin clone | 30 | €9/stuk (3 stuks, €27) | Enkel voor projecten zonder shield (bijv. losse testopstellingen) |
+
+⚠️ **Het Zarlar shield v2.0 is NIET compatibel met het 30-pin board** — andere pinvolgorde en footprint. Gebruik uitsluitend 32-pin boards op het shield.
+
+⚠️ **Clone-boards:** de AliExpress-boards zijn clones — niet officieel Espressif. Ze werken identiek maar hebben soms afwijkende pinlabels t.o.v. de officiële Espressif DevKitC-1. Gebruik altijd de pinout uit §3.1 / §5.1 van dit document, niet de opdruk op het board.
 
 #### Strapping pins — nooit als input gebruiken
 
@@ -138,8 +142,8 @@ Gedetailleerde pinout per controller staat in §3.1 (HVAC), §4.1 (ECO), §5.1 (
 
 | Pin | Functie |
 |---|---|
-| IO1 | LDR1 analog (⚠️ 10k pull-up naar 3V3!) |
-| IO2 | LDR2 analog (beam) |
+| IO1 | LDR1 analog (⚠️ spanningsdeler 10k pull-up naar 3V3!) |
+| IO2 | LDR2 analog (beam) (⚠️ zelfde spanningsdeler nodig als LDR1!) |
 | IO3 | DS18B20 OneWire |
 | IO4 | NeoPixels data |
 | IO5 | MOV1 PIR |
@@ -164,26 +168,24 @@ Overzicht van alle aansluitingen die het Zarlar-shield moet voorzien per control
 
 | Connector | Pins | Voeding | ROOM | HVAC | ECO | Dashboard | Opmerking |
 |---|---|---|---|---|---|---|---|
-| **Roomsense** (RJ45) | 8 | 3V3 + GND | ✅ | — | — | — | DHT22, MOV1 PIR, Sharp dust (LED+analog), LDR1 |
+| **Roomsense** (RJ45) | 8 | 3V3 + GND | ✅ | — | ✅ | — | ROOM: DHT22, MOV1, Dust, LDR1 / ECO: IO1=relay, IO5=PWM pomp |
 | **OPTION** (RJ45) | 8 | 5V + 3V3 + GND | ✅ | — | — | — | MOV2 PIR, CO2 PWM, TSTAT, LDR2/beam |
 | **T-BUS** (3-pin) | 3 | 3V3 + GND | ✅ | ✅ | ✅ | — | DS18B20 OneWire — één bus, meerdere sensoren |
 | **Pixel-line** (3-pin) | 3 | 5V + GND | ✅ | — | — | 〇 | NeoPixel data + 5V voeding |
-| **I2C** (4-pin) | 4 | 3V3 + GND | ✅ | ✅ | — | — | SDA + SCL, 4.7k pull-ups naar 3.3V |
+| **I2C** (5-pin Qwiic) | 5 | VCC_5V + 3V3 + GND | ✅ | ✅ | — | — | SDA + SCL, 4.7k pull-ups naar 3.3V |
 | **SPI** (4-pin header) | 6 | 3V3 + GND | — | — | ✅ | — | IO20-23: CS, MOSI, MISO, SCK + 3V3 + GND |
-| **ECO Relay+PWM** (RJ45) | 8 | 3V3 + GND | — | — | ✅ | — | IO1: pomprelais, IO5: PWM circulatiepomp |
-| **UART** (3-pin) | 3 | 3V3 + GND | 〇 | — | — | — | Optie voor serieel randapparaat |
+| **UART** (4-pin) | 4 | 3V3 + GND | 〇 | — | — | — | TX, RX + 3V3 + GND |
 
 #### Voltage-specificaties per connector
 
 | Connector | Voedings-pin | Signaal-niveau | Opmerking |
 |---|---|---|---|
-| Roomsense | 3V3 | 3.3V | HC-SR501 PIR draait op 3.3V — beweging = LOW. DHT22 op 3.3V met pull-up. |
+| Roomsense | 3V3 | 3.3V | ROOM: PIR op 3.3V (beweging=LOW), DHT22 pull-up. ECO: zelfde connector — IO1=relay (actief-laag), IO5=PWM pomp. |
 | OPTION | 5V (VIN) + 3V3 | 3.3V | MH-Z19 CO2 heeft **5V voedingspin** nodig; PWM-signaal is 3.3V. |
 | T-BUS | 3V3 | 3.3V | DS18B20 werkt op 3.3V met 4.7k pull-up naar 3.3V. |
 | Pixel-line | **5V (VIN)** | 3.3V | NeoPixels (WS2812) vereisen 5V voeding; 3.3V data-signaal werkt. |
-| I2C | 3V3 | 3.3V | 4.7k pull-ups naar **3.3V** (niet 5V zoals op de oude Photon-shield). |
-| SPI | 3V3 + GND | 3.3V | MAX31865 module heeft ingebouwde 3.3V LDO + level shifter — werkt op 3.3V én 5V voeding. SPI-signalen van ESP32-C6 (3.3V) zijn direct compatibel. |
-| ECO Relay+PWM | 3V3 + GND | 3.3V | IO1 actief-laag: LOW = relais AAN (vrijloop-diode op relay coil!). IO5 PWM: `ledcAttach()` 1 kHz, 8-bit. |
+| I2C | 3V3 | 3.3V | 4.7k pull-ups naar **3.3V**. TSL2561 (ROOM): 4-pin header zodat VCC_5V onbereikbaar is. |
+| SPI | 3V3 + GND | 3.3V | MAX31865 heeft ingebouwde 3.3V LDO + level shifter — direct compatibel. |
 
 #### Toekomstige uitbreiding Dashboard
 
@@ -210,14 +212,13 @@ Het Dashboard-shield heeft momenteel geen IO-aansluitingen. Een **NeoPixel-matri
 
 | Connector | Type | Voeding | Signalen |
 |---|---|---|---|
-| **Roomsense** | RJ45 | 3V3 + GND | DS18B20, DHT22, DUST-LED, DUST-ANA, LDR1, MOV1, T-BUS |
+| **Roomsense** | RJ45 | 3V3 + GND | ROOM: DS18B20, DHT22, DUST-LED, DUST-ANA, LDR1, MOV1, T-BUS / ECO: IO1=relay, IO5=PWM |
 | **Option** | RJ45 | 5V + 3V3 + GND | TSTAT, MOV2, CO2, LDR2, Pixels |
 | **Pixel-line** | 3-pin header | 5V + GND | PIXELS (IO4) |
 | **I2C-2** | 5-pin JST SH (Qwiic) | VCC_5V + 3V3 + GND | SCL (IO11), SDA (IO13) |
 | **T-BUS** | 3-pin header | 3V3 + GND | DO (IO3) |
 | **Serial** | 4-pin header | 3V3 + GND | TX, RX |
 | **SPI ECO** | 4-pin header + 3V3 + GND | 3V3 + GND | IO20 CS, IO21 MOSI, IO22 MISO, IO23 SCK |
-| **ECO Relay+PWM** | RJ45 | 3V3 + GND | IO1 pomprelais, IO5 PWM circulatiepomp |
 | **Power IN** | 2-pin | 6–23V input | Via regelaar naar 5V |
 
 #### Passieve componenten
@@ -226,6 +227,8 @@ Het Dashboard-shield heeft momenteel geen IO-aansluitingen. Een **NeoPixel-matri
 |---|---|---|
 | PTC | 500 mA | Resetbare zekering op VCC_5V |
 | PTC | 500 mA | Resetbare zekering op 3V3 — beschermt ESP32-C6 bij kortsluiting op sensoren |
+
+**PTC 500 mA — voldoende voor alle aangesloten lasten:** de PIXEL-LINE connector voert enkel het 3.3V datasignaal naar de **PowerPixels** (eigen ontwerp Filip Delannoy) — de zware verlichtingscircuits worden aangestuurd via optocouplers en MOSFETs op aparte voedingscircuits, volledig gescheiden van het shield. Het shield draagt dus geen verlichtingsstromen.
 | U1 | 6–23V → 5V | Spanningsregelaar (knipbaar als externe 5V gebruikt wordt) |
 | C2 | 10 µF 25V X5R | Bulk afvlakking VCC_5V |
 | C4 | 0.1 µF 50V X7R | Ontkoppeling |
@@ -252,7 +255,7 @@ De I2C connector heeft VCC_5V op pin 1. De TSL2561 lux-sensor (ROOM) heeft max 3
 
 #### ECO Boiler aansluitingen
 
-De reserve-pads aan de linkerzijde van het shield zijn uitgebroken en gelabeld voor ECO Boiler gebruik:
+De ECO Boiler gebruikt twee bestaande connectors op het shield:
 
 **SPI — 4-pin header (IO20–IO23) + 3V3 + GND:**
 
@@ -265,16 +268,16 @@ De reserve-pads aan de linkerzijde van het shield zijn uitgebroken en gelabeld v
 
 De 4-pin header heeft bijkomend 3V3 en GND voor de voeding van de MAX31865 module.
 
-**Relay + PWM — RJ45 connector (IO1 + IO5) + 3V3 + GND:**
+**Relay + PWM — via ROOMSENSE RJ45 (IO1 + IO5):**
 
-| Pin | ECO-functie |
-|---|---|
-| IO1 | Pomprelais (actief-laag: LOW = AAN) |
-| IO5 | PWM circulatiepomp (0–255, 1 kHz) |
-| 3V3 | Voeding |
-| GND | Ground |
+Geen aparte connector nodig — dezelfde ROOMSENSE RJ45 wordt hergebruikt, maar IO1 en IO5 krijgen een andere functie bij de ECO-controller:
 
-⚠️ Vrijloop-diode verplicht op de relay coil. IO5 PWM vereist een externe driver voor de pomp.
+| Pin | ROOM-gebruik | ECO-gebruik |
+|---|---|---|
+| IO1 | LDR1 analog | Pomprelais (actief-laag: LOW = AAN) |
+| IO5 | MOV1 PIR | PWM circulatiepomp (1 kHz, 8-bit) |
+
+⚠️ Vrijloop-diode verplicht op de relay coil. IO5 PWM vereist externe driver voor de pomp.
 
 ---
 
@@ -474,14 +477,14 @@ Crash-info tonen in `/settings`: laatste reden + teller + resetknop.
 | IO3 | `ONE_WIRE_PIN 3` | DS18B20 OneWire | 6× SCH boiler |
 | IO11 | `I2C_SCL 11` | I2C SCL → MCP23017 | `Wire.begin(13, 11)` — 4.7k pull-up naar 5V |
 | IO13 | `I2C_SDA 13` | I2C SDA → MCP23017 | 4.7k pull-up naar 5V |
-| IO20 | `VENT_FAN_PIN 20` | PWM ventilator | `ledcAttach(pin, 1000, 8)` — 1 kHz, 8-bit (0–255) |
+| IO20 | `VENT_FAN_PIN 20` | PWM ventilator | `ledcAttach(pin, 1000, 8)` — 3.3V PWM → externe OPAMP → 10V (vereist door Begetube ventilatie) |
 
 #### MCP23017 poortindeling
 
 | MCP pin | pinMode | Functie |
 |---|---|---|
 | 0–6 | OUTPUT | Relay circuits 1–7 (actief-laag: LOW = AAN) |
-| 7 | INPUT_PULLUP | Pomp feedback |
+| 7 | INPUT_PULLUP | Pomp feedback — actief gebruikt: vergelijkt verwachte vs. werkelijke pompstatus, ALERT in Serial bij afwijking |
 | 8 | OUTPUT (`RELAY_PUMP_SCH`) | Distributiepomp SCH |
 | 9 | OUTPUT (`RELAY_PUMP_WON`) | Distributiepomp WON |
 | 10–12 | INPUT_PULLUP | TSTAT inputs circuits (LOW = warmtevraag) |
@@ -595,8 +598,8 @@ Runtime: largest_block stabiel >35KB  ✅
 
 | ESP32-C6 Pin | `#define` | Photon | Functie | Opmerking |
 |---|---|---|---|---|
-| IO1 | `LDR_ANALOG 1` | A3 | LDR1 analog | ⚠️ 10k pull-up IO1→3V3 op shield! |
-| IO2 | `OPTION_LDR 2` | A7 | LDR2 analog (beam/MOV2) | 0–3.3V, geschaald 0–100 |
+| IO1 | `LDR_ANALOG 1` | A3 | LDR1 analog | ⚠️ 10k spanningsdeler (pull-up IO1→3V3) op shield! |
+| IO2 | `OPTION_LDR 2` | A7 | LDR2 analog (beam/MOV2) | ⚠️ Zelfde spanningsdeler nodig als LDR1! |
 | IO3 | `ONE_WIRE_PIN 3` | D3 | DS18B20 OneWire | 3.3V pull-up |
 | IO4 | `NEOPIXEL_PIN 4` | D4 | NeoPixels data | NEO_GRB + NEO_KHZ800 |
 | IO5 | `PIR_MOV1 5` | D5 | MOV1 PIR | INPUT_PULLUP — beweging = LOW |
@@ -609,7 +612,7 @@ Runtime: largest_block stabiel >35KB  ✅
 | IO18 | `CO2_PWM 18` | A4 | CO2 PWM input (MH-Z19) | ⚠️ MH-Z19 heeft 5V voedingspin nodig! |
 | IO19 | `PIR_MOV2 19` | A5 | MOV2 PIR | INPUT_PULLUP — beweging = LOW |
 
-⚠️ **IO1 heeft een 10k pull-up naar 3V3** op de Roomsense-shield — beïnvloedt analoge meting van LDR1.
+⚠️ **Beide LDRs (IO1 en IO2) hebben een spanningsdeler nodig** — een 10k pull-up naar 3V3 vormt een spanningsdeler met de LDR-weerstand zodat de analoge waarde correct geschaald wordt naar 0–3.3V. IO1 heeft deze al op de Roomsense-shield; IO2 (OPTION-connector) heeft dezelfde schakeling nodig.
 
 ⚠️ **MH-Z19 CO2-sensor** heeft aparte 5V voedingspin — PWM-signaal zelf is 3.3V compatibel.
 
@@ -763,13 +766,11 @@ Elke pagina vervangt `<style>...</style>` door `<link rel="stylesheet" href="/st
 
 | Component | Detail |
 |---|---|
-| Board | ESP32-C6 **30-pin** clone (blote controller, MAC `A8:42:E3:4B:FA:BC`) |
+| Board | ESP32-C6 **32-pin** clone (MAC `A8:42:E3:4B:FA:BC`) |
 | Voeding | Test: 5V USB-C / Productie: 5V via VIN (Zarlar shield, PTC 500 mA) |
 | Static IP | 192.168.0.60 |
 | WebServer | `WebServer` (blocking) — bewust, niet `AsyncWebServer` |
 | Sketch | `ESP32_C6_Zarlar_Dashboard_17mar_wifi.ino` v3.0 |
-
-⚠️ **30-pin vs 32-pin:** het Dashboard gebruikt een 30-pin board. De pinvolgorde verschilt van het 32-pin board — gebruik de pinout van het 30-pin board bij hardware-aanpassingen. IO14 ontbreekt op beide formfactors.
 
 ### 6.2 Wat het Dashboard doet
 
@@ -853,13 +854,89 @@ Scan-resultaat: alle netwerken behalve eigen SSID, max 4, gesorteerd sterkste ee
 
 ---
 
-## 7. Schimmelbescherming via vochtigheid
+## 7. PowerPixels — ControlpiXel systeem
+
+### 7.1 Concept
+
+**PowerPixels** zijn een eigen ontwerp van iTroniX / Filip Delannoy. Ze combineren de eenvoudige NeoPixel-aansturing (WS2812B protocol, 3.3V datasignaal) met zware verlichtingscircuits via galvanische scheiding.
+
+```
+ESP32-C6 IO4 (3.3V)
+        │
+        ▼
+  NeoPixel chip (WS2812B)
+        │
+   Optocouplers
+        │
+   MOSFET gates
+        │
+   3–24V verlichtingscircuits (aparte voeding, aparte GND)
+```
+
+De ESP32-C6 en het shield dragen **geen verlichtingsstromen** — enkel het 3.3V datasignaal gaat via de PIXEL-LINE connector. De zware stromen lopen volledig gescheiden op eigen voedingscircuits.
+
+### 7.2 ControlpiXel TRIO v1.0
+
+| Kenmerk | Detail |
+|---|---|
+| Ontwerp | iTroniX / FiDel — v1.0, 1 okt 2020 |
+| Kanalen | 3 — R, G, B (afzonderlijk aanstuurbaar) |
+| Protocol | NeoPixel / WS2812B (daisy-chain via DI → DO) |
+| Voedingsspanning | 3–24V op aparte PGND |
+| Scheiding | Optocouplers → MOSFET gates |
+| Extra | PWM-OUT beschikbaar als bijkomende uitgang |
+
+### 7.3 Koppeling met ROOM-controller sketch
+
+De ROOM-sketch gebruikt de standaard `Adafruit_NeoPixel` library. De ControlpiXel TRIO ziet er vanuit de sketch identiek uit als een gewone NeoPixel-strip.
+
+**Configuratie:**
+
+| NVS-sleutel | Default | Beschrijving |
+|---|---|---|
+| `pixels_num` | 8 | Aantal PowerPixels (1–30, instelbaar via `/settings`) |
+| `pixel_nick_N` | — | Nickname per pixel (bijv. "Bureaulamp", "Spots") |
+| `pixel_on_N` | false | Aan/uit toestand per pixel (persistent in NVS) |
+| `pixel_user_on_N` | false | Manuele intentie per pixel |
+| `pixel_mode_0` | 0 | Pixel 0 modus: 0 = AUTO (PIR MOV1), 1 = MANUEEL |
+| `pixel_mode_1` | 0 | Pixel 1 modus: 0 = AUTO (PIR MOV2), 1 = MANUEEL |
+
+**Pixellogica:**
+
+| Pixel | Type | Gedrag |
+|---|---|---|
+| 0 | MOV-pixel | AUTO: aan bij beweging MOV1 + donker. MANUEEL: altijd aan (vaste kleur) |
+| 1 | MOV-pixel | AUTO: aan bij beweging MOV2 + donker (enkel als `mov2_enabled`). MANUEEL: altijd aan |
+| 2 … pixels_num-1 | Normale pixels | Aan/uit via webUI, Matter of NVS |
+
+**Boot-gedrag:** pixels buiten `pixels_num` worden bij boot expliciet gewist (`updateLength(30)` + `clear()` + `show()`), daarna teruggeschaald naar `pixels_num`. Voorkomt spookpixels op een langere fysieke strip.
+
+### 7.4 Matter-endpoints voor pixels (ROOM v2.10)
+
+| Endpoint | Type | Wat het aanstuurt |
+|---|---|---|
+| EP5 | `MatterColorLight` | Globale kleur (R/G/B) voor alle pixels — on/off altijd `true` |
+| EP6 | `MatterOnOffLight` | SW1: pixel 0 MOV-override (MANUEEL/AUTO) |
+| EP7 | `MatterOnOffLight` | SW2: pixel 1 aan/uit |
+| EP8 | `MatterOnOffLight` | SW3: pixels 2…pixels_num-1 samen aan/uit |
+
+⚠️ **`MatterColorLight` niet `MatterEnhancedColorLight`** — de Enhanced variant blokkeert de "aparte tegels" optie in Apple Home.
+
+⚠️ **Color light on/off wordt genegeerd** — altijd op `true` gehouden. Schakelen gebeurt via de drie `MatterOnOffLight` endpoints.
+
+### 7.5 Toekomstig: PowerPixels op Dashboard
+
+Een NeoPixel-matrix (of ControlpiXel) is voorzien als toekomstige uitbreiding op het Zarlar Dashboard-shield. Doel: visuele statusweergave van alle controllers (kleur per controller = online/offline/alarm, of live heatmap van verwarmingskringen). Hiervoor is een PIXEL-LINE aansluiting (5V + GND + data IO4) te voorzien op het Dashboard-shield.
+
+---
+
+## 8. Schimmelbescherming via vochtigheid
 
 Elke ROOM controller meet lokaal de luchtvochtigheid. Bij overschrijding van een drempelwaarde beslist de room controller autonoom om ventilatie te vragen via JSON key `g` (Vent_percent). De HVAC neemt de hoogste ventilatievraag van alle zones en stuurt de centrale ventilator aan. De volledige schimmelbeschermingslogica zit in de room controllers — de HVAC is enkel uitvoerder.
 
 ---
 
-## 8. Bestanden
+## 9. Bestanden
 
 | Bestand | Beschrijving |
 |---|---|
@@ -876,7 +953,7 @@ Elke ROOM controller meet lokaal de luchtvochtigheid. Bij overschrijding van een
 
 ---
 
-## 9. Instructies voor nieuwe sessie
+## 10. Instructies voor nieuwe sessie
 
 1. **Upload** de actuele sketch als bijlage + dit document
 2. **Vraag Claude** het document te lezen en samen te vatten vóór hij iets aanpast
@@ -895,4 +972,4 @@ Elke ROOM controller meet lokaal de luchtvochtigheid. Bij overschrijding van een
 
 ---
 
-*Zarlar project — Filip Delannoy — bijgewerkt 18 maart 2026*
+*Zarlar project — Filip Delannoy — bijgewerkt 19 maart 2026*
