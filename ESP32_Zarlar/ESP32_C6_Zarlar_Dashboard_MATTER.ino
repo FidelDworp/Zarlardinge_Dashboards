@@ -72,7 +72,7 @@
    16mar26        v2.4  HOME/UIT broadcast naar alle rooms.
    11mar26        v2.3  WiFi sleep uit. AP + captive portal.
    11mar26        v2.0  Volledig herschreven.
-   ============================================================ * /
+   ============================================================ */
 
 // ⚠️ Verplicht voor ESP32-C6 (RISC-V) — vóór alle #include statements
 #define Serial Serial0
