@@ -1,5 +1,5 @@
 /* ============================================================
-   Zarlar Dashboard v4.5
+   Zarlar Dashboard v4.6
    ESP32-C6 (32-pin 16MB) @ 192.168.0.60
    Filip Delannoy
 
@@ -45,6 +45,10 @@
        /matrix_test of Serial commando 'matrix-test'. Pas MATRIX_FLIP_H
        aan als kolommen gespiegeld zijn.
 
+   01apr26        v4.6  Separator + gereserveerde rijen → zwart (pixels uit).
+                        MROW rij 10: R-EETPL idx 13→11 (geverifieerd via status).
+                        Serial 'status': matrix ctrl-index debug toegevoegd.
+                        Verouderde HVAC key-waarschuwing verwijderd.
    26mar26        v4.5  ECO renderer herwerkt: collector→pomp→6 boilerlagen→energie→heap.
                         Pomp relay weg (PWM volstaat), HOME global weg, FreeHeap% toegevoegd.
    26mar26        v4.4  ROOM col13: pixel_on_str wit evenredig met actieve pixels.
@@ -226,7 +230,7 @@ const MatrixRowMap MROW[MATRIX_HEIGHT] = {
   {  8, true  }, // rij  7: R-INKOM  (ctrl idx 8)
   {  9, true  }, // rij  8: R-KEUKEN (ctrl idx 9)
   { 10, true  }, // rij  9: R-WASPL  (ctrl idx 10)
-  { 13, true  }, // rij 10: R-EETPL  (ctrl idx 13 = TESTROOM actief)
+  { 11, true  }, // rij 10: R-EETPL  (ctrl idx 11 — geverifieerd 1apr26)
   { 12, true  }, // rij 11: R-ZITPL  (ctrl idx 12)
   { -1, false }, // rij 12: leeg
   { -1, false }, // rij 13: leeg
@@ -940,21 +944,17 @@ void updateMatrix() {
     bool is_room  = MROW[row].is_room;
 
     if (ci == -1) {
-      // Lege rij — zwart
+      // Lege rij — zwart (pixels uit)
       continue;
     }
     if (ci == -2) {
-      // Separator — dim amber streep
-      for (int c = 0; c < MATRIX_WIDTH; c++) matPx(row, c, 35, 14, 0);
+      // Separator — zwart (pixels uit)
       continue;
     }
 
-    // Gereserveerde controllers (inactive + geen json)
+    // Gereserveerde/inactieve controllers — volledig zwart, geen kleur
     if (!controllers[ci].active) {
-      // Dim paars: "toekomstig"
-      statusPx(row, 0, STATUS_INACTIVE);
-      for (int c = 1; c < MATRIX_WIDTH; c++) matPx(row, c, 12, 0, 12);
-      continue;
+      continue;  // pixels uit — matrix.clear() zorgt voor zwart
     }
 
     if (is_room) {
@@ -1618,7 +1618,7 @@ void setup() {
   Serial.begin(115200);
   delay(3000);
   Serial.println("\n\n╔══════════════════════════════════════╗");
-  Serial.println("║  Zarlar Dashboard v4.5               ║");
+  Serial.println("║  Zarlar Dashboard v4.6               ║");
   Serial.println("║  192.168.0.60 — Statusmatrix 16×16  ║");
   Serial.println("╚══════════════════════════════════════╝\n");
 
@@ -1679,9 +1679,7 @@ void setup() {
 
   setupWebServer();
 
-  Serial.println(F("\n⚠️  HVAC JSON KEYS VERIFICATIE:"));
-  Serial.println(F("   Open http://192.168.0.70/json in browser"));
-  Serial.println(F("   Pas HVAC_KEY_* defines bovenaan sketch aan\n"));
+
   Serial.println("READY — http://192.168.0.60/\n");
 }
 
@@ -1729,7 +1727,7 @@ void loop() {
       ESP.restart();
     }
     if (cmd.equalsIgnoreCase("status")) {
-      Serial.printf("\n=== Zarlar Dashboard v4.5 | Uptime: %lu s ===\n", millis()/1000);
+      Serial.printf("\n=== Zarlar Dashboard v4.6 | Uptime: %lu s ===\n", millis()/1000);
       Serial.printf("IP: %s  RSSI: %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
       Serial.printf("Heap free: %u  Largest: %u\n",
                     ESP.getFreeHeap(),
@@ -1737,6 +1735,27 @@ void loop() {
       Serial.printf("Matter: %s\n", Matter.isDeviceCommissioned() ? "gepaard" : "niet gepaard");
       Serial.printf("HOME: %s  Matrix brightness: %d\n",
                     home_mode_global ? "THUIS" : "WEG", matrix_brightness);
+      // ── Matrix controller-index debug ─────────────────────────────────────
+      Serial.println(F("\n--- Actieve controllers (idx | naam | status | json?) ---"));
+      for (int i = 0; i < 22; i++) {
+        if (controllers[i].active) {
+          Serial.printf("  idx %2d | %-16s | %s | json=%s\n",
+            i,
+            controllers[i].name,
+            controllers[i].status == STATUS_ONLINE  ? "ONLINE " :
+            controllers[i].status == STATUS_OFFLINE ? "OFFLINE" :
+            controllers[i].status == STATUS_PENDING ? "PENDING" : "INACTF ",
+            controllers[i].last_json.length() > 5 ? "ja" : "nee");
+        }
+      }
+      Serial.println(F("--- MROW matrix-rij mapping ---"));
+      for (int r = 0; r < MATRIX_HEIGHT; r++) {
+        int ci = MROW[r].ctrl_idx;
+        if (ci >= 0)
+          Serial.printf("  rij %2d → idx %2d (%s) actief=%s\n",
+            r, ci, controllers[ci].name,
+            controllers[ci].active ? "JA" : "NEE ← PROBLEEM!");
+      }
     }
     if (cmd.equalsIgnoreCase("matrix-test")) {
       matrixTestPattern();
