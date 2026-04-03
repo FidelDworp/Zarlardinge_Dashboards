@@ -45,6 +45,7 @@
        /matrix_test of Serial commando 'matrix-test'. Pas MATRIX_FLIP_H
        aan als kolommen gespiegeld zijn.
 
+   02apr26        v5.1  2 Controllers vervangen: ZITPL en INKOM (Nieuwe IDs)
    01apr26        v5.0  Automatische ESP32/Photon fallback per matrix-rij.
                         MatrixRowDef struct: esp_idx + photon_idx + sys_idx.
                         MROW volgorde gecorrigeerd: stemt nu exact overeen
@@ -161,11 +162,11 @@ Controller controllers[NUM_CONTROLLERS] = {
   {"R-TESTROOM","192.168.0.80", "", TYPE_ROOM,   true,  STATUS_PENDING,  "", "", 0},
   {"P-BandB",   "", "30002c000547343233323032", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
   {"P-Badkamer","", "5600420005504b464d323520", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
-  {"P-Inkom",   "", "420035000e47343432313031", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
+  {"P-Inkom",   "", "2c0026000747343232363230", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
   {"P-Keuken",  "", "310017001647373335333438", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
   {"P-Waspl",   "", "33004f000e504b464d323520", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
   {"P-Eetpl",   "", "210042000b47343432313031", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
-  {"P-Zitpl",   "", "410038000547353138383138", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
+  {"P-Zitpl",   "", "200033000547373336323230", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
   {"P-TESTROOM","", "200033000547373336323230", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
 };
 
