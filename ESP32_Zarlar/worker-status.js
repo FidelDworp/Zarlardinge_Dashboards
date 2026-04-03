@@ -1,4 +1,6 @@
 // worker-status.js — v2.0 met /sensor endpoint voor ESP32 Dashboard matrix
+// https://dash.cloudflare.com/6410f9752a55e2ae9964a1e9462c7304/home/overview
+// Deployment url: https://controllers-diagnose.filip-delannoy.workers.dev/
 const PARTICLE_TOKEN = "ba9d9e1ed9f70cc5db24de2db21764a3a3afe28b";
 
 const DEVICES = [
