@@ -1,5 +1,5 @@
 /* ============================================================
-   Zarlar Dashboard v5.0
+   Zarlar Dashboard v5.1
    ESP32-C6 (32-pin 16MB) @ 192.168.0.60
    Filip Delannoy
 
@@ -45,7 +45,7 @@
        /matrix_test of Serial commando 'matrix-test'. Pas MATRIX_FLIP_H
        aan als kolommen gespiegeld zijn.
 
-   02apr26        v5.1  2 Controllers vervangen: ZITPL en INKOM (Nieuwe IDs)
+   02apr26        v5.1  5 Controllers vervangen door "static damage!": ZITPL EETPL, OUTSIDE, ACCESS en INKOM (Nieuwe IDs)
    01apr26        v5.0  Automatische ESP32/Photon fallback per matrix-rij.
                         MatrixRowDef struct: esp_idx + photon_idx + sys_idx.
                         MROW volgorde gecorrigeerd: stemt nu exact overeen
@@ -165,7 +165,7 @@ Controller controllers[NUM_CONTROLLERS] = {
   {"P-Inkom",   "", "2c0026000747343232363230", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
   {"P-Keuken",  "", "310017001647373335333438", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
   {"P-Waspl",   "", "33004f000e504b464d323520", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
-  {"P-Eetpl",   "", "210042000b47343432313031", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
+  {"P-Eetpl",   "", "3c0030000a47353138383138", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
   {"P-Zitpl",   "", "200033000547373336323230", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
   {"P-TESTROOM","", "200033000547373336323230", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
 };
