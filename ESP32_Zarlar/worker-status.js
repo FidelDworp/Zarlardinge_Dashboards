@@ -4,13 +4,13 @@ const PARTICLE_TOKEN = "ba9d9e1ed9f70cc5db24de2db21764a3a3afe28b";
 const DEVICES = [
     { id: "30002c000547343233323032", name: "R1-BandB" },
     { id: "5600420005504b464d323520", name: "R2-BADK" },
-    { id: "420035000e47343432313031", name: "R3-INKOM" },
+    { id: "2c0026000747343232363230", name: "R3-INKOM" },
     { id: "310017001647373335333438", name: "R4-KEUK" },
     { id: "33004f000e504b464d323520", name: "R5-WASPL" },
-    { id: "210042000b47343432313031", name: "R6-EETPL" },
-    { id: "410038000547353138383138", name: "R7-ZITPL" },
-    { id: "2d0032001247333438353733", name: "R8-ACCESS" },
-    { id: "390028001147343339383037", name: "S-OUTSIDE" },
+    { id: "3c0030000a47353138383138", name: "R6-EETPL" },
+    { id: "200033000547373336323230", name: "R7-ZITPL" },
+    { id: "30002d000747353138383138", name: "R8-ACCESS" },
+    { id: "3e003f001447343338333633", name: "S-OUTSIDE" },
     { id: "310049000f47343432313031", name: "S-ECO-boiler" },
     { id: "290044000147353138383138", name: "S-HVAC" }
 ];
