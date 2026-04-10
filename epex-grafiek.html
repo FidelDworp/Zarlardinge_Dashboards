@@ -308,30 +308,15 @@ function renderChart(tijden, prijzen) {
 }
 
 function updateKaarten(tijden, prijzen) {
-  const nuIdx = huidigUur(tijden);
-  const nuCt  = prijzen[nuIdx] / 10;
-  document.getElementById('prijs-nu').textContent  = nuCt.toFixed(1);
-  document.getElementById('prijs-nu').className    = 'value ' + klasLabel(nuCt)[0];
-  const badge = document.getElementById('badge-nu');
-  badge.textContent = klasLabel(nuCt)[1];
-  badge.className   = 'badge ' + klasLabel(nuCt)[0];
-
-  const sorted = [...prijzen].map((p,i)=>({p,i})).sort((a,b)=>a.p-b.p);
-  const minObj = sorted[0], maxObj = sorted[sorted.length-1];
-  document.getElementById('prijs-min').textContent = (minObj.p/10).toFixed(1);
-  document.getElementById('uur-min').textContent   = `${fmtTime(tijden[minObj.i])} · ${fmtDag(tijden[minObj.i])}`;
-  document.getElementById('prijs-max').textContent = (maxObj.p/10).toFixed(1);
-  document.getElementById('uur-max').textContent   = `${fmtTime(tijden[maxObj.i])} · ${fmtDag(tijden[maxObj.i])}`;
-
+  // Dag-labels boven grafiek
   const nu = new Date();
-  const vP = prijzen.filter((_,i) => new Date(tijden[i]).toDateString() === nu.toDateString());
-  const gem = vP.reduce((a,b)=>a+b,0) / vP.length;
-  document.getElementById('prijs-gem').textContent = (gem/10).toFixed(1);
-  document.getElementById('datum').textContent = nu.toLocaleDateString('nl-BE', {weekday:'long',day:'numeric',month:'long'});
-
   const morgen = new Date(nu); morgen.setDate(nu.getDate()+1);
-  document.getElementById('dag-label-1').textContent = `▶ Vandaag ${nu.toLocaleDateString('nl-BE',{day:'numeric',month:'short'})}`;
-  document.getElementById('dag-label-2').textContent = `Morgen ${morgen.toLocaleDateString('nl-BE',{day:'numeric',month:'short'})}`;
+  document.getElementById('datum').textContent =
+    nu.toLocaleDateString('nl-BE', {weekday:'long', day:'numeric', month:'long'});
+  document.getElementById('dag-label-1').textContent =
+    `▶ Vandaag ${nu.toLocaleDateString('nl-BE', {day:'numeric', month:'short'})}`;
+  document.getElementById('dag-label-2').textContent =
+    `Morgen ${morgen.toLocaleDateString('nl-BE', {day:'numeric', month:'short'})}`;
 }
 
 // Groepeer aaneengesloten uren onder/boven drempel in periodes
