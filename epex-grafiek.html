@@ -446,35 +446,107 @@ async function haalDag(j,m,d) {
   return res.json();
 }
 
+function slaDataOp(tijden, prijzen) {
+  try {
+    localStorage.setItem('epex_tijden',  JSON.stringify(tijden));
+    localStorage.setItem('epex_prijzen', JSON.stringify(prijzen));
+    localStorage.setItem('epex_ts',      Date.now().toString());
+  } catch(e) { console.warn('Cache opslaan mislukt:', e); }
+}
+
+function laadCache() {
+  try {
+    const ts      = parseInt(localStorage.getItem('epex_ts') || '0');
+    const oudheid = Date.now() - ts;
+    if (oudheid > 26 * 3600000) return null; // cache ouder dan 26u: negeren
+    const tijden  = JSON.parse(localStorage.getItem('epex_tijden')  || 'null');
+    const prijzen = JSON.parse(localStorage.getItem('epex_prijzen') || 'null');
+    if (!tijden || !prijzen || tijden.length === 0) return null;
+    // Filter: enkel slots waarvan het einde nog in de toekomst ligt
+    const nu  = Date.now();
+    const ivl = new Date(tijden[1]).getTime() - new Date(tijden[0]).getTime();
+    const idx = tijden.findIndex((t,i) => new Date(t).getTime() + ivl > nu);
+    if (idx < 0) return null; // alles voorbij
+    return { tijden: tijden.slice(idx), prijzen: prijzen.slice(idx) };
+  } catch(e) { return null; }
+}
+
+function toonData(tijden, prijzen, bron) {
+  allTimes  = tijden;
+  allPrices = prijzen;
+  renderChart(tijden, prijzen);
+  updateKaarten(tijden, prijzen);
+  updateArbitrage(tijden, prijzen);
+
+  // Verwijder oude banners
+  document.querySelectorAll('.data-banner').forEach(b => b.remove());
+  if (bron !== 'live') {
+    const b = document.createElement('div');
+    b.className   = 'data-banner';
+    b.style.cssText = 'font-size:.68rem;font-family:Space Mono,monospace;text-align:center;margin-top:10px;';
+    b.style.color = bron === 'cache' ? '#58a6ff' : '#d29922';
+    b.textContent = bron === 'cache'
+      ? 'ℹ Gecachte data — live refresh volgt bij volgende uurlijkse poging'
+      : '⚠ Demo-data — gebruik localhost of GitHub Pages voor live data';
+    document.querySelector('.chart-wrap').appendChild(b);
+  }
+}
+
 async function laadEPEX() {
   document.getElementById('status-msg').style.display = 'block';
   document.getElementById('epexChart').style.display  = 'none';
 
-  const nu = new Date();
+  const nu     = new Date();
   const morgen = new Date(nu); morgen.setDate(nu.getDate()+1);
+  const gisteren = new Date(nu); gisteren.setDate(nu.getDate()-1);
   const ymd = d => [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')];
 
+  // Probeer vandaag + morgen op te halen
+  // Als morgen nog niet beschikbaar is (vóór ~13u): enkel vandaag is ook goed
   try {
-    const [dV, dM] = await Promise.all([haalDag(...ymd(nu)), haalDag(...ymd(morgen))]);
+    const resultaten = await Promise.allSettled([
+      haalDag(...ymd(nu)),
+      haalDag(...ymd(morgen))
+    ]);
+
+    const dV = resultaten[0].status === 'fulfilled' ? resultaten[0].value : null;
+    const dM = resultaten[1].status === 'fulfilled' ? resultaten[1].value : null;
+
+    if (!dV || !dV.price || dV.price.length === 0) throw new Error('Geen data voor vandaag');
+
     const tV = dV.unix_seconds.map(s => new Date(s*1000).toISOString());
-    const tM = (dM.unix_seconds||[]).map(s => new Date(s*1000).toISOString());
-    allTimes  = [...tV, ...tM];
-    allPrices = [...(dV.price||[]), ...(dM.price||[])];
-    if (allPrices.length === 0) throw new Error('Geen data');
-    renderChart(allTimes, allPrices);
-    updateKaarten(allTimes, allPrices);
-    updateArbitrage(allTimes, allPrices);
+    const tM = dM && dM.unix_seconds ? dM.unix_seconds.map(s => new Date(s*1000).toISOString()) : [];
+    const tijden  = [...tV, ...tM];
+    const prijzen = [...(dV.price||[]), ...(dM && dM.price ? dM.price : [])];
+
+    slaDataOp(tijden, prijzen); // bewaar in cache
+
+    const morgenBeschikbaar = tM.length > 0;
+    toonData(tijden, prijzen, 'live');
+
+    // Info als morgen nog niet beschikbaar is
+    if (!morgenBeschikbaar) {
+      const b = document.createElement('div');
+      b.className   = 'data-banner';
+      b.style.cssText = 'font-size:.68rem;color:#58a6ff;font-family:Space Mono,monospace;text-align:center;margin-top:10px;';
+      b.textContent = 'ℹ Prijzen voor morgen nog niet gepubliceerd (verschijnen ~13u)';
+      document.querySelector('.chart-wrap').appendChild(b);
+    }
+
   } catch(e) {
-    console.warn('Demo-data:', e.message);
+    console.warn('API fout:', e.message);
+
+    // Probeer cache
+    const cache = laadCache();
+    if (cache) {
+      console.info('Cache gebruikt:', cache.tijden.length, 'slots');
+      toonData(cache.tijden, cache.prijzen, 'cache');
+      return;
+    }
+
+    // Laatste redmiddel: demo-data
     const { tijden, prijzen } = demoData();
-    allTimes = tijden; allPrices = prijzen;
-    renderChart(allTimes, allPrices);
-    updateKaarten(allTimes, allPrices);
-    updateArbitrage(allTimes, allPrices);
-    const b = document.createElement('div');
-    b.style.cssText = 'font-size:.68rem;color:var(--yellow);font-family:Space Mono,monospace;text-align:center;margin-top:10px;';
-    b.textContent = '⚠ Demo-data — gebruik localhost of GitHub Pages voor live data';
-    document.querySelector('.chart-wrap').appendChild(b);
+    toonData(tijden, prijzen, 'demo');
   }
 }
 
