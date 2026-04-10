@@ -11,7 +11,8 @@
     --bg:      #0d1117;
     --panel:   #161b22;
     --border:  #21262d;
-    --green:   #3fb950;
+    --green:   #2a8a3e;  /* donkerder goedkoop */
+    --lime:    #a8ff3e;   /* superhel negatief */
     --yellow:  #d29922;
     --red:     #f85149;
     --blue:    #58a6ff;
@@ -60,14 +61,15 @@
   .card .when  { font-size: .72rem; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
   .badge { display: inline-block; font-size: .66rem; font-family: var(--mono); padding: 2px 7px; border-radius: 4px; margin-top: 7px; }
   .green  { color: var(--green); }
+  .lime   { color: var(--lime); }
   .yellow { color: var(--yellow); }
   .red    { color: var(--red); }
   .blue   { color: var(--blue); }
   .badge.green  { background: rgba(63,185,80,.15);  color: var(--green); }
   .badge.yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
   .badge.red    { background: rgba(248,81,73,.15);  color: var(--red); }
-  .badge.cyan   { background: rgba(0,212,170,.15);   color: #00d4aa; }
-  .cyan { color: #00d4aa; }
+  .badge.lime   { background: rgba(168,255,62,.15);  color: var(--lime); }
+  .lime { color: var(--lime); }
 
   .chart-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px 18px 14px; margin-bottom: 16px; }
   .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
@@ -82,7 +84,7 @@
 
   .arb-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 16px; }
   .arb-header { font-family: var(--mono); font-size: .73rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; }
-  .arb-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: start; }
+  .arb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
   .arb-col { display: flex; flex-direction: column; gap: 6px; }
   .arb-col-title { font-family: var(--mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
   .arb-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
@@ -92,23 +94,22 @@
   .arb-time  { font-family: var(--mono); font-size: .82rem; color: var(--text); }
   .arb-dag   { font-size: .65rem; color: var(--muted); margin-left: 4px; }
   .arb-price { font-family: var(--mono); font-size: .9rem; font-weight: 700; }
+  .arb-winst { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--muted); flex-wrap: wrap; }
+  .arb-winst-val { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--green); margin-left: 4px; }
 
-  .spread-card { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 10px; text-align: center; min-width: 90px; }
-  .spread-card .s-label { font-family: var(--mono); font-size: .6rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
-  .spread-card .s-value { font-family: var(--mono); font-size: 1.3rem; font-weight: 700; color: var(--blue); line-height: 1; }
-  .spread-card .s-unit  { font-size: .68rem; color: var(--muted); margin-top: 3px; }
-  .spread-card .s-bat   { font-size: .65rem; color: var(--muted); margin-top: 8px; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 8px; width: 100%; }
-  .spread-card .s-bat strong { color: var(--green); font-family: var(--mono); }
 
-  .footer { font-size: .68rem; color: var(--muted); text-align: center; font-family: var(--mono); margin-top: 4px; }
-  .footer a { color: var(--muted); }
-  .footer input { background: transparent; border: none; border-bottom: 1px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: .68rem; width: 36px; text-align: center; }
+  .instellingen { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 4px; }
+  .inst-title { font-family: var(--mono); font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-right: 4px; }
+  .inst-item { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: .75rem; color: var(--text); cursor: default; }
+  .inst-input-wrap { display: flex; align-items: center; gap: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; }
+  .inst-input-wrap input { background: transparent; border: none; outline: none; color: var(--text); font-family: var(--mono); font-size: .82rem; font-weight: 700; width: 44px; text-align: right; }
+  .inst-unit { font-size: .68rem; color: var(--muted); }
+  .inst-bron { font-size: .65rem; color: var(--muted); font-family: var(--mono); margin-left: auto; }
+  .inst-bron a { color: var(--muted); }
   #status-msg { font-size: .75rem; color: var(--muted); font-family: var(--mono); text-align: center; padding: 40px; display: none; }
 
   @media (max-width: 500px) {
     .arb-grid { grid-template-columns: 1fr; }
-    .spread-card { flex-direction: row; gap: 16px; padding: 12px; }
-    .spread-card .s-bat { border-top: none; border-left: 1px solid var(--border); padding-top: 0; padding-left: 12px; margin-top: 0; }
   }
 </style>
 </head>
@@ -154,7 +155,7 @@
   <div class="chart-header">
     <span class="chart-title">Dag-ahead prijzen 48u — EPEX SPOT BE</span>
     <div class="legend">
-      <span><span class="leg-dot" style="background:#00d4aa"></span>Negatief</span>
+      <span><span class="leg-dot" style="background:var(--lime)"></span>Negatief</span>
       <span><span class="leg-dot" style="background:var(--green)"></span>Goedkoop</span>
       <span><span class="leg-dot" style="background:var(--yellow)"></span>Normaal</span>
       <span><span class="leg-dot" style="background:var(--red)"></span>Duur</span>
@@ -173,34 +174,47 @@
   <div class="arb-header">⚡ Arbitrage — beste momenten komende 48u</div>
   <div class="arb-grid">
     <div class="arb-col">
-      <div class="arb-col-title green">↓ Goedkoopste uren</div>
-      <div style="font-size:.65rem;color:var(--muted);margin-bottom:6px;font-family:var(--mono)">Laden EV · Boiler · Batterij</div>
+      <div class="arb-col-title green">↓ Best om te verbruiken</div>
+      <div style="font-size:.65rem;color:var(--muted);margin-bottom:6px;font-family:var(--mono)">EV lader · Boiler · Batterij laden</div>
       <div id="arb-goedkoop"></div>
     </div>
-    <div class="spread-card">
-      <div class="s-label">Spread</div>
-      <div class="s-value" id="spread-val">—</div>
-      <div class="s-unit">ct/kWh</div>
-      <div class="s-bat">10 kWh bat.<br><strong id="spread-winst">—</strong>/dag</div>
-    </div>
     <div class="arb-col">
-      <div class="arb-col-title red">↑ Duurste uren</div>
-      <div style="font-size:.65rem;color:var(--muted);margin-bottom:6px;font-family:var(--mono)">Batterij ontladen · Vermijden</div>
+      <div class="arb-col-title red">↑ Best om batterij te ontladen</div>
+      <div style="font-size:.65rem;color:var(--muted);margin-bottom:6px;font-family:var(--mono)">Vermijd grote verbruikers</div>
       <div id="arb-duur"></div>
     </div>
   </div>
+  <div class="arb-winst">
+    <span>Bedrag te verdienen door batterij arbitrage:</span>
+    <span class="arb-winst-val" id="arb-winst-val">— </span>
+    <span style="color:var(--muted)">/24u</span>
+  </div>
 </div>
 
-<div class="footer">
-  Bron: <a href="https://energy-charts.info" target="_blank">energy-charts.info</a> (Fraunhofer ISE) · EPEX SPOT BE ·
-  Vast contract: <input id="inp-vast" type="number" value="28.0" step="0.1" min="0" max="99" title="Pas je vaste contract aan (ct/kWh)"> ct/kWh
+<div class="instellingen">
+  <span class="inst-title">⚙ Instellingen</span>
+  <label class="inst-item">
+    <span>Vaste prijs</span>
+    <span class="inst-input-wrap">
+      <input id="inp-vast" type="number" value="28.0" step="0.1" min="0" max="99">
+      <span class="inst-unit">ct/kWh</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Batterij</span>
+    <span class="inst-input-wrap">
+      <input id="inp-bat" type="number" value="10" step="1" min="1" max="100">
+      <span class="inst-unit">kWh</span>
+    </span>
+  </label>
+  <span class="inst-bron">Bron: <a href="https://energy-charts.info" target="_blank">energy-charts.info</a></span>
 </div>
 
 <script>
 const VAST_DEFAULT = 28.0;
 const DREMPEL_GROEN = 10;
 const DREMPEL_GEEL  = 20;
-const BAT_KWH = 10;
+let BAT_KWH = 10;
 
 let chart     = null;
 let allPrices = [];
@@ -208,13 +222,13 @@ let allTimes  = [];
 let vast      = VAST_DEFAULT;
 
 function kleur(ct) {
-  if (ct < 0)             return '#00d4aa'; // negatief = je wordt betaald = cyaan
-  if (ct < DREMPEL_GROEN) return '#3fb950';
+  if (ct < 0)             return '#a8ff3e'; // negatief = superhel lime
+  if (ct < DREMPEL_GROEN) return '#2a8a3e'; // donker groen
   if (ct < DREMPEL_GEEL)  return '#d29922';
   return '#f85149';
 }
 function klasLabel(ct) {
-  if (ct < 0)             return ['cyan',   'Negatief ★'];
+  if (ct < 0)             return ['lime',   'Negatief ★'];
   if (ct < DREMPEL_GROEN) return ['green',  'Goedkoop'];
   if (ct < DREMPEL_GEEL)  return ['yellow', 'Normaal'];
   return ['red', 'Duur'];
@@ -366,8 +380,11 @@ function groepeerPeriodes(tijden, prijzen, isGoedkoop) {
       start = null;
     }
   }
-  periodes.sort((a,b) => isGoedkoop ? a.gem - b.gem : b.gem - a.gem);
-  return periodes.slice(0, 3);
+  // Alleen toekomstige periodes (einde ligt in de toekomst)
+  const nu = Date.now();
+  const toekomst = periodes.filter(p => new Date(p.totTijd).getTime() > nu);
+  toekomst.sort((a,b) => isGoedkoop ? a.gem - b.gem : b.gem - a.gem);
+  return toekomst.slice(0, 3);
 }
 
 function updateArbitrage(tijden, prijzen) {
@@ -399,13 +416,12 @@ function updateArbitrage(tijden, prijzen) {
   document.getElementById('arb-goedkoop').innerHTML = maakPeriodeItems(periodesG, true);
   document.getElementById('arb-duur').innerHTML     = maakPeriodeItems(periodesD, false);
 
-  // Spread: goedkoopste periode gem vs duurste periode gem
+  // Winst berekening: beste goedkope periode laden, beste dure periode ontladen
   const goedkCt = periodesG.length ? periodesG[0].gem / 10 : 0;
   const duurCt  = periodesD.length ? periodesD[0].gem / 10 : 0;
-  const spread  = duurCt - goedkCt;
+  const spread  = Math.max(0, duurCt - goedkCt);
   const winst   = (spread * BAT_KWH * 0.92 / 100).toFixed(2);
-  document.getElementById('spread-val').textContent   = spread.toFixed(1);
-  document.getElementById('spread-winst').textContent = `€${winst}`;
+  document.getElementById('arb-winst-val').textContent = `€ ${winst}`;
 }
 
 function demoData() {
@@ -457,10 +473,17 @@ async function laadEPEX() {
   }
 }
 
+function herbereken() {
+  if (allPrices.length) { renderChart(allTimes,allPrices); updateKaarten(allTimes,allPrices); updateArbitrage(allTimes,allPrices); }
+}
 document.getElementById('inp-vast').addEventListener('change', e => {
   vast = parseFloat(e.target.value) || VAST_DEFAULT;
   document.getElementById('prijs-vast').textContent = vast.toFixed(1);
-  if (allPrices.length) { renderChart(allTimes,allPrices); updateKaarten(allTimes,allPrices); updateArbitrage(allTimes,allPrices); }
+  herbereken();
+});
+document.getElementById('inp-bat').addEventListener('change', e => {
+  BAT_KWH = parseFloat(e.target.value) || 10;
+  herbereken();
 });
 
 laadEPEX();
