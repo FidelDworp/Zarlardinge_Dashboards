@@ -322,11 +322,28 @@ function updateKaarten(tijden, prijzen) {
     `Morgen ${morgen.toLocaleDateString('nl-BE', {day:'numeric', month:'short'})}`;
 }
 
-// Groepeer aaneengesloten uren met dezelfde prijsklasse
+// Detecteer interval tussen datapunten (15min of 60min)
+function detecteerInterval(tijden) {
+  if (tijden.length < 2) return 3600000;
+  return new Date(tijden[1]).getTime() - new Date(tijden[0]).getTime();
+}
+
+// Formateer duur in uren en minuten
+function fmtDuur(nSlots, intervalMs) {
+  const totMin = nSlots * intervalMs / 60000;
+  const uren   = Math.floor(totMin / 60);
+  const min    = totMin % 60;
+  if (uren === 0)       return `${min} min`;
+  if (min === 0)        return uren === 1 ? '1 uur' : `${uren} uur`;
+  return `${uren}u${String(min).padStart(2,'0')}`;
+}
+
+// Groepeer aaneengesloten slots met dezelfde prijsklasse
 // drempelMin/drempelMax in €/MWh (null = geen grens)
 function groepeerPeriodes(tijden, prijzen, drempelMin, drempelMax) {
-  const nu = Date.now();
-  const periodes = [];
+  const nu          = Date.now();
+  const intervalMs  = detecteerInterval(tijden);
+  const periodes    = [];
   let start = null, som = 0, n = 0;
 
   for (let i = 0; i <= prijzen.length; i++) {
@@ -339,10 +356,16 @@ function groepeerPeriodes(tijden, prijzen, drempelMin, drempelMax) {
       if (start === null) { start = i; som = 0; n = 0; }
       som += p; n++;
     } else if (start !== null) {
-      const totTijd = new Date(new Date(tijden[i-1]).getTime() + 3600000).toISOString();
-      // Alleen periodes die nog niet volledig voorbij zijn
+      // Eindtijd = start laatste slot + 1 interval
+      const totTijd = new Date(new Date(tijden[i-1]).getTime() + intervalMs).toISOString();
+      // Toon ook deels-toekomstige periodes (begonnen maar nog niet voorbij)
       if (new Date(totTijd).getTime() > nu) {
-        periodes.push({ vanTijd: tijden[start], totTijd, gem: som/n, duur: n });
+        periodes.push({
+          vanTijd: tijden[start],
+          totTijd,
+          gem:  som / n,
+          duur: fmtDuur(n, intervalMs)
+        });
       }
       start = null;
     }
@@ -367,7 +390,7 @@ function updateArbitrage(tijden, prijzen) {
           <span class="arb-time">${fmtTime(p.vanTijd)} – ${fmtTime(p.totTijd)}</span>
           <span class="arb-dag">${fmtDag(p.vanTijd)}</span>
         </span>
-        <span style="font-size:.65rem;color:var(--muted);padding-left:22px;font-family:var(--mono)">${uren} · gem. ${gemCt} ct</span>
+        <span style="font-size:.65rem;color:var(--muted);padding-left:22px;font-family:var(--mono)">${p.duur} · gem. ${gemCt} ct</span>
       </span>
       <span class="arb-price" style="color:${klr};align-self:center">${gemCt} ct</span>
     </div>`;
