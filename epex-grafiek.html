@@ -429,7 +429,9 @@ async function laadEPEX(vast) {
   const maand   = String(vandaag.getMonth() + 1).padStart(2, '0');
   const dag     = String(vandaag.getDate()).padStart(2, '0');
 
-  const url = `https://api.energy-charts.info/price?bzn=BE&start=${jaar}-${maand}-${dag}&end=${jaar}-${maand}-${dag}`;
+  const apiUrl = `https://api.energy-charts.info/price?bzn=BE&start=${jaar}-${maand}-${dag}&end=${jaar}-${maand}-${dag}`;
+  // CORS proxy voor browser. Verdwijnt zodra ESP32 data serveert via /json.
+  const url = `https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`;
 
   try {
     const res  = await fetch(url);
