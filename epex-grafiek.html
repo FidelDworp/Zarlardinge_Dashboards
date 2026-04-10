@@ -120,36 +120,6 @@
   <span class="sub">EPEX dag-ahead · België · <span id="datum">—</span></span>
 </header>
 
-<div class="cards">
-  <div class="card">
-    <div class="label">Nu</div>
-    <div class="value" id="prijs-nu">—</div>
-    <div class="unit">ct/kWh</div>
-    <div id="badge-nu" class="badge">—</div>
-  </div>
-  <div class="card">
-    <div class="label">Goedkoopste (48u)</div>
-    <div class="value green" id="prijs-min">—</div>
-    <div class="unit">ct/kWh</div>
-    <div class="when" id="uur-min">—</div>
-  </div>
-  <div class="card">
-    <div class="label">Duurste (48u)</div>
-    <div class="value red" id="prijs-max">—</div>
-    <div class="unit">ct/kWh</div>
-    <div class="when" id="uur-max">—</div>
-  </div>
-  <div class="card">
-    <div class="label">Gem. vandaag</div>
-    <div class="value blue" id="prijs-gem">—</div>
-    <div class="unit">ct/kWh</div>
-  </div>
-  <div class="card">
-    <div class="label">Vast contract</div>
-    <div class="value" style="color:var(--muted)" id="prijs-vast">28.0</div>
-    <div class="unit">ct/kWh</div>
-  </div>
-</div>
 
 <div class="chart-wrap">
   <div class="chart-header">
@@ -185,7 +155,7 @@
     </div>
   </div>
   <div class="arb-winst">
-    <span>Bedrag te verdienen door batterij arbitrage:</span>
+    <span>Opbrengst van batterijarbitrage per 24u:</span>
     <span class="arb-winst-val" id="arb-winst-val">— </span>
     <span style="color:var(--muted)">/24u</span>
   </div>
@@ -214,12 +184,20 @@
 const VAST_DEFAULT = 28.0;
 const DREMPEL_GROEN = 10;
 const DREMPEL_GEEL  = 20;
-let BAT_KWH = 10;
+
+// Lees opgeslagen waarden uit localStorage (blijven bewaard na refresh)
+let BAT_KWH = parseFloat(localStorage.getItem('bat_kwh'))  || 10;
+let vast     = parseFloat(localStorage.getItem('vast_prijs')) || VAST_DEFAULT;
 
 let chart     = null;
 let allPrices = [];
 let allTimes  = [];
-let vast      = VAST_DEFAULT;
+
+// Stel inputs in op opgeslagen waarden zodra DOM klaar is
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('inp-vast').value = vast;
+  document.getElementById('inp-bat').value  = BAT_KWH;
+});
 
 function kleur(ct) {
   if (ct < 0)             return '#a8ff3e'; // negatief = superhel lime
@@ -478,11 +456,13 @@ function herbereken() {
 }
 document.getElementById('inp-vast').addEventListener('change', e => {
   vast = parseFloat(e.target.value) || VAST_DEFAULT;
+  localStorage.setItem('vast_prijs', vast);
   document.getElementById('prijs-vast').textContent = vast.toFixed(1);
   herbereken();
 });
 document.getElementById('inp-bat').addEventListener('change', e => {
   BAT_KWH = parseFloat(e.target.value) || 10;
+  localStorage.setItem('bat_kwh', BAT_KWH);
   herbereken();
 });
 
