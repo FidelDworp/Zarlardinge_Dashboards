@@ -93,7 +93,10 @@
   .arb-rank  { font-family: var(--mono); font-size: .6rem; color: var(--muted); margin-right: 8px; }
   .arb-time  { font-family: var(--mono); font-size: .82rem; color: var(--text); }
   .arb-dag   { font-size: .65rem; color: var(--muted); margin-left: 4px; }
-  .arb-price { font-family: var(--mono); font-size: .9rem; font-weight: 700; }
+  .arb-price  { font-family: var(--mono); font-size: .9rem; font-weight: 700; }
+  .arb-subkop { font-family: var(--mono); font-size: .65rem; text-transform: uppercase; letter-spacing: .05em; margin: 8px 0 4px; }
+  .arb-subkop:first-child { margin-top: 0; }
+  .arb-item.rank-lime { border-color: rgba(168,255,62,.5); }
   .arb-winst { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--muted); flex-wrap: wrap; }
   .arb-winst-val { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--green); margin-left: 4px; }
 
@@ -117,7 +120,7 @@
 
 <header>
   <h1><span class="dot"></span>ZARLARDINGE ENERGIE</h1>
-  <span class="sub">EPEX dag-ahead · België · <span id="datum">—</span></span>
+  <span class="sub" style="display:none"><span id="datum"></span></span>
 </header>
 
 
@@ -319,72 +322,88 @@ function updateKaarten(tijden, prijzen) {
     `Morgen ${morgen.toLocaleDateString('nl-BE', {day:'numeric', month:'short'})}`;
 }
 
-// Groepeer aaneengesloten uren onder/boven drempel in periodes
-function groepeerPeriodes(tijden, prijzen, isGoedkoop) {
-  const drempel = isGoedkoop ? DREMPEL_GEEL * 10 : DREMPEL_GROEN * 10; // €/MWh
+// Groepeer aaneengesloten uren met dezelfde prijsklasse
+// drempelMin/drempelMax in €/MWh (null = geen grens)
+function groepeerPeriodes(tijden, prijzen, drempelMin, drempelMax) {
+  const nu = Date.now();
   const periodes = [];
   let start = null, som = 0, n = 0;
 
   for (let i = 0; i <= prijzen.length; i++) {
-    const inGroep = i < prijzen.length &&
-      (isGoedkoop ? prijzen[i] < drempel : prijzen[i] > drempel);
+    const p = prijzen[i];
+    const inGroep = i < prijzen.length
+      && (drempelMin === null || p >= drempelMin)
+      && (drempelMax === null || p <  drempelMax);
+
     if (inGroep) {
       if (start === null) { start = i; som = 0; n = 0; }
-      som += prijzen[i]; n++;
+      som += p; n++;
     } else if (start !== null) {
-      const eindTijd = new Date(new Date(tijden[i-1]).getTime() + 3600000); // +1u
-      periodes.push({
-        start, end: i-1,
-        vanTijd: tijden[start],
-        totTijd: eindTijd.toISOString(),
-        gem: som / n,
-        duur: n
-      });
+      const totTijd = new Date(new Date(tijden[i-1]).getTime() + 3600000).toISOString();
+      // Alleen periodes die nog niet volledig voorbij zijn
+      if (new Date(totTijd).getTime() > nu) {
+        periodes.push({ vanTijd: tijden[start], totTijd, gem: som/n, duur: n });
+      }
       start = null;
     }
   }
-  // Alleen toekomstige periodes (einde ligt in de toekomst)
-  const nu = Date.now();
-  const toekomst = periodes.filter(p => new Date(p.totTijd).getTime() > nu);
-  toekomst.sort((a,b) => isGoedkoop ? a.gem - b.gem : b.gem - a.gem);
-  return toekomst.slice(0, 3);
+  return periodes;
 }
 
 function updateArbitrage(tijden, prijzen) {
-  const periodesG = groepeerPeriodes(tijden, prijzen, true);
-  const periodesD = groepeerPeriodes(tijden, prijzen, false);
+  // Goedkoop: negatief (< 0) en groen (0 – DREMPEL_GROEN ct)
+  const periodesNeg  = groepeerPeriodes(tijden, prijzen, null,              0);
+  const periodesGoen = groepeerPeriodes(tijden, prijzen, 0,                 DREMPEL_GROEN * 10);
+  // Duur: rood (>= DREMPEL_GEEL ct)
+  const periodesDuur = groepeerPeriodes(tijden, prijzen, DREMPEL_GEEL * 10, null);
 
-  function maakPeriodeItems(periodes, goedkoop) {
-    if (periodes.length === 0) return '<div style="color:var(--muted);font-size:.75rem;padding:8px">Geen periodes gevonden</div>';
-    return periodes.map((p, rank) => {
-      const gemCt = (p.gem / 10).toFixed(1);
-      const klr   = goedkoop ? 'var(--green)' : 'var(--red)';
-      const rc    = rank===0 ? (goedkoop ? 'rank-1' : 'rank-1-red') : '';
-      const uren  = p.duur === 1 ? '1 uur' : `${p.duur} uur`;
-      const dag   = fmtDag(p.vanTijd);
-      return `<div class="arb-item ${rc}">
-        <span style="display:flex;flex-direction:column;gap:2px">
-          <span>
-            <span class="arb-rank">#${rank+1}</span>
-            <span class="arb-time">${fmtTime(p.vanTijd)} – ${fmtTime(p.totTijd)}</span>
-            <span class="arb-dag">${dag}</span>
-          </span>
-          <span style="font-size:.65rem;color:var(--muted);padding-left:22px;font-family:var(--mono)">${uren} · gem. ${gemCt} ct</span>
+  function maakItem(p, rank, klr, borderKls) {
+    const gemCt = (p.gem / 10).toFixed(1);
+    const uren  = p.duur === 1 ? '1 uur' : `${p.duur} uur`;
+    return `<div class="arb-item ${borderKls}">
+      <span style="display:flex;flex-direction:column;gap:2px">
+        <span>
+          <span class="arb-rank">#${rank+1}</span>
+          <span class="arb-time">${fmtTime(p.vanTijd)} – ${fmtTime(p.totTijd)}</span>
+          <span class="arb-dag">${fmtDag(p.vanTijd)}</span>
         </span>
-        <span class="arb-price" style="color:${klr};align-self:center">${gemCt} ct</span>
-      </div>`;
-    }).join('');
+        <span style="font-size:.65rem;color:var(--muted);padding-left:22px;font-family:var(--mono)">${uren} · gem. ${gemCt} ct</span>
+      </span>
+      <span class="arb-price" style="color:${klr};align-self:center">${gemCt} ct</span>
+    </div>`;
   }
 
-  document.getElementById('arb-goedkoop').innerHTML = maakPeriodeItems(periodesG, true);
-  document.getElementById('arb-duur').innerHTML     = maakPeriodeItems(periodesD, false);
+  // Linker kolom: negatief bovenaan (superhel), daarna groen
+  let htmlG = '';
+  if (periodesNeg.length) {
+    htmlG += `<div class="arb-subkop" style="color:var(--lime)">★ Negatieve prijs — wordt betaald om te verbruiken</div>`;
+    htmlG += periodesNeg.map((p,i) => maakItem(p, i, 'var(--lime)', i===0?'rank-lime':'')).join('');
+  }
+  if (periodesGoen.length) {
+    htmlG += `<div class="arb-subkop" style="color:var(--green)">Goedkoop (0 – ${DREMPEL_GROEN} ct)</div>`;
+    htmlG += periodesGoen.map((p,i) => maakItem(p, i, 'var(--green)', i===0?'rank-1':'')).join('');
+  }
+  if (!htmlG) htmlG = '<div style="color:var(--muted);font-size:.75rem;padding:8px">Geen goedkope periodes gevonden</div>';
 
-  // Winst berekening: beste goedkope periode laden, beste dure periode ontladen
-  const goedkCt = periodesG.length ? periodesG[0].gem / 10 : 0;
-  const duurCt  = periodesD.length ? periodesD[0].gem / 10 : 0;
-  const spread  = Math.max(0, duurCt - goedkCt);
-  const winst   = (spread * BAT_KWH * 0.92 / 100).toFixed(2);
-  document.getElementById('arb-winst-val').textContent = `€ ${winst}`;
+  // Rechter kolom: duur
+  let htmlD = '';
+  if (periodesDuur.length) {
+    htmlD += periodesDuur.map((p,i) => maakItem(p, i, 'var(--red)', i===0?'rank-1-red':'')).join('');
+  } else {
+    htmlD = '<div style="color:var(--muted);font-size:.75rem;padding:8px">Geen dure periodes gevonden</div>';
+  }
+
+  document.getElementById('arb-goedkoop').innerHTML = htmlG;
+  document.getElementById('arb-duur').innerHTML     = htmlD;
+
+  // Winst: beste negatieve of groenste periode vs duurste rode periode
+  const allGoedkoop = [...periodesNeg, ...periodesGoen].sort((a,b) => a.gem - b.gem);
+  const allDuur     = [...periodesDuur].sort((a,b) => b.gem - a.gem);
+  const goedkCt     = allGoedkoop.length ? allGoedkoop[0].gem / 10 : 0;
+  const duurCt      = allDuur.length     ? allDuur[0].gem     / 10 : 0;
+  const spread      = Math.max(0, duurCt - goedkCt);
+  const winst       = (spread * BAT_KWH * 0.92 / 100).toFixed(2);
+  document.getElementById('arb-winst-val').textContent = `€\u00a0${winst}`;
 }
 
 function demoData() {
