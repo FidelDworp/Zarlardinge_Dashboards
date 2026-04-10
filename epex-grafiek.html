@@ -66,6 +66,8 @@
   .badge.green  { background: rgba(63,185,80,.15);  color: var(--green); }
   .badge.yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
   .badge.red    { background: rgba(248,81,73,.15);  color: var(--red); }
+  .badge.cyan   { background: rgba(0,212,170,.15);   color: #00d4aa; }
+  .cyan { color: #00d4aa; }
 
   .chart-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px 18px 14px; margin-bottom: 16px; }
   .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
@@ -152,6 +154,7 @@
   <div class="chart-header">
     <span class="chart-title">Dag-ahead prijzen 48u — EPEX SPOT BE</span>
     <div class="legend">
+      <span><span class="leg-dot" style="background:#00d4aa"></span>Negatief</span>
       <span><span class="leg-dot" style="background:var(--green)"></span>Goedkoop</span>
       <span><span class="leg-dot" style="background:var(--yellow)"></span>Normaal</span>
       <span><span class="leg-dot" style="background:var(--red)"></span>Duur</span>
@@ -205,13 +208,13 @@ let allTimes  = [];
 let vast      = VAST_DEFAULT;
 
 function kleur(ct) {
-  if (ct < 0)             return '#f85149';
+  if (ct < 0)             return '#00d4aa'; // negatief = je wordt betaald = cyaan
   if (ct < DREMPEL_GROEN) return '#3fb950';
   if (ct < DREMPEL_GEEL)  return '#d29922';
   return '#f85149';
 }
 function klasLabel(ct) {
-  if (ct < 0)             return ['red',    'Negatief'];
+  if (ct < 0)             return ['cyan',   'Negatief ★'];
   if (ct < DREMPEL_GROEN) return ['green',  'Goedkoop'];
   if (ct < DREMPEL_GEEL)  return ['yellow', 'Normaal'];
   return ['red', 'Duur'];
@@ -339,32 +342,68 @@ function updateKaarten(tijden, prijzen) {
   document.getElementById('dag-label-2').textContent = `Morgen ${morgen.toLocaleDateString('nl-BE',{day:'numeric',month:'short'})}`;
 }
 
-function updateArbitrage(tijden, prijzen) {
-  const gesorteerd = prijzen.map((p,i)=>({p,i})).sort((a,b)=>a.p-b.p);
-  const top3G = gesorteerd.slice(0,3);
-  const top3D = gesorteerd.slice(-3).reverse();
+// Groepeer aaneengesloten uren onder/boven drempel in periodes
+function groepeerPeriodes(tijden, prijzen, isGoedkoop) {
+  const drempel = isGoedkoop ? DREMPEL_GEEL * 10 : DREMPEL_GROEN * 10; // €/MWh
+  const periodes = [];
+  let start = null, som = 0, n = 0;
 
-  function maakItems(items, goedkoop) {
-    return items.map((item, rank) => {
-      const ct  = (item.p/10).toFixed(1);
-      const klr = goedkoop ? 'var(--green)' : 'var(--red)';
-      const rc  = rank===0 ? (goedkoop ? 'rank-1' : 'rank-1-red') : '';
+  for (let i = 0; i <= prijzen.length; i++) {
+    const inGroep = i < prijzen.length &&
+      (isGoedkoop ? prijzen[i] < drempel : prijzen[i] > drempel);
+    if (inGroep) {
+      if (start === null) { start = i; som = 0; n = 0; }
+      som += prijzen[i]; n++;
+    } else if (start !== null) {
+      const eindTijd = new Date(new Date(tijden[i-1]).getTime() + 3600000); // +1u
+      periodes.push({
+        start, end: i-1,
+        vanTijd: tijden[start],
+        totTijd: eindTijd.toISOString(),
+        gem: som / n,
+        duur: n
+      });
+      start = null;
+    }
+  }
+  periodes.sort((a,b) => isGoedkoop ? a.gem - b.gem : b.gem - a.gem);
+  return periodes.slice(0, 3);
+}
+
+function updateArbitrage(tijden, prijzen) {
+  const periodesG = groepeerPeriodes(tijden, prijzen, true);
+  const periodesD = groepeerPeriodes(tijden, prijzen, false);
+
+  function maakPeriodeItems(periodes, goedkoop) {
+    if (periodes.length === 0) return '<div style="color:var(--muted);font-size:.75rem;padding:8px">Geen periodes gevonden</div>';
+    return periodes.map((p, rank) => {
+      const gemCt = (p.gem / 10).toFixed(1);
+      const klr   = goedkoop ? 'var(--green)' : 'var(--red)';
+      const rc    = rank===0 ? (goedkoop ? 'rank-1' : 'rank-1-red') : '';
+      const uren  = p.duur === 1 ? '1 uur' : `${p.duur} uur`;
+      const dag   = fmtDag(p.vanTijd);
       return `<div class="arb-item ${rc}">
-        <span>
-          <span class="arb-rank">#${rank+1}</span>
-          <span class="arb-time">${fmtTime(tijden[item.i])}</span>
-          <span class="arb-dag">${fmtDag(tijden[item.i])}</span>
+        <span style="display:flex;flex-direction:column;gap:2px">
+          <span>
+            <span class="arb-rank">#${rank+1}</span>
+            <span class="arb-time">${fmtTime(p.vanTijd)} – ${fmtTime(p.totTijd)}</span>
+            <span class="arb-dag">${dag}</span>
+          </span>
+          <span style="font-size:.65rem;color:var(--muted);padding-left:22px;font-family:var(--mono)">${uren} · gem. ${gemCt} ct</span>
         </span>
-        <span class="arb-price" style="color:${klr}">${ct} ct</span>
+        <span class="arb-price" style="color:${klr};align-self:center">${gemCt} ct</span>
       </div>`;
     }).join('');
   }
 
-  document.getElementById('arb-goedkoop').innerHTML = maakItems(top3G, true);
-  document.getElementById('arb-duur').innerHTML     = maakItems(top3D, false);
+  document.getElementById('arb-goedkoop').innerHTML = maakPeriodeItems(periodesG, true);
+  document.getElementById('arb-duur').innerHTML     = maakPeriodeItems(periodesD, false);
 
-  const spread = (top3D[0].p - top3G[0].p) / 10;
-  const winst  = (spread * BAT_KWH * 0.92).toFixed(2);
+  // Spread: goedkoopste periode gem vs duurste periode gem
+  const goedkCt = periodesG.length ? periodesG[0].gem / 10 : 0;
+  const duurCt  = periodesD.length ? periodesD[0].gem / 10 : 0;
+  const spread  = duurCt - goedkCt;
+  const winst   = (spread * BAT_KWH * 0.92 / 100).toFixed(2);
   document.getElementById('spread-val').textContent   = spread.toFixed(1);
   document.getElementById('spread-winst').textContent = `€${winst}`;
 }
