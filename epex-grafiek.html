@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EPEX Dag-Ahead — Zarlardinge</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0d1117;
+    --panel:    #161b22;
+    --border:   #21262d;
+    --green:    #3fb950;
+    --yellow:   #d29922;
+    --red:      #f85149;
+    --blue:     #58a6ff;
+    --muted:    #8b949e;
+    --text:     #e6edf3;
+    --mono:     'Space Mono', monospace;
+    --sans:     'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 24px 16px 40px;
+  }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+  }
+
+  header h1 {
+    font-family: var(--mono);
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text);
+  }
+
+  header .sub {
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  .dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s ease-in-out infinite;
+    margin-right: 6px;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .card .label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+    font-family: var(--mono);
+  }
+
+  .card .value {
+    font-family: var(--mono);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .card .unit {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .card .badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-family: var(--mono);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-top: 6px;
+  }
+
+  .green  { color: var(--green); }
+  .yellow { color: var(--yellow); }
+  .red    { color: var(--red); }
+  .blue   { color: var(--blue); }
+
+  .badge.green  { background: rgba(63,185,80,.15); color: var(--green); }
+  .badge.yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .badge.red    { background: rgba(248,81,73,.15);  color: var(--red); }
+
+  .chart-wrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .chart-title {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .legend span::before {
+    content: '—';
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .legend .l-contract::before { color: var(--muted); }
+  .legend .l-epex::before { color: var(--blue); }
+
+  canvas { width: 100% !important; }
+
+  .footer {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-align: center;
+    font-family: var(--mono);
+    margin-top: 8px;
+  }
+
+  .footer a { color: var(--muted); }
+
+  #status-msg {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: var(--mono);
+    text-align: center;
+    padding: 40px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot"></span>ZARLARDINGE ENERGIE</h1>
+  <span class="sub">EPEX dag-ahead · België · <span id="datum">—</span></span>
+</header>
+
+<div class="cards">
+  <div class="card">
+    <div class="label">Nu</div>
+    <div class="value" id="prijs-nu">—</div>
+    <div class="unit">ct/kWh</div>
+    <div id="badge-nu" class="badge">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Goedkoopste uur</div>
+    <div class="value green" id="prijs-min">—</div>
+    <div class="unit">ct/kWh &nbsp;<span id="uur-min" style="color:var(--muted);font-size:.8rem"></span></div>
+  </div>
+  <div class="card">
+    <div class="label">Duurste uur</div>
+    <div class="value red" id="prijs-max">—</div>
+    <div class="unit">ct/kWh &nbsp;<span id="uur-max" style="color:var(--muted);font-size:.8rem"></span></div>
+  </div>
+  <div class="card">
+    <div class="label">Daggemiddelde</div>
+    <div class="value blue" id="prijs-gem">—</div>
+    <div class="unit">ct/kWh</div>
+  </div>
+  <div class="card">
+    <div class="label">Vast contract</div>
+    <div class="value" style="color:var(--muted)" id="prijs-vast">28.0</div>
+    <div class="unit">ct/kWh</div>
+  </div>
+</div>
+
+<div class="chart-wrap">
+  <div class="chart-header">
+    <span class="chart-title">Dag-ahead prijzen 24u — EPEX SPOT BE</span>
+    <div class="legend">
+      <span class="l-epex">EPEX</span>
+      <span class="l-contract">Vast contract</span>
+    </div>
+  </div>
+  <div id="status-msg">Prijzen laden…</div>
+  <canvas id="epexChart" height="220"></canvas>
+</div>
+
+<div class="footer">
+  Bron: <a href="https://energy-charts.info" target="_blank">energy-charts.info</a> (Fraunhofer ISE) · EPEX SPOT BE dag-ahead ·
+  Vast contract: <input id="inp-vast" type="number" value="28.0" step="0.1" min="0" max="99"
+    style="background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--muted);
+    font-family:var(--mono);font-size:.7rem;width:36px;text-align:center;" title="Pas je vaste contract aan (ct/kWh)"> ct/kWh
+</div>
+
+<script>
+const VAST_DEFAULT = 28.0;
+let chart = null;
+let allPrices = [];
+let allTimes  = [];
+
+// Kleurdrempels (ct/kWh)
+const DREMPEL_GROEN = 10;
+const DREMPEL_GEEL  = 20;
+
+function kleur(ct) {
+  if (ct < 0)              return '#f85149'; // negatief = rood (overvolle markt)
+  if (ct < DREMPEL_GROEN)  return '#3fb950';
+  if (ct < DREMPEL_GEEL)   return '#d29922';
+  return '#f85149';
+}
+
+function klasLabel(ct) {
+  if (ct < 0)             return ['red', 'Negatief'];
+  if (ct < DREMPEL_GROEN) return ['green', 'Goedkoop'];
+  if (ct < DREMPEL_GEEL)  return ['yellow', 'Normaal'];
+  return ['red', 'Duur'];
+}
+
+function fmt(ct) {
+  return (ct / 10).toFixed(1); // API levert €/MWh → omzetten naar ct/kWh
+}
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Brussels' });
+}
+
+function huidigUur(tijden) {
+  const nu = Date.now();
+  for (let i = tijden.length - 1; i >= 0; i--) {
+    if (new Date(tijden[i]).getTime() <= nu) return i;
+  }
+  return 0;
+}
+
+function renderChart(tijden, prijzen, vast) {
+  const ctx = document.getElementById('epexChart').getContext('2d');
+  const labels = tijden.map(t => fmtTime(t));
+  const nuIdx  = huidigUur(tijden);
+
+  const barColors = prijzen.map((p, i) => {
+    const base = kleur(p / 10);
+    return i === nuIdx ? base : base + '99';
+  });
+
+  const borderColors = prijzen.map((p, i) => {
+    const base = kleur(p / 10);
+    return i === nuIdx ? '#ffffff' : base;
+  });
+
+  const vastLine = prijzen.map(() => vast * 10); // terug naar €/MWh voor dezelfde schaal
+
+  if (chart) chart.destroy();
+
+  document.getElementById('status-msg').style.display = 'none';
+  document.getElementById('epexChart').style.display  = 'block';
+
+  chart = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'EPEX (€/MWh)',
+          data: prijzen,
+          backgroundColor: barColors,
+          borderColor: borderColors,
+          borderWidth: 1.5,
+          borderRadius: 3,
+          order: 2
+        },
+        {
+          type: 'line',
+          label: `Vast contract (${vast} ct/kWh)`,
+          data: vastLine,
+          borderColor: 'rgba(139,148,158,0.6)',
+          borderWidth: 1.5,
+          borderDash: [4, 3],
+          pointRadius: 0,
+          fill: false,
+          order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#161b22',
+          borderColor: '#21262d',
+          borderWidth: 1,
+          titleColor: '#8b949e',
+          bodyColor: '#e6edf3',
+          titleFont: { family: 'Space Mono', size: 11 },
+          bodyFont: { family: 'DM Sans', size: 12 },
+          callbacks: {
+            title: (items) => labels[items[0].dataIndex],
+            label: (item) => {
+              if (item.datasetIndex === 0) {
+                const ct = (item.raw / 10).toFixed(1);
+                return ` EPEX: ${ct} ct/kWh`;
+              }
+              return ` Vast: ${vast} ct/kWh`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#8b949e',
+            font: { family: 'Space Mono', size: 10 },
+            maxRotation: 0,
+            maxTicksLimit: 12
+          },
+          grid: { color: 'rgba(33,38,45,0.8)' }
+        },
+        y: {
+          ticks: {
+            color: '#8b949e',
+            font: { family: 'Space Mono', size: 10 },
+            callback: v => (v / 10).toFixed(0) + ' ct'
+          },
+          grid: { color: 'rgba(33,38,45,0.8)' }
+        }
+      }
+    }
+  });
+}
+
+function updateKaarten(tijden, prijzen, vast) {
+  const nuIdx = huidigUur(tijden);
+  const nuRaw = prijzen[nuIdx];
+  const nuCt  = nuRaw / 10;
+
+  document.getElementById('prijs-nu').textContent  = nuCt.toFixed(1);
+  const [kls, lbl] = klasLabel(nuCt);
+  const badge = document.getElementById('badge-nu');
+  badge.textContent = lbl;
+  badge.className = `badge ${kls}`;
+
+  const minVal = Math.min(...prijzen);
+  const maxVal = Math.max(...prijzen);
+  const minIdx = prijzen.indexOf(minVal);
+  const maxIdx = prijzen.indexOf(maxVal);
+
+  document.getElementById('prijs-min').textContent = (minVal / 10).toFixed(1);
+  document.getElementById('uur-min').textContent   = fmtTime(tijden[minIdx]);
+  document.getElementById('prijs-max').textContent = (maxVal / 10).toFixed(1);
+  document.getElementById('uur-max').textContent   = fmtTime(tijden[maxIdx]);
+
+  const gem = prijzen.reduce((a, b) => a + b, 0) / prijzen.length;
+  document.getElementById('prijs-gem').textContent = (gem / 10).toFixed(1);
+
+  const nu = new Date();
+  document.getElementById('datum').textContent = nu.toLocaleDateString('nl-BE',
+    { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+function demoData() {
+  // Realistische demo-prijzen (€/MWh) als API niet bereikbaar is
+  const basis = new Date();
+  basis.setHours(0, 0, 0, 0);
+  const demo = [
+    42, 38, 35, 32, 30, 28, 31, 55, 88, 102, 95, 87,
+    76, 72, 68, 74, 89, 115, 130, 118, 95, 78, 60, 48
+  ];
+  const tijden = demo.map((_, i) => {
+    const d = new Date(basis);
+    d.setHours(i);
+    return d.toISOString();
+  });
+  return { tijden, prijzen: demo };
+}
+
+async function laadEPEX(vast) {
+  document.getElementById('status-msg').style.display = 'block';
+  document.getElementById('epexChart').style.display  = 'none';
+
+  const vandaag = new Date();
+  const jaar    = vandaag.getFullYear();
+  const maand   = String(vandaag.getMonth() + 1).padStart(2, '0');
+  const dag     = String(vandaag.getDate()).padStart(2, '0');
+
+  const url = `https://api.energy-charts.info/price?bzn=BE&start=${jaar}-${maand}-${dag}&end=${jaar}-${maand}-${dag}`;
+
+  try {
+    const res  = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (!data || !data.price || data.price.length === 0) throw new Error('Geen data');
+
+    allTimes  = data.unix_seconds.map(s => new Date(s * 1000).toISOString());
+    allPrices = data.price; // €/MWh
+
+    renderChart(allTimes, allPrices, vast);
+    updateKaarten(allTimes, allPrices, vast);
+
+  } catch (e) {
+    console.warn('API niet bereikbaar, demo-data getoond:', e.message);
+    // Toon demo-data met waarschuwing
+    const { tijden, prijzen } = demoData();
+    allTimes  = tijden;
+    allPrices = prijzen;
+    renderChart(allTimes, allPrices, vast);
+    updateKaarten(allTimes, allPrices, vast);
+    // Subtiele banner
+    const banner = document.createElement('div');
+    banner.style.cssText = 'font-size:.7rem;color:#d29922;font-family:Space Mono,monospace;text-align:center;margin-top:8px;';
+    banner.textContent = '⚠ Demo-data — API niet bereikbaar via file://. Gebruik localhost of GitHub Pages voor live data.';
+    document.querySelector('.chart-wrap').appendChild(banner);
+  }
+}
+
+// Vast contract aanpasbaar
+let vast = VAST_DEFAULT;
+document.getElementById('inp-vast').addEventListener('change', (e) => {
+  vast = parseFloat(e.target.value) || VAST_DEFAULT;
+  document.getElementById('prijs-vast').textContent = vast.toFixed(1);
+  if (allPrices.length) {
+    renderChart(allTimes, allPrices, vast);
+    updateKaarten(allTimes, allPrices, vast);
+  }
+});
+
+// Start
+laadEPEX(vast);
+
+// Auto-refresh elk uur
+setInterval(() => laadEPEX(vast), 60 * 60 * 1000);
+</script>
+</body>
+</html>
