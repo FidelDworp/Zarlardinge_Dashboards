@@ -8,177 +8,105 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:       #0d1117;
-    --panel:    #161b22;
-    --border:   #21262d;
-    --green:    #3fb950;
-    --yellow:   #d29922;
-    --red:      #f85149;
-    --blue:     #58a6ff;
-    --muted:    #8b949e;
-    --text:     #e6edf3;
-    --mono:     'Space Mono', monospace;
-    --sans:     'DM Sans', sans-serif;
+    --bg:      #0d1117;
+    --panel:   #161b22;
+    --border:  #21262d;
+    --green:   #3fb950;
+    --yellow:  #d29922;
+    --red:     #f85149;
+    --blue:    #58a6ff;
+    --muted:   #8b949e;
+    --text:    #e6edf3;
+    --mono:    'Space Mono', monospace;
+    --sans:    'DM Sans', sans-serif;
   }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
   body {
     background: var(--bg);
     color: var(--text);
     font-family: var(--sans);
     min-height: 100vh;
-    padding: 24px 16px 40px;
+    padding: 20px 16px 48px;
+    max-width: 960px;
+    margin: 0 auto;
   }
-
   header {
     display: flex;
     align-items: baseline;
     gap: 12px;
-    margin-bottom: 28px;
+    margin-bottom: 24px;
     border-bottom: 1px solid var(--border);
-    padding-bottom: 16px;
+    padding-bottom: 14px;
+    flex-wrap: wrap;
   }
-
-  header h1 {
-    font-family: var(--mono);
-    font-size: 1rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    color: var(--text);
-  }
-
-  header .sub {
-    font-size: 0.78rem;
-    color: var(--muted);
-  }
-
+  header h1 { font-family: var(--mono); font-size: 1rem; font-weight: 700; letter-spacing: .05em; }
+  header .sub { font-size: .78rem; color: var(--muted); }
   .dot {
-    display: inline-block;
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--green);
-    animation: pulse 2s ease-in-out infinite;
-    margin-right: 6px;
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--green);
+    animation: pulse 2s ease-in-out infinite; margin-right: 6px;
   }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
   .cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px;
-    margin-bottom: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+    gap: 10px; margin-bottom: 16px;
   }
-
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-  }
-
-  .card .label {
-    font-size: 0.72rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 6px;
-    font-family: var(--mono);
-  }
-
-  .card .value {
-    font-family: var(--mono);
-    font-size: 1.5rem;
-    font-weight: 700;
-    line-height: 1;
-  }
-
-  .card .unit {
-    font-size: 0.78rem;
-    color: var(--muted);
-    margin-top: 4px;
-  }
-
-  .card .badge {
-    display: inline-block;
-    font-size: 0.68rem;
-    font-family: var(--mono);
-    padding: 2px 6px;
-    border-radius: 4px;
-    margin-top: 6px;
-  }
-
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .card .label { font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 5px; font-family: var(--mono); }
+  .card .value { font-family: var(--mono); font-size: 1.45rem; font-weight: 700; line-height: 1; }
+  .card .unit  { font-size: .75rem; color: var(--muted); margin-top: 4px; }
+  .card .when  { font-size: .72rem; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
+  .badge { display: inline-block; font-size: .66rem; font-family: var(--mono); padding: 2px 7px; border-radius: 4px; margin-top: 7px; }
   .green  { color: var(--green); }
   .yellow { color: var(--yellow); }
   .red    { color: var(--red); }
   .blue   { color: var(--blue); }
-
-  .badge.green  { background: rgba(63,185,80,.15); color: var(--green); }
+  .badge.green  { background: rgba(63,185,80,.15);  color: var(--green); }
   .badge.yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
   .badge.red    { background: rgba(248,81,73,.15);  color: var(--red); }
 
-  .chart-wrap {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 20px;
-  }
-
-  .chart-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-  }
-
-  .chart-title {
-    font-family: var(--mono);
-    font-size: 0.78rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-
-  .legend {
-    display: flex;
-    gap: 16px;
-    font-size: 0.72rem;
-    color: var(--muted);
-  }
-
-  .legend span::before {
-    content: '—';
-    font-weight: 700;
-    margin-right: 4px;
-  }
-
-  .legend .l-contract::before { color: var(--muted); }
-  .legend .l-epex::before { color: var(--blue); }
-
+  .chart-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px 18px 14px; margin-bottom: 16px; }
+  .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+  .chart-title { font-family: var(--mono); font-size: .73rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .legend { display: flex; gap: 12px; font-size: .7rem; color: var(--muted); flex-wrap: wrap; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .leg-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
   canvas { width: 100% !important; }
 
-  .footer {
-    font-size: 0.7rem;
-    color: var(--muted);
-    text-align: center;
-    font-family: var(--mono);
-    margin-top: 8px;
-  }
+  .dag-labels { display: flex; font-family: var(--mono); font-size: .68rem; color: var(--muted); margin-bottom: 4px; }
+  .dag-labels span { flex: 1; text-align: center; }
 
+  .arb-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 16px; }
+  .arb-header { font-family: var(--mono); font-size: .73rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; }
+  .arb-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: start; }
+  .arb-col { display: flex; flex-direction: column; gap: 6px; }
+  .arb-col-title { font-family: var(--mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .arb-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
+  .arb-item.rank-1     { border-color: rgba(63,185,80,.4); }
+  .arb-item.rank-1-red { border-color: rgba(248,81,73,.4); }
+  .arb-rank  { font-family: var(--mono); font-size: .6rem; color: var(--muted); margin-right: 8px; }
+  .arb-time  { font-family: var(--mono); font-size: .82rem; color: var(--text); }
+  .arb-dag   { font-size: .65rem; color: var(--muted); margin-left: 4px; }
+  .arb-price { font-family: var(--mono); font-size: .9rem; font-weight: 700; }
+
+  .spread-card { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 10px; text-align: center; min-width: 90px; }
+  .spread-card .s-label { font-family: var(--mono); font-size: .6rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+  .spread-card .s-value { font-family: var(--mono); font-size: 1.3rem; font-weight: 700; color: var(--blue); line-height: 1; }
+  .spread-card .s-unit  { font-size: .68rem; color: var(--muted); margin-top: 3px; }
+  .spread-card .s-bat   { font-size: .65rem; color: var(--muted); margin-top: 8px; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 8px; width: 100%; }
+  .spread-card .s-bat strong { color: var(--green); font-family: var(--mono); }
+
+  .footer { font-size: .68rem; color: var(--muted); text-align: center; font-family: var(--mono); margin-top: 4px; }
   .footer a { color: var(--muted); }
+  .footer input { background: transparent; border: none; border-bottom: 1px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: .68rem; width: 36px; text-align: center; }
+  #status-msg { font-size: .75rem; color: var(--muted); font-family: var(--mono); text-align: center; padding: 40px; display: none; }
 
-  #status-msg {
-    font-size: 0.75rem;
-    color: var(--muted);
-    font-family: var(--mono);
-    text-align: center;
-    padding: 40px;
-    display: none;
+  @media (max-width: 500px) {
+    .arb-grid { grid-template-columns: 1fr; }
+    .spread-card { flex-direction: row; gap: 16px; padding: 12px; }
+    .spread-card .s-bat { border-top: none; border-left: 1px solid var(--border); padding-top: 0; padding-left: 12px; margin-top: 0; }
   }
 </style>
 </head>
@@ -197,17 +125,19 @@
     <div id="badge-nu" class="badge">—</div>
   </div>
   <div class="card">
-    <div class="label">Goedkoopste uur</div>
+    <div class="label">Goedkoopste (48u)</div>
     <div class="value green" id="prijs-min">—</div>
-    <div class="unit">ct/kWh &nbsp;<span id="uur-min" style="color:var(--muted);font-size:.8rem"></span></div>
+    <div class="unit">ct/kWh</div>
+    <div class="when" id="uur-min">—</div>
   </div>
   <div class="card">
-    <div class="label">Duurste uur</div>
+    <div class="label">Duurste (48u)</div>
     <div class="value red" id="prijs-max">—</div>
-    <div class="unit">ct/kWh &nbsp;<span id="uur-max" style="color:var(--muted);font-size:.8rem"></span></div>
+    <div class="unit">ct/kWh</div>
+    <div class="when" id="uur-max">—</div>
   </div>
   <div class="card">
-    <div class="label">Daggemiddelde</div>
+    <div class="label">Gem. vandaag</div>
     <div class="value blue" id="prijs-gem">—</div>
     <div class="unit">ct/kWh</div>
   </div>
@@ -220,264 +150,282 @@
 
 <div class="chart-wrap">
   <div class="chart-header">
-    <span class="chart-title">Dag-ahead prijzen 24u — EPEX SPOT BE</span>
+    <span class="chart-title">Dag-ahead prijzen 48u — EPEX SPOT BE</span>
     <div class="legend">
-      <span class="l-epex">EPEX</span>
-      <span class="l-contract">Vast contract</span>
+      <span><span class="leg-dot" style="background:var(--green)"></span>Goedkoop</span>
+      <span><span class="leg-dot" style="background:var(--yellow)"></span>Normaal</span>
+      <span><span class="leg-dot" style="background:var(--red)"></span>Duur</span>
+      <span><span style="border-bottom:2px dashed var(--muted);display:inline-block;width:14px;margin-bottom:3px"></span>Vast</span>
     </div>
   </div>
+  <div class="dag-labels">
+    <span id="dag-label-1">Vandaag</span>
+    <span id="dag-label-2">Morgen</span>
+  </div>
   <div id="status-msg">Prijzen laden…</div>
-  <canvas id="epexChart" height="220"></canvas>
+  <canvas id="epexChart" height="200"></canvas>
+</div>
+
+<div class="arb-wrap">
+  <div class="arb-header">⚡ Arbitrage — beste momenten komende 48u</div>
+  <div class="arb-grid">
+    <div class="arb-col">
+      <div class="arb-col-title green">↓ Goedkoopste uren</div>
+      <div style="font-size:.65rem;color:var(--muted);margin-bottom:6px;font-family:var(--mono)">Laden EV · Boiler · Batterij</div>
+      <div id="arb-goedkoop"></div>
+    </div>
+    <div class="spread-card">
+      <div class="s-label">Spread</div>
+      <div class="s-value" id="spread-val">—</div>
+      <div class="s-unit">ct/kWh</div>
+      <div class="s-bat">10 kWh bat.<br><strong id="spread-winst">—</strong>/dag</div>
+    </div>
+    <div class="arb-col">
+      <div class="arb-col-title red">↑ Duurste uren</div>
+      <div style="font-size:.65rem;color:var(--muted);margin-bottom:6px;font-family:var(--mono)">Batterij ontladen · Vermijden</div>
+      <div id="arb-duur"></div>
+    </div>
+  </div>
 </div>
 
 <div class="footer">
-  Bron: <a href="https://energy-charts.info" target="_blank">energy-charts.info</a> (Fraunhofer ISE) · EPEX SPOT BE dag-ahead ·
-  Vast contract: <input id="inp-vast" type="number" value="28.0" step="0.1" min="0" max="99"
-    style="background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--muted);
-    font-family:var(--mono);font-size:.7rem;width:36px;text-align:center;" title="Pas je vaste contract aan (ct/kWh)"> ct/kWh
+  Bron: <a href="https://energy-charts.info" target="_blank">energy-charts.info</a> (Fraunhofer ISE) · EPEX SPOT BE ·
+  Vast contract: <input id="inp-vast" type="number" value="28.0" step="0.1" min="0" max="99" title="Pas je vaste contract aan (ct/kWh)"> ct/kWh
 </div>
 
 <script>
 const VAST_DEFAULT = 28.0;
-let chart = null;
-let allPrices = [];
-let allTimes  = [];
-
-// Kleurdrempels (ct/kWh)
 const DREMPEL_GROEN = 10;
 const DREMPEL_GEEL  = 20;
+const BAT_KWH = 10;
+
+let chart     = null;
+let allPrices = [];
+let allTimes  = [];
+let vast      = VAST_DEFAULT;
 
 function kleur(ct) {
-  if (ct < 0)              return '#f85149'; // negatief = rood (overvolle markt)
-  if (ct < DREMPEL_GROEN)  return '#3fb950';
-  if (ct < DREMPEL_GEEL)   return '#d29922';
+  if (ct < 0)             return '#f85149';
+  if (ct < DREMPEL_GROEN) return '#3fb950';
+  if (ct < DREMPEL_GEEL)  return '#d29922';
   return '#f85149';
 }
-
 function klasLabel(ct) {
-  if (ct < 0)             return ['red', 'Negatief'];
-  if (ct < DREMPEL_GROEN) return ['green', 'Goedkoop'];
+  if (ct < 0)             return ['red',    'Negatief'];
+  if (ct < DREMPEL_GROEN) return ['green',  'Goedkoop'];
   if (ct < DREMPEL_GEEL)  return ['yellow', 'Normaal'];
   return ['red', 'Duur'];
 }
-
-function fmt(ct) {
-  return (ct / 10).toFixed(1); // API levert €/MWh → omzetten naar ct/kWh
-}
-
 function fmtTime(iso) {
-  const d = new Date(iso);
-  return d.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Brussels' });
+  return new Date(iso).toLocaleTimeString('nl-BE',
+    { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Brussels' });
 }
-
+function fmtDag(iso) {
+  const d = new Date(iso);
+  const nu = new Date();
+  if (d.toDateString() === nu.toDateString()) return 'vandaag';
+  const m = new Date(nu); m.setDate(nu.getDate()+1);
+  if (d.toDateString() === m.toDateString()) return 'morgen';
+  return d.toLocaleDateString('nl-BE', { weekday: 'short' });
+}
 function huidigUur(tijden) {
   const nu = Date.now();
-  for (let i = tijden.length - 1; i >= 0; i--) {
+  for (let i = tijden.length-1; i >= 0; i--) {
     if (new Date(tijden[i]).getTime() <= nu) return i;
   }
   return 0;
 }
 
-function renderChart(tijden, prijzen, vast) {
-  const ctx = document.getElementById('epexChart').getContext('2d');
+function renderChart(tijden, prijzen) {
+  const ctx    = document.getElementById('epexChart').getContext('2d');
   const labels = tijden.map(t => fmtTime(t));
   const nuIdx  = huidigUur(tijden);
 
-  const barColors = prijzen.map((p, i) => {
-    const base = kleur(p / 10);
-    return i === nuIdx ? base : base + '99';
-  });
+  const nu     = new Date();
+  const morgen = new Date(nu); morgen.setDate(nu.getDate()+1); morgen.setHours(0,0,0,0);
+  let midIdx   = -1;
+  for (let i = 0; i < tijden.length; i++) {
+    if (new Date(tijden[i]).getTime() >= morgen.getTime()) { midIdx = i; break; }
+  }
 
-  const borderColors = prijzen.map((p, i) => {
-    const base = kleur(p / 10);
-    return i === nuIdx ? '#ffffff' : base;
-  });
-
-  const vastLine = prijzen.map(() => vast * 10); // terug naar €/MWh voor dezelfde schaal
+  const barColors    = prijzen.map((p,i) => kleur(p/10) + (i === nuIdx ? '' : '99'));
+  const borderColors = prijzen.map((p,i) => i === nuIdx ? '#ffffff' : kleur(p/10));
+  const vastLine     = prijzen.map(() => vast * 10);
 
   if (chart) chart.destroy();
-
   document.getElementById('status-msg').style.display = 'none';
   document.getElementById('epexChart').style.display  = 'block';
 
+  const dagLijn = {
+    id: 'dagLijn',
+    afterDraw(ch) {
+      if (midIdx < 0) return;
+      const { ctx, scales: {x, y} } = ch;
+      const xPos = x.getPixelForValue(midIdx - 0.5);
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(xPos, y.top);
+      ctx.lineTo(xPos, y.bottom);
+      ctx.strokeStyle = 'rgba(88,166,255,0.4)';
+      ctx.lineWidth   = 1.5;
+      ctx.setLineDash([4,4]);
+      ctx.stroke();
+      ctx.restore();
+    }
+  };
+
   chart = new Chart(ctx, {
+    plugins: [dagLijn],
     data: {
       labels,
       datasets: [
-        {
-          type: 'bar',
-          label: 'EPEX (€/MWh)',
-          data: prijzen,
-          backgroundColor: barColors,
-          borderColor: borderColors,
-          borderWidth: 1.5,
-          borderRadius: 3,
-          order: 2
-        },
-        {
-          type: 'line',
-          label: `Vast contract (${vast} ct/kWh)`,
-          data: vastLine,
-          borderColor: 'rgba(139,148,158,0.6)',
-          borderWidth: 1.5,
-          borderDash: [4, 3],
-          pointRadius: 0,
-          fill: false,
-          order: 1
-        }
+        { type:'bar',  label:'EPEX (€/MWh)', data:prijzen, backgroundColor:barColors, borderColor:borderColors, borderWidth:1.5, borderRadius:3, order:2 },
+        { type:'line', label:`Vast`, data:vastLine, borderColor:'rgba(139,148,158,0.5)', borderWidth:1.5, borderDash:[4,3], pointRadius:0, fill:false, order:1 }
       ]
     },
     options: {
       responsive: true,
-      interaction: { mode: 'index', intersect: false },
+      interaction: { mode:'index', intersect:false },
       plugins: {
-        legend: { display: false },
+        legend: { display:false },
         tooltip: {
-          backgroundColor: '#161b22',
-          borderColor: '#21262d',
-          borderWidth: 1,
-          titleColor: '#8b949e',
-          bodyColor: '#e6edf3',
-          titleFont: { family: 'Space Mono', size: 11 },
-          bodyFont: { family: 'DM Sans', size: 12 },
+          backgroundColor:'#161b22', borderColor:'#21262d', borderWidth:1,
+          titleColor:'#8b949e', bodyColor:'#e6edf3',
+          titleFont:{family:'Space Mono',size:11}, bodyFont:{family:'DM Sans',size:12},
           callbacks: {
-            title: (items) => labels[items[0].dataIndex],
+            title: (items) => {
+              const i = items[0].dataIndex;
+              return `${labels[i]}  (${fmtDag(tijden[i])})`;
+            },
             label: (item) => {
-              if (item.datasetIndex === 0) {
-                const ct = (item.raw / 10).toFixed(1);
-                return ` EPEX: ${ct} ct/kWh`;
-              }
+              if (item.datasetIndex === 0) return ` EPEX: ${(item.raw/10).toFixed(1)} ct/kWh`;
               return ` Vast: ${vast} ct/kWh`;
             }
           }
         }
       },
       scales: {
-        x: {
-          ticks: {
-            color: '#8b949e',
-            font: { family: 'Space Mono', size: 10 },
-            maxRotation: 0,
-            maxTicksLimit: 12
-          },
-          grid: { color: 'rgba(33,38,45,0.8)' }
-        },
-        y: {
-          ticks: {
-            color: '#8b949e',
-            font: { family: 'Space Mono', size: 10 },
-            callback: v => (v / 10).toFixed(0) + ' ct'
-          },
-          grid: { color: 'rgba(33,38,45,0.8)' }
-        }
+        x: { ticks:{color:'#8b949e', font:{family:'Space Mono',size:9}, maxRotation:0, maxTicksLimit:16}, grid:{color:'rgba(33,38,45,0.8)'} },
+        y: { ticks:{color:'#8b949e', font:{family:'Space Mono',size:10}, callback:v=>(v/10).toFixed(0)+' ct'}, grid:{color:'rgba(33,38,45,0.8)'} }
       }
     }
   });
 }
 
-function updateKaarten(tijden, prijzen, vast) {
+function updateKaarten(tijden, prijzen) {
   const nuIdx = huidigUur(tijden);
-  const nuRaw = prijzen[nuIdx];
-  const nuCt  = nuRaw / 10;
-
+  const nuCt  = prijzen[nuIdx] / 10;
   document.getElementById('prijs-nu').textContent  = nuCt.toFixed(1);
-  const [kls, lbl] = klasLabel(nuCt);
+  document.getElementById('prijs-nu').className    = 'value ' + klasLabel(nuCt)[0];
   const badge = document.getElementById('badge-nu');
-  badge.textContent = lbl;
-  badge.className = `badge ${kls}`;
+  badge.textContent = klasLabel(nuCt)[1];
+  badge.className   = 'badge ' + klasLabel(nuCt)[0];
 
-  const minVal = Math.min(...prijzen);
-  const maxVal = Math.max(...prijzen);
-  const minIdx = prijzen.indexOf(minVal);
-  const maxIdx = prijzen.indexOf(maxVal);
-
-  document.getElementById('prijs-min').textContent = (minVal / 10).toFixed(1);
-  document.getElementById('uur-min').textContent   = fmtTime(tijden[minIdx]);
-  document.getElementById('prijs-max').textContent = (maxVal / 10).toFixed(1);
-  document.getElementById('uur-max').textContent   = fmtTime(tijden[maxIdx]);
-
-  const gem = prijzen.reduce((a, b) => a + b, 0) / prijzen.length;
-  document.getElementById('prijs-gem').textContent = (gem / 10).toFixed(1);
+  const sorted = [...prijzen].map((p,i)=>({p,i})).sort((a,b)=>a.p-b.p);
+  const minObj = sorted[0], maxObj = sorted[sorted.length-1];
+  document.getElementById('prijs-min').textContent = (minObj.p/10).toFixed(1);
+  document.getElementById('uur-min').textContent   = `${fmtTime(tijden[minObj.i])} · ${fmtDag(tijden[minObj.i])}`;
+  document.getElementById('prijs-max').textContent = (maxObj.p/10).toFixed(1);
+  document.getElementById('uur-max').textContent   = `${fmtTime(tijden[maxObj.i])} · ${fmtDag(tijden[maxObj.i])}`;
 
   const nu = new Date();
-  document.getElementById('datum').textContent = nu.toLocaleDateString('nl-BE',
-    { weekday: 'long', day: 'numeric', month: 'long' });
+  const vP = prijzen.filter((_,i) => new Date(tijden[i]).toDateString() === nu.toDateString());
+  const gem = vP.reduce((a,b)=>a+b,0) / vP.length;
+  document.getElementById('prijs-gem').textContent = (gem/10).toFixed(1);
+  document.getElementById('datum').textContent = nu.toLocaleDateString('nl-BE', {weekday:'long',day:'numeric',month:'long'});
+
+  const morgen = new Date(nu); morgen.setDate(nu.getDate()+1);
+  document.getElementById('dag-label-1').textContent = `▶ Vandaag ${nu.toLocaleDateString('nl-BE',{day:'numeric',month:'short'})}`;
+  document.getElementById('dag-label-2').textContent = `Morgen ${morgen.toLocaleDateString('nl-BE',{day:'numeric',month:'short'})}`;
+}
+
+function updateArbitrage(tijden, prijzen) {
+  const gesorteerd = prijzen.map((p,i)=>({p,i})).sort((a,b)=>a.p-b.p);
+  const top3G = gesorteerd.slice(0,3);
+  const top3D = gesorteerd.slice(-3).reverse();
+
+  function maakItems(items, goedkoop) {
+    return items.map((item, rank) => {
+      const ct  = (item.p/10).toFixed(1);
+      const klr = goedkoop ? 'var(--green)' : 'var(--red)';
+      const rc  = rank===0 ? (goedkoop ? 'rank-1' : 'rank-1-red') : '';
+      return `<div class="arb-item ${rc}">
+        <span>
+          <span class="arb-rank">#${rank+1}</span>
+          <span class="arb-time">${fmtTime(tijden[item.i])}</span>
+          <span class="arb-dag">${fmtDag(tijden[item.i])}</span>
+        </span>
+        <span class="arb-price" style="color:${klr}">${ct} ct</span>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('arb-goedkoop').innerHTML = maakItems(top3G, true);
+  document.getElementById('arb-duur').innerHTML     = maakItems(top3D, false);
+
+  const spread = (top3D[0].p - top3G[0].p) / 10;
+  const winst  = (spread * BAT_KWH * 0.92).toFixed(2);
+  document.getElementById('spread-val').textContent   = spread.toFixed(1);
+  document.getElementById('spread-winst').textContent = `€${winst}`;
 }
 
 function demoData() {
-  // Realistische demo-prijzen (€/MWh) als API niet bereikbaar is
-  const basis = new Date();
-  basis.setHours(0, 0, 0, 0);
-  const demo = [
-    42, 38, 35, 32, 30, 28, 31, 55, 88, 102, 95, 87,
-    76, 72, 68, 74, 89, 115, 130, 118, 95, 78, 60, 48
-  ];
-  const tijden = demo.map((_, i) => {
-    const d = new Date(basis);
-    d.setHours(i);
-    return d.toISOString();
-  });
-  return { tijden, prijzen: demo };
+  const basis = new Date(); basis.setHours(0,0,0,0);
+  const v = [42,38,35,32,30,28,31,55,88,102,95,87,76,72,68,74,89,115,130,118,95,78,60,48];
+  const m = [45,40,36,33,31,29,34,58,91,105,98,90,79,75,71,77,92,118,125,110,91,75,58,44];
+  const prijzen = [...v,...m];
+  const tijden  = prijzen.map((_,i) => { const d=new Date(basis); d.setHours(i); return d.toISOString(); });
+  return { tijden, prijzen };
 }
 
-async function laadEPEX(vast) {
+async function haalDag(j,m,d) {
+  const apiUrl = `https://api.energy-charts.info/price?bzn=BE&start=${j}-${m}-${d}&end=${j}-${m}-${d}`;
+  const url    = `https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`;
+  const res    = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function laadEPEX() {
   document.getElementById('status-msg').style.display = 'block';
   document.getElementById('epexChart').style.display  = 'none';
 
-  const vandaag = new Date();
-  const jaar    = vandaag.getFullYear();
-  const maand   = String(vandaag.getMonth() + 1).padStart(2, '0');
-  const dag     = String(vandaag.getDate()).padStart(2, '0');
-
-  const apiUrl = `https://api.energy-charts.info/price?bzn=BE&start=${jaar}-${maand}-${dag}&end=${jaar}-${maand}-${dag}`;
-  // CORS proxy voor browser. Verdwijnt zodra ESP32 data serveert via /json.
-  const url = `https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`;
+  const nu = new Date();
+  const morgen = new Date(nu); morgen.setDate(nu.getDate()+1);
+  const ymd = d => [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')];
 
   try {
-    const res  = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-
-    if (!data || !data.price || data.price.length === 0) throw new Error('Geen data');
-
-    allTimes  = data.unix_seconds.map(s => new Date(s * 1000).toISOString());
-    allPrices = data.price; // €/MWh
-
-    renderChart(allTimes, allPrices, vast);
-    updateKaarten(allTimes, allPrices, vast);
-
-  } catch (e) {
-    console.warn('API niet bereikbaar, demo-data getoond:', e.message);
-    // Toon demo-data met waarschuwing
+    const [dV, dM] = await Promise.all([haalDag(...ymd(nu)), haalDag(...ymd(morgen))]);
+    const tV = dV.unix_seconds.map(s => new Date(s*1000).toISOString());
+    const tM = (dM.unix_seconds||[]).map(s => new Date(s*1000).toISOString());
+    allTimes  = [...tV, ...tM];
+    allPrices = [...(dV.price||[]), ...(dM.price||[])];
+    if (allPrices.length === 0) throw new Error('Geen data');
+    renderChart(allTimes, allPrices);
+    updateKaarten(allTimes, allPrices);
+    updateArbitrage(allTimes, allPrices);
+  } catch(e) {
+    console.warn('Demo-data:', e.message);
     const { tijden, prijzen } = demoData();
-    allTimes  = tijden;
-    allPrices = prijzen;
-    renderChart(allTimes, allPrices, vast);
-    updateKaarten(allTimes, allPrices, vast);
-    // Subtiele banner
-    const banner = document.createElement('div');
-    banner.style.cssText = 'font-size:.7rem;color:#d29922;font-family:Space Mono,monospace;text-align:center;margin-top:8px;';
-    banner.textContent = '⚠ Demo-data — API niet bereikbaar via file://. Gebruik localhost of GitHub Pages voor live data.';
-    document.querySelector('.chart-wrap').appendChild(banner);
+    allTimes = tijden; allPrices = prijzen;
+    renderChart(allTimes, allPrices);
+    updateKaarten(allTimes, allPrices);
+    updateArbitrage(allTimes, allPrices);
+    const b = document.createElement('div');
+    b.style.cssText = 'font-size:.68rem;color:var(--yellow);font-family:Space Mono,monospace;text-align:center;margin-top:10px;';
+    b.textContent = '⚠ Demo-data — gebruik localhost of GitHub Pages voor live data';
+    document.querySelector('.chart-wrap').appendChild(b);
   }
 }
 
-// Vast contract aanpasbaar
-let vast = VAST_DEFAULT;
-document.getElementById('inp-vast').addEventListener('change', (e) => {
+document.getElementById('inp-vast').addEventListener('change', e => {
   vast = parseFloat(e.target.value) || VAST_DEFAULT;
   document.getElementById('prijs-vast').textContent = vast.toFixed(1);
-  if (allPrices.length) {
-    renderChart(allTimes, allPrices, vast);
-    updateKaarten(allTimes, allPrices, vast);
-  }
+  if (allPrices.length) { renderChart(allTimes,allPrices); updateKaarten(allTimes,allPrices); updateArbitrage(allTimes,allPrices); }
 });
 
-// Start
-laadEPEX(vast);
-
-// Auto-refresh elk uur
-setInterval(() => laadEPEX(vast), 60 * 60 * 1000);
+laadEPEX();
+setInterval(laadEPEX, 60*60*1000);
 </script>
 </body>
 </html>
