@@ -407,7 +407,7 @@ transition:all .15s;
   <label class="inst-item">
     <span>Max piek</span>
     <span class="inst-input-wrap">
-      <input id="inp-piek" type="number" value="8" step="0.5" min="1" max="30">
+      <input id="inp-piek" type="number" value="15" step="0.5" min="1" max="30">
       <span class="inst-unit">kW</span>
     </span>
   </label>
@@ -461,7 +461,7 @@ let BAT_KWH   = parseFloat(localStorage.getItem('bat_kwh'))    || 10;
 let vast      = parseFloat(localStorage.getItem('vast_prijs'))  || VAST_DEFAULT;
 let SOC_START = parseFloat(localStorage.getItem('soc_start'))   || 50;
 let seizoen   = localStorage.getItem('seizoen') || 'lente';
-let MAX_PIEK  = parseFloat(localStorage.getItem('max_piek'))    || 8;
+let MAX_PIEK  = parseFloat(localStorage.getItem('max_piek'))    || 15;
 let CAP_TAR   = parseFloat(localStorage.getItem('cap_tar'))     || 4.80;
 
 // Override per apparaat: 'auto'|'aan'|'uit'
@@ -679,17 +679,16 @@ const HUISHOUD = [
 
 // Geef keuzes voor een periode-id terug (met defaults)
 function getKeuze(periodeId, klasse) {
-  // HUISHOUD: opgeslagen gebruikerskeuze (default false)
-  if (!periodeKeuzes[periodeId]) periodeKeuzes[periodeId] = {};
-  const opgeslagen = periodeKeuzes[periodeId];
-
-  // GROOT + BATTERIJ: altijd berekend uit algoritme (CB_DEFAULTS) + overrides
-  // Nooit uit localStorage — zo blijft het altijd actueel
-  const base = CB_DEFAULTS[klasse] || CB_DEFAULTS.norm;
-  const k = { ...base };
-
-  // Huishoud vanuit opgeslagen keuze
-  for (const h of HUISHOUD) k[h.id] = opgeslagen[h.id] || false;
+  // Init: als periode nog niet gekend, vul in met CB_DEFAULTS
+  if (!periodeKeuzes[periodeId]) {
+    const base = CB_DEFAULTS[klasse] || CB_DEFAULTS.norm;
+    periodeKeuzes[periodeId] = { ...base };
+    for (const h of HUISHOUD) periodeKeuzes[periodeId][h.id] = false;
+  }
+  // Lees opgeslagen keuze (huishoud + groot per-periode-override)
+  const k = { ...periodeKeuzes[periodeId] };
+  // Huishoud: nooit vanuit groot-defaults, enkel opgeslagen
+  for (const h of HUISHOUD) k[h.id] = periodeKeuzes[periodeId][h.id] || false;
 
   // Overrides toepassen op grootverbruikers
   for (const v of VERBRUIKERS) {
@@ -734,14 +733,7 @@ function getKeuze(periodeId, klasse) {
 }
 
 function slaKeuzeOp() {
-  // Sla ENKEL huishoud-keuzes op — groot wordt altijd live berekend door algoritme
-  const huishoudIds = HUISHOUD.map(h => h.id);
-  const opSlaan = {};
-  for (const [pid, k] of Object.entries(periodeKeuzes)) {
-    opSlaan[pid] = {};
-    for (const id of huishoudIds) opSlaan[pid][id] = k[id] || false;
-  }
-  try { localStorage.setItem('periode_keuzes', JSON.stringify(opSlaan)); } catch(e) {}
+  try { localStorage.setItem('periode_keuzes', JSON.stringify(periodeKeuzes)); } catch(e) {}
 }
 
 
@@ -831,13 +823,16 @@ function updateArbitrage(tijden, prijzen) {
       const checked = k[v.id];
       const ovKey   = v.id==='bat_laden'||v.id==='bat_ontladen'?'bat':v.id;
       const ov      = overrides[ovKey];
-      const negBat  = !cfg.isDuur && v.id==='bat_laden' && p.klasse==='neg';
-      const duurBat = cfg.isDuur && v.id==='bat_ontladen' && p.klasse==='duur';
-      const forced  = negBat || duurBat || ov==='aan' || ov==='uit';
-      const style   = forced?'opacity:.4;cursor:not-allowed':'';
-      const tooltip = negBat?'★ Negatief: batterij laden verplicht'
-                    : duurBat?'★ Duur: batterij ontladen'
-                    : forced?'Override: '+ov:'';
+      // Enkel neg-bat en duur-bat zijn geforceerd (niet klikbaar)
+      const negBat  = !cfg.isDuur && v.id==='bat_laden'    && p.klasse==='neg';
+      const duurBat =  cfg.isDuur && v.id==='bat_ontladen' && p.klasse==='duur';
+      const forced  = negBat || duurBat;
+      const ovActief = !forced && (ov==='aan' || ov==='uit');
+      const style    = forced   ? 'opacity:.35;cursor:not-allowed'
+                     : ovActief ? 'accent-color:var(--yellow)' : '';
+      const tooltip  = negBat  ? '★ Negatief: batterij laden verplicht'
+                     : duurBat ? '★ Duur: batterij ontladen'
+                     : ovActief ? 'Globale override: '+ov : '';
       return `<td${vi===0?' class="td-sep"':''}><input type="checkbox" class="${cbKls}"
         data-pid="${pid}" data-key="${v.id}" ${checked?'checked':''}
         ${forced?'disabled':''} style="${style}" title="${tooltip}"></td>`;
@@ -868,7 +863,7 @@ function updateArbitrage(tijden, prijzen) {
   }
 
   // Checkbox listeners
-  tbody.querySelectorAll('input[data-pid]:not([disabled])').forEach(cb => {
+  tbody.querySelectorAll('input[data-pid]:not([disabled])').forEach(cb => { // ook groot
     cb.addEventListener('change', () => {
       const pid = cb.dataset.pid, key = cb.dataset.key;
       if (!periodeKeuzes[pid]) periodeKeuzes[pid] = {};
@@ -1446,13 +1441,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   try {
     const opgeslagen = localStorage.getItem('periode_keuzes');
     if (opgeslagen) {
-      const parsed = JSON.parse(opgeslagen);
-      // Migratie: enkel huishoud-keys bewaren, groot weggooien
-      const huishoudIds = HUISHOUD.map(h=>h.id);
-      for (const [pid, k] of Object.entries(parsed)) {
-        periodeKeuzes[pid] = {};
-        for (const id of huishoudIds) periodeKeuzes[pid][id] = k[id] || false;
-      }
+      periodeKeuzes = JSON.parse(opgeslagen); // herstel volledige opgeslagen staat
     }
   } catch(e) { periodeKeuzes = {}; }
 });
