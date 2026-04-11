@@ -679,59 +679,72 @@ const HUISHOUD = [
 
 // Geef keuzes voor een periode-id terug (met defaults)
 function getKeuze(periodeId, klasse) {
-  if (!periodeKeuzes[periodeId]) {
-    // Init: algoritme-defaults voor grootverbruikers
-    periodeKeuzes[periodeId] = { ...CB_DEFAULTS[klasse] };
-    // Huishoudtoestellen altijd uit (manuele keuze)
-    for (const h of HUISHOUD) periodeKeuzes[periodeId][h.id] = false;
-  }
-  // Pas overrides toe op grootverbruikers — override wint altijd
-  const k = { ...periodeKeuzes[periodeId] };
+  // HUISHOUD: opgeslagen gebruikerskeuze (default false)
+  if (!periodeKeuzes[periodeId]) periodeKeuzes[periodeId] = {};
+  const opgeslagen = periodeKeuzes[periodeId];
+
+  // GROOT + BATTERIJ: altijd berekend uit algoritme (CB_DEFAULTS) + overrides
+  // Nooit uit localStorage — zo blijft het altijd actueel
+  const base = CB_DEFAULTS[klasse] || CB_DEFAULTS.norm;
+  const k = { ...base };
+
+  // Huishoud vanuit opgeslagen keuze
+  for (const h of HUISHOUD) k[h.id] = opgeslagen[h.id] || false;
+
+  // Overrides toepassen op grootverbruikers
   for (const v of VERBRUIKERS) {
     const ov = overrides[v.id];
     if (ov === 'aan') k[v.id] = true;
     if (ov === 'uit') k[v.id] = false;
   }
-  // Batterij override — maar bij negatieve prijs: laden is ALTIJD verplicht (gratis energie!)
+  // Batterij override
   const batOv = overrides['bat'];
   if (batOv === 'aan') { k['bat_laden'] = true;  k['bat_ontladen'] = false; }
   if (batOv === 'uit') { k['bat_laden'] = false; k['bat_ontladen'] = false; }
-  // Negatieve prijs: forceer laden, nooit blokkeren
+  // Negatief: batterij laden altijd
   if (klasse === 'neg') { k['bat_laden'] = true; k['bat_ontladen'] = false; }
+  // Duur: batterij ontladen altijd
+  if (klasse === 'duur') { k['bat_ontladen'] = true; k['bat_laden'] = false; }
 
-  // Piekbeheer: als totaal grootverbruikers al boven MAX_PIEK → snij af in prioriteit
+  // Piekbeheer op groot (nooit op huishoud — dat is manuele keuze)
   let kwGroot = 0;
   const evBeide = k['ev_won'] && k['ev_sch'];
-  kwGroot += k['eco']    ? 2  : 0;
-  kwGroot += k['ev_won'] ? (evBeide ? 6 : 9) : 0;
-  kwGroot += k['ev_sch'] ? (evBeide ? 6 : 9) : 0;
-  kwGroot += k['wp_won'] ? 9  : 0;
-  kwGroot += k['wp_sch'] ? 9  : 0;
-  kwGroot += k['bat_laden'] ? Math.min(5, BAT_KWH/2) : 0;
+  kwGroot += k['eco']        ? 2 : 0;
+  kwGroot += k['ev_won']     ? (evBeide ? 6 : 9) : 0;
+  kwGroot += k['ev_sch']     ? (evBeide ? 6 : 9) : 0;
+  kwGroot += k['wp_won']     ? 9 : 0;
+  kwGroot += k['wp_sch']     ? 9 : 0;
+  kwGroot += k['bat_laden']  ? Math.min(5, BAT_KWH/2) : 0;
 
   if (kwGroot > MAX_PIEK) {
     for (const id of PIEK_PRIO) {
       if (kwGroot <= MAX_PIEK) break;
-      if (overrides[id==='bat_laden'?'bat':id] === 'aan') continue; // override AAN: niet afschakelen
+      if (overrides[id==='bat_laden'?'bat':id] === 'aan') continue;
       if (id === 'bat_laden') {
-        // Bij negatieve prijs: batterij laden nooit afschakelen — gratis energie, vol laden!
-        if (klasse === 'neg') continue;
+        if (klasse === 'neg') continue; // negatief: nooit bat afschakelen
         if (k['bat_laden']) { kwGroot -= Math.min(5, BAT_KWH/2); k['bat_laden'] = false; }
         continue;
       }
       const vkw = id==='ev_won'||id==='ev_sch' ? (k['ev_won']&&k['ev_sch']?6:9)
-                : id==='wp_won'||id==='wp_sch' ? 9
-                : id==='eco' ? 2 : 0;
+                : id==='wp_won'||id==='wp_sch' ? 9 : 2;
       if (k[id]) { kwGroot -= vkw; k[id] = false; }
     }
   }
   return k;
 }
+
 function slaKeuzeOp() {
-  try { localStorage.setItem('periode_keuzes', JSON.stringify(periodeKeuzes)); } catch(e){}
+  // Sla ENKEL huishoud-keuzes op — groot wordt altijd live berekend door algoritme
+  const huishoudIds = HUISHOUD.map(h => h.id);
+  const opSlaan = {};
+  for (const [pid, k] of Object.entries(periodeKeuzes)) {
+    opSlaan[pid] = {};
+    for (const id of huishoudIds) opSlaan[pid][id] = k[id] || false;
+  }
+  try { localStorage.setItem('periode_keuzes', JSON.stringify(opSlaan)); } catch(e) {}
 }
 
-// Bereken piek voor een periode op basis van keuzes
+
 function berekenPiekVoorPeriode(periodeId, klasse) {
   const k = getKeuze(periodeId, klasse);
   let kw = 0;
@@ -855,7 +868,7 @@ function updateArbitrage(tijden, prijzen) {
   }
 
   // Checkbox listeners
-  tbody.querySelectorAll('input[data-pid]').forEach(cb => {
+  tbody.querySelectorAll('input[data-pid]:not([disabled])').forEach(cb => {
     cb.addEventListener('change', () => {
       const pid = cb.dataset.pid, key = cb.dataset.key;
       if (!periodeKeuzes[pid]) periodeKeuzes[pid] = {};
@@ -1432,8 +1445,16 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('inp-cap').value    = CAP_TAR;
   try {
     const opgeslagen = localStorage.getItem('periode_keuzes');
-    if(opgeslagen) periodeKeuzes = JSON.parse(opgeslagen);
-  } catch(e){}
+    if (opgeslagen) {
+      const parsed = JSON.parse(opgeslagen);
+      // Migratie: enkel huishoud-keys bewaren, groot weggooien
+      const huishoudIds = HUISHOUD.map(h=>h.id);
+      for (const [pid, k] of Object.entries(parsed)) {
+        periodeKeuzes[pid] = {};
+        for (const id of huishoudIds) periodeKeuzes[pid][id] = k[id] || false;
+      }
+    }
+  } catch(e) { periodeKeuzes = {}; }
 });
 
 initLedStrip();
