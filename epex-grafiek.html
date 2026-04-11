@@ -424,10 +424,12 @@ const VERBRUIKERS = [
 ];
 
 // Standaard checkboxes per prijsklasse
+// CB_DEFAULTS: startwaarden voor nieuwe periodes (grootverbruikers ALTIJD uit — sturing via simulatie)
+// Gebruiker vinkt manueel aan wat hij wil activeren per periode
 const CB_DEFAULTS = {
-  neg:  { eco:true,  ev_won:true,  ev_sch:true,  wp_won:true,  wp_sch:true,  bat_laden:true,  bat_ontladen:false },
-  goen: { eco:true,  ev_won:true,  ev_sch:true,  wp_won:false, wp_sch:false, bat_laden:true,  bat_ontladen:false },
-  duur: { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:true  },
+  neg:  { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:false },
+  goen: { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:false },
+  duur: { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:false },
 };
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
@@ -624,9 +626,9 @@ const HUISHOUD = [
 function getKeuze(periodeId, klasse) {
   if (!periodeKeuzes[periodeId]) {
     periodeKeuzes[periodeId] = { ...CB_DEFAULTS[klasse] };
-    // Huishoudtoestellen: standaard aan bij goedkoop/negatief, uit bij duur
+    // Huishoudtoestellen: standaard ALTIJD uit — gebruiker kiest bewust
     for (const h of HUISHOUD) {
-      periodeKeuzes[periodeId][h.id] = (klasse !== 'duur');
+      periodeKeuzes[periodeId][h.id] = false;
     }
   }
   return periodeKeuzes[periodeId];
@@ -655,26 +657,27 @@ function updateArbitrage(tijden, prijzen) {
   // ── Koprij opbouwen ────────────────────────────────────────────────────────
   const thead = document.getElementById('matrix-thead');
   const cols = [
-    { sym:'⏰',  kw:'',       cls:'th-left',                 title:'Periode' },
-    { sym:'💰',  kw:'ct/kWh', cls:'',                        title:'Prijs'   },
-    // Scheiding huishoud
+    { sym:'⏰',  sub:'Periode',  kw:'',            cls:'th-left',  title:'Periode'   },
+    { sym:'💰',  sub:'Prijs',    kw:'ct/kWh',      cls:'',         title:'Prijs'     },
+    // Huishoud (manueel)
     ...HUISHOUD.map((h,i) => ({
-      sym: h.sym, kw: h.kw+'kW', cls: i===0?'th-sep':'', title: h.naam
+      sym: h.sym, sub: h.naam, kw: h.kw+'kW', cls: i===0?'th-sep':'', title: h.naam
     })),
-    // Scheiding groot
-    { sym:'♨️',  kw:'2kW',    cls:'th-sep', title:'ECO'         },
-    { sym:'🚗',  kw:'11kW',   cls:'',       title:'Tesla WON'   },
-    { sym:'⚡',  kw:'11kW',   cls:'',       title:'EV SCH'      },
-    { sym:'🏠',  kw:'9kW',    cls:'',       title:'WP WON'      },
-    { sym:'🏚️', kw:'9kW',    cls:'',       title:'WP SCH'      },
-    { sym:'🔋',  kw:BAT_KWH+'kWh', cls:'', title:'Batterij'    },
-    // Piek
-    { sym:'📊',  kw:'kW',     cls:'th-sep', title:'Piek'        },
+    // Grootverbruikers (automatisch) — gescheiden door lijn
+    { sym:'♨️',  sub:'ECO',      kw:'2kW',         cls:'th-sep',   title:'ECO-boiler SCH' },
+    { sym:'🚗',  sub:'Tesla',    kw:'11kW',        cls:'',         title:'Tesla WON'      },
+    { sym:'⚡',  sub:'EV',       kw:'11kW',        cls:'',         title:'EV-lader SCH'   },
+    { sym:'🏠',  sub:'WP WON',   kw:'9kW',         cls:'',         title:'WP WON'         },
+    { sym:'🏚️', sub:'WP SCH',   kw:'9kW',         cls:'',         title:'WP SCH'         },
+    { sym:'🔋',  sub:'Bat.',     kw:BAT_KWH+'kWh', cls:'',         title:'Batterij'       },
+    // Totaal piek
+    { sym:'📊',  sub:'Totaal',   kw:'kW',          cls:'th-sep',   title:'Totaal vermogen' },
   ];
   thead.innerHTML = `<tr>${cols.map(c=>`
     <th class="${c.cls}" title="${c.title}">
       <span class="th-sym">${c.sym}</span>
-      <span class="th-kw">${c.kw}</span>
+      <span class="th-kw">${c.sub}</span>
+      <span class="th-kw" style="opacity:.6">${c.kw}</span>
     </th>`).join('')}</tr>`;
 
   // ── Rijen opbouwen ─────────────────────────────────────────────────────────
