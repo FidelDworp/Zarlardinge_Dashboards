@@ -437,8 +437,8 @@ const VERBRUIKERS = [
   { id:'eco',    naam:'ECO-boiler', sub:'SCH', kw:2,  regelbaar:false, pixel:0 },
   { id:'ev_won', naam:'Tesla',      sub:'WON', kw:9,  regelbaar:true,  pixel:1 },  // wit
   { id:'ev_sch', naam:'EV-lader',   sub:'SCH', kw:9,  regelbaar:true,  pixel:2 },  // rood
-  { id:'wp_won', naam:'WP',         sub:'WON', kw:9,  regelbaar:false, pixel:3 },
-  { id:'wp_sch', naam:'WP',         sub:'SCH', kw:9,  regelbaar:false, pixel:4 },
+  { id:'wp_won', naam:'WP',         sub:'WON', kw:2.5, regelbaar:false, pixel:3 }, // elektrisch compressorvermogen
+  { id:'wp_sch', naam:'WP',         sub:'SCH', kw:2.5, regelbaar:false, pixel:4 }, // elektrisch compressorvermogen
 ];
 
 // Standaard checkboxes per prijsklasse
@@ -713,8 +713,8 @@ function getKeuze(periodeId, klasse) {
   kwGroot += k['eco']        ? 2 : 0;
   kwGroot += k['ev_won']     ? (evBeide ? 6 : 9) : 0;
   kwGroot += k['ev_sch']     ? (evBeide ? 6 : 9) : 0;
-  kwGroot += k['wp_won']     ? 9 : 0;
-  kwGroot += k['wp_sch']     ? 9 : 0;
+  kwGroot += k['wp_won']     ? 2.5 : 0;
+  kwGroot += k['wp_sch']     ? 2.5 : 0;
   kwGroot += k['bat_laden']  ? Math.min(5, BAT_KWH/2) : 0;
 
   if (kwGroot > MAX_PIEK) {
@@ -727,7 +727,7 @@ function getKeuze(periodeId, klasse) {
         continue;
       }
       const vkw = id==='ev_won'||id==='ev_sch' ? (k['ev_won']&&k['ev_sch']?6:9)
-                : id==='wp_won'||id==='wp_sch' ? 9 : 2;
+                : id==='wp_won'||id==='wp_sch' ? 2.5 : 2;
       if (k[id]) { kwGroot -= vkw; k[id] = false; }
     }
   }
@@ -779,8 +779,8 @@ function updateArbitrage(tijden, prijzen) {
     { sym:'♨️',  sub:'ECO',    kw:'2kW',         cls:'th-sep',  title:'ECO-boiler SCH' },
     { sym:'🚙',  sub:'Tesla WON',  kw:'9kW',    cls:'',        title:'Tesla WON (Filip, wit)'   },
     { sym:'🚗',  sub:'EV SCH',     kw:'9kW',    cls:'',        title:'EV-lader SCH (Maarten, rood)' },
-    { sym:'🏠',  sub:'WP WON', kw:'9kW',         cls:'',        title:'WP WON'         },
-    { sym:'🏚️', sub:'WP SCH', kw:'9kW',         cls:'',        title:'WP SCH'         },
+    { sym:'🏠',  sub:'WP WON', kw:'2.5kW',       cls:'',        title:'WP WON (elektrisch)' },
+    { sym:'🏚️', sub:'WP SCH', kw:'2.5kW',       cls:'',        title:'WP SCH (elektrisch)' },
     { sym:'🔋',  sub:'Bat.',   kw:BAT_KWH+'kWh', cls:'',        title:'Batterij'       },
     { sym:'📊',  sub:'Totaal', kw:'kW',          cls:'th-sep',  title:'Totaal vermogen'},
   ];
