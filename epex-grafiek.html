@@ -95,10 +95,12 @@ width:4px; border-radius:2px; align-self:stretch; min-height:28px; flex-shrink:0
 .mx-cb.cb-duur { accent-color:var(–red); }
 
 /* Piek kolom */
-.td-piek { font-family:var(–mono); font-size:.78rem; font-weight:700; white-space:nowrap; }
-.td-piek.ok     { color:var(–green); }
-.td-piek.warn   { color:var(–yellow); }
-.td-piek.over   { color:var(–red); }
+.td-piek         { font-family:var(–mono); font-size:.82rem; font-weight:700; white-space:nowrap; transition:color .3s; }
+.td-piek.ok      { color:#8b949e; }           /* <50%: grijs, geen zorg */
+.td-piek.notice  { color:#3fb950; }           /* 50-75%: groen */
+.td-piek.warn    { color:#d29922; }           /* 75-90%: geel */
+.td-piek.warn-hi { color:#f0883e; }           /* 90-100%: oranje */
+.td-piek.over    { color:#f85149; font-size:.9rem; } /* >100%: rood + groter */
 
 /* Type rijen */
 tr.row-neg  { background:rgba(168,255,62,.04); }
@@ -736,17 +738,29 @@ function slaKeuzeOp() {
   try { localStorage.setItem('periode_keuzes', JSON.stringify(periodeKeuzes)); } catch(e) {}
 }
 
+// Geeft de ruwe keuze terug (wat aangevinkt staat) zonder piekbeheer of overrides
+// Wordt gebruikt voor de tabel-weergave en de piek-kolom
+function getRawKeuze(periodeId, klasse) {
+  if (!periodeKeuzes[periodeId]) {
+    const base = CB_DEFAULTS[klasse] || CB_DEFAULTS.norm;
+    periodeKeuzes[periodeId] = { ...base };
+    for (const h of HUISHOUD) periodeKeuzes[periodeId][h.id] = false;
+    if (klasse === 'neg')  { periodeKeuzes[periodeId].bat_laden = true;  periodeKeuzes[periodeId].bat_ontladen = false; }
+    if (klasse === 'duur') { periodeKeuzes[periodeId].bat_ontladen = true; periodeKeuzes[periodeId].bat_laden = false; }
+  }
+  return periodeKeuzes[periodeId];
+}
+
 
 function berekenPiekVoorPeriode(periodeId, klasse) {
-  // Eenvoudige som van alle aangevinkte toestellen — geen energy sharing, geen piekbeheer
-  // Toont het werkelijke netafname als alles tegelijk aan is
-  const k = getKeuze(periodeId, klasse);
+  // Pure optelling van wat aangevinkt staat — geen piekbeheer, geen energy sharing
+  const k = getRawKeuze(periodeId, klasse);
   let kw = 0;
-  for (const h of HUISHOUD)   { if (k[h.id])          kw += h.kw; }
-  for (const v of VERBRUIKERS){ if (k[v.id])          kw += v.kw; }
-  const batMax = Math.min(5, BAT_KWH/2);
-  if (k['bat_laden'])                                  kw += batMax;
-  // bat_ontladen vermindert netto-afname maar telt niet mee in piek (piek = afname)
+  for (const h of HUISHOUD)    { if (k[h.id]) kw += h.kw; }
+  for (const v of VERBRUIKERS) { if (k[v.id]) kw += v.kw; }
+  const batMax = Math.min(5, BAT_KWH / 2);
+  if (k.bat_laden) kw += batMax;
+  // bat_ontladen telt niet mee als piek (ontladen = levering aan net, geen afname)
   return Math.max(0, kw);
 }
 
@@ -802,7 +816,7 @@ function updateArbitrage(tijden, prijzen) {
       for (const h of HUISHOUD) periodeKeuzes[pid][h.id] = false;
     }
 
-    const k      = getKeuze(pid, p.klasse);
+    const k      = getRawKeuze(pid, p.klasse); // tabel toont ruwe keuze
     const gemCt  = (p.gem/10).toFixed(1);
     const piek   = berekenPiekVoorPeriode(pid, p.klasse);
     const piekKls = piek > MAX_PIEK ? 'over' : piek > MAX_PIEK*0.85 ? 'warn' : 'ok';
@@ -876,7 +890,9 @@ function updateArbitrage(tijden, prijzen) {
       const cel    = document.getElementById(`piek-cel-${pid}`);
       if (cel) {
         cel.textContent = piek.toFixed(1);
-        cel.className   = `td-sep td-piek ${piek>MAX_PIEK?'over':piek>MAX_PIEK*0.85?'warn':'ok'}`;
+        const pp = MAX_PIEK > 0 ? piek / MAX_PIEK : 0;
+        const pk = pp > 1 ? 'over' : pp > 0.9 ? 'warn-hi' : pp > 0.75 ? 'warn' : pp > 0.5 ? 'notice' : 'ok';
+        cel.className = `td-sep td-piek ${pk}`;
       }
       updateSimulatie();
     });
