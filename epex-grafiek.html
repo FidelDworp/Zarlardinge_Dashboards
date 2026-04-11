@@ -103,7 +103,9 @@ table.matrix td.td-sep { border-left:1px solid var(--border); }
 tr.row-neg  { background:rgba(168,255,62,.04); }
 tr.row-goen { background:rgba(42,138,62,.04); }
 tr.row-duur { background:rgba(248,81,73,.04); }
-tr.row-neg:hover, tr.row-goen:hover, tr.row-duur:hover { background:rgba(255,255,255,.04); }
+tr.row-neg:hover, tr.row-goen:hover, tr.row-duur:hover, tr.row-norm:hover { background:rgba(255,255,255,.04); }
+tr.row-norm { background:rgba(210,153,34,.03); }
+tr.row-current td { border-top:1px solid rgba(255,255,255,.15) !important; border-bottom:1px solid rgba(255,255,255,.15) !important; }
 
 /* Separator rij */
 tr.row-sep td { padding:2px; background:transparent; border-bottom:1px solid var(--border); }
@@ -129,17 +131,19 @@ input[type=range].sim-slider::-webkit-slider-thumb {
 /* LED STRIP */
 .sim-strip-wrap { margin-bottom:16px; }
 .sim-strip-title { font-family:var(--mono); font-size:.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px; }
-.led-strip { display:flex; gap:8px; justify-content:center; margin-bottom:8px; flex-wrap:wrap; }
-.led-pixel-wrap { display:flex; flex-direction:column; align-items:center; gap:5px; }
+.led-strip-scroll { overflow-x:auto; padding-bottom:4px; }
+.led-strip { display:flex; gap:10px; justify-content:flex-start; margin-bottom:4px; min-width:max-content; padding:4px 2px; }
+.led-pixel-wrap { display:flex; flex-direction:column; align-items:center; gap:4px; min-width:52px; }
+.led-sym { font-size:1.1rem; line-height:1; margin-bottom:1px; }
 .led-pixel {
-  width:36px; height:36px; border-radius:50%;
-  background:#111; border:2px solid #333;
-  box-shadow:0 0 0 0 transparent;
+  width:44px; height:44px; border-radius:50%;
+  background:#111; border:2px solid #2a2a2a;
   transition:background .3s, box-shadow .3s;
-  position:relative;
+  display:flex; align-items:center; justify-content:center;
 }
-.led-pixel.aan { box-shadow:0 0 12px 3px currentColor; }
-.led-label { font-family:var(--mono); font-size:.52rem; color:var(--muted); text-align:center; line-height:1.3; max-width:40px; }
+.led-pixel.aan { box-shadow:0 0 16px 5px var(--glow-clr, #3fb950); }
+.led-label { font-family:var(--mono); font-size:.54rem; color:var(--muted); text-align:center; line-height:1.3; max-width:52px; }
+.led-groep-sep { width:1px; background:var(--border); align-self:stretch; margin:0 2px; flex-shrink:0; }
 
 /* SOC BALK */
 .soc-wrap { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px 14px; margin-bottom:12px; }
@@ -278,9 +282,9 @@ input[type=range].sim-slider::-webkit-slider-thumb {
 
   <!-- LED Strip -->
   <div class="sim-strip-wrap">
-    <div class="sim-strip-title">LED-strip kastje (8 pixels)</div>
-    <div class="led-strip" id="led-strip">
-      <!-- Gevuld door JS -->
+    <div class="sim-strip-title">LED-strip kastje (12 pixels)</div>
+    <div class="led-strip-scroll">
+      <div class="led-strip" id="led-strip"><!-- Gevuld door JS --></div>
     </div>
   </div>
 
@@ -430,6 +434,7 @@ const VERBRUIKERS = [
 const CB_DEFAULTS = {
   neg:  { eco:true,  ev_won:true,  ev_sch:true,  wp_won:true,  wp_sch:true,  bat_laden:true,  bat_ontladen:false },
   goen: { eco:true,  ev_won:true,  ev_sch:true,  wp_won:false, wp_sch:false, bat_laden:true,  bat_ontladen:false },
+  norm: { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:false },
   duur: { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:true  },
 };
 
@@ -590,6 +595,42 @@ function renderChart(tijden, prijzen) {
 }
 
 // ─── PERIODES ─────────────────────────────────────────────────────────────────
+
+// Bouw ALLE toekomstige periodes chronologisch (één doorlopende tijdlijn)
+function groepeerAlleChronologisch(tijden, prijzen) {
+  const nu  = Date.now();
+  const ivl = detecteerInterval(tijden);
+  const periodes = [];
+  let start=null, som=0, n=0, klasse=null;
+
+  function klasseVan(p_mwh) {
+    const ct = p_mwh/10;
+    if (ct < 0)              return 'neg';
+    if (ct < DREMPEL_GROEN)  return 'goen';
+    if (ct < DREMPEL_GEEL)   return 'norm';
+    return 'duur';
+  }
+
+  for (let i=0; i<=prijzen.length; i++) {
+    const huidKlasse = i < prijzen.length ? klasseVan(prijzen[i]) : null;
+    if (huidKlasse && huidKlasse === klasse) {
+      som += prijzen[i]; n++;
+    } else {
+      if (start !== null) {
+        const totTijd = new Date(new Date(tijden[i-1]).getTime()+ivl).toISOString();
+        if (new Date(totTijd).getTime() > nu)
+          periodes.push({vanTijd:tijden[start],totTijd,gem:som/n,duur:fmtDuur(n,ivl),nSlots:n,startIdx:start,klasse});
+      }
+      start  = i < prijzen.length ? i : null;
+      som    = i < prijzen.length ? prijzen[i] : 0;
+      n      = i < prijzen.length ? 1 : 0;
+      klasse = huidKlasse;
+    }
+  }
+  return periodes;
+}
+
+// Hou ook de drie afzonderlijke lijsten bij voor de winst-berekening
 function groepeerPeriodes(tijden, prijzen, drempelMin, drempelMax) {
   const nu = Date.now(), ivl = detecteerInterval(tijden);
   const periodes = [];
@@ -611,6 +652,7 @@ function groepeerPeriodes(tijden, prijzen, drempelMin, drempelMax) {
   }
   return periodes;
 }
+
 
 // ─── PLANNINGSMATRIX ──────────────────────────────────────────────────────────
 
@@ -693,25 +735,21 @@ function updateArbitrage(tijden, prijzen) {
   _periodesNeg  = groepeerPeriodes(tijden, prijzen, null, 0);
   _periodesGoen = groepeerPeriodes(tijden, prijzen, 0, DREMPEL_GROEN*10);
   _periodesDuur = groepeerPeriodes(tijden, prijzen, DREMPEL_GEEL*10, null);
+  const alleChron = groepeerAlleChronologisch(tijden, prijzen);
 
-  // ── Koprij opbouwen ────────────────────────────────────────────────────────
+  // Koprij
   const thead = document.getElementById('matrix-thead');
   const cols = [
-    { sym:'⏰',  sub:'Periode',  kw:'',            cls:'th-left',  title:'Periode'   },
-    { sym:'💰',  sub:'Prijs',    kw:'ct/kWh',      cls:'',         title:'Prijs'     },
-    // Huishoud (manueel)
-    ...HUISHOUD.map((h,i) => ({
-      sym: h.sym, sub: h.naam, kw: h.kw+'kW', cls: i===0?'th-sep':'', title: h.naam
-    })),
-    // Grootverbruikers (automatisch) — gescheiden door lijn
-    { sym:'♨️',  sub:'ECO',      kw:'2kW',         cls:'th-sep',   title:'ECO-boiler SCH' },
-    { sym:'🚗',  sub:'Tesla',    kw:'11kW',        cls:'',         title:'Tesla WON'      },
-    { sym:'⚡',  sub:'EV',       kw:'11kW',        cls:'',         title:'EV-lader SCH'   },
-    { sym:'🏠',  sub:'WP WON',   kw:'9kW',         cls:'',         title:'WP WON'         },
-    { sym:'🏚️', sub:'WP SCH',   kw:'9kW',         cls:'',         title:'WP SCH'         },
-    { sym:'🔋',  sub:'Bat.',     kw:BAT_KWH+'kWh', cls:'',         title:'Batterij'       },
-    // Totaal piek
-    { sym:'📊',  sub:'Totaal',   kw:'kW',          cls:'th-sep',   title:'Totaal vermogen' },
+    { sym:'⏰', sub:'Periode', kw:'',           cls:'th-left', title:'Periode' },
+    { sym:'💰', sub:'Prijs',   kw:'ct/kWh',     cls:'',        title:'Prijs'   },
+    ...HUISHOUD.map((h,i) => ({ sym:h.sym, sub:h.naam, kw:h.kw+'kW', cls:i===0?'th-sep':'', title:h.naam })),
+    { sym:'♨️',  sub:'ECO',    kw:'2kW',         cls:'th-sep',  title:'ECO-boiler SCH' },
+    { sym:'🚗',  sub:'Tesla',  kw:'11kW',        cls:'',        title:'Tesla WON'      },
+    { sym:'⚡',  sub:'EV',     kw:'11kW',        cls:'',        title:'EV-lader SCH'   },
+    { sym:'🏠',  sub:'WP WON', kw:'9kW',         cls:'',        title:'WP WON'         },
+    { sym:'🏚️', sub:'WP SCH', kw:'9kW',         cls:'',        title:'WP SCH'         },
+    { sym:'🔋',  sub:'Bat.',   kw:BAT_KWH+'kWh', cls:'',        title:'Batterij'       },
+    { sym:'📊',  sub:'Totaal', kw:'kW',          cls:'th-sep',  title:'Totaal vermogen'},
   ];
   thead.innerHTML = `<tr>${cols.map(c=>`
     <th class="${c.cls}" title="${c.title}">
@@ -720,86 +758,89 @@ function updateArbitrage(tijden, prijzen) {
       <span class="th-kw" style="opacity:.6">${c.kw}</span>
     </th>`).join('')}</tr>`;
 
-  // ── Rijen opbouwen ─────────────────────────────────────────────────────────
   const tbody = document.getElementById('matrix-tbody');
   tbody.innerHTML = '';
 
-  const secties = [
-    { periodes: _periodesNeg,  klasse:'neg',  kleur:'var(--lime)', rowKls:'row-neg',  label:'★ Negatief' },
-    { periodes: _periodesGoen, klasse:'goen', kleur:'var(--green)',rowKls:'row-goen', label:'Goedkoop'   },
-    { periodes: _periodesDuur, klasse:'duur', kleur:'var(--red)',  rowKls:'row-duur', label:'Duur'       },
-  ];
+  const KLASSE_CFG = {
+    neg:  { kleur:'var(--lime)',   rowKls:'row-neg',  prCls:'lime',   isDuur:false },
+    goen: { kleur:'var(--green)',  rowKls:'row-goen', prCls:'green',  isDuur:false },
+    norm: { kleur:'var(--yellow)', rowKls:'row-norm', prCls:'yellow', isDuur:false },
+    duur: { kleur:'var(--red)',    rowKls:'row-duur', prCls:'red',    isDuur:true  },
+  };
+  // CB_DEFAULTS voor normaal: alles uit
+  const CB_NORM = { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:false };
 
-  let heeftRijen = false;
-  for (const sec of secties) {
-    if (!sec.periodes.length) continue;
-    for (let ri=0; ri<sec.periodes.length; ri++) {
-      const p   = sec.periodes[ri];
-      const pid = `${sec.klasse}_${p.vanTijd}`;
-      const k   = getKeuze(pid, sec.klasse);
-      const gemCt = (p.gem/10).toFixed(1);
-      const piek  = berekenPiekVoorPeriode(pid, sec.klasse);
-      const piekKls = piek > MAX_PIEK ? 'over' : piek > MAX_PIEK*0.85 ? 'warn' : 'ok';
+  const nuMs = Date.now();
 
-      const isDuur = sec.klasse === 'duur';
-      const cbKls  = isDuur ? 'mx-cb cb-duur' : 'mx-cb';
-      const prCls  = sec.klasse==='neg'?'lime':sec.klasse==='goen'?'green':'red';
+  for (let ri=0; ri<alleChron.length; ri++) {
+    const p   = alleChron[ri];
+    const cfg = KLASSE_CFG[p.klasse] || KLASSE_CFG.norm;
+    const pid = `${p.klasse}_${p.vanTijd}`;
 
-      // Huishoud checkboxes
-      const huishoudCbs = HUISHOUD.map(h => `
-        <td><input type="checkbox" class="${cbKls}" data-pid="${pid}" data-key="${h.id}" ${k[h.id]?'checked':''}></td>`).join('');
+    // Init keuze voor normaal-periodes (geen algoritme)
+    if (p.klasse === 'norm' && !periodeKeuzes[pid]) {
+      periodeKeuzes[pid] = { ...CB_NORM };
+      for (const h of HUISHOUD) periodeKeuzes[pid][h.id] = false;
+    }
 
-      // Groot checkboxes — tonen algoritmebeslissing, rekening houdend met override
-      const grootDefs = [
-        {id:'eco'}, {id:'ev_won'}, {id:'ev_sch'},
-        {id:'wp_won'}, {id:'wp_sch'}, {id: isDuur ? 'bat_ontladen' : 'bat_laden'}
-      ];
-      const grootCbs = grootDefs.map((v,vi) => {
-        const checked = k[v.id];
-        const ovKey   = v.id==='bat_laden'||v.id==='bat_ontladen' ? 'bat' : v.id;
-        const ov      = overrides[ovKey];
-        // Readonly als override actief (AAN of UIT) — gebruiker ziet dat het geforceerd is
-        // Batterij laden bij negatief: altijd geforceerd
-        const negBat  = !isDuur && v.id==='bat_laden' && sec.klasse==='neg';
-        const forced  = negBat || ov === 'aan' || ov === 'uit';
-        const style   = forced ? 'opacity:.4;cursor:not-allowed' : '';
-        const tooltip = negBat ? '★ Negatieve prijs: batterij laden verplicht' : forced ? 'Override: '+ov : '';
-        return `<td${vi===0?' class="td-sep"':''}><input type="checkbox" class="${cbKls}"
-          data-pid="${pid}" data-key="${v.id}" ${checked?'checked':''}
-          ${forced?'disabled':''} style="${style}" title="${tooltip}"></td>`;
-      }).join('');
+    const k      = getKeuze(pid, p.klasse);
+    const gemCt  = (p.gem/10).toFixed(1);
+    const piek   = berekenPiekVoorPeriode(pid, p.klasse);
+    const piekKls = piek > MAX_PIEK ? 'over' : piek > MAX_PIEK*0.85 ? 'warn' : 'ok';
+    const cbKls   = cfg.isDuur ? 'mx-cb cb-duur' : 'mx-cb';
 
-      const tr = document.createElement('tr');
-      tr.className = sec.rowKls;
-      tr.innerHTML = `
-        <td class="td-periode">
-          <div class="periode-band">
-            <div class="periode-kleurband" style="background:${sec.kleur}"></div>
-            <div class="periode-info">
-              <span class="periode-tijd">${fmtTime(p.vanTijd)} – ${fmtTime(p.totTijd)}</span>
-              <span class="periode-dag">${fmtDag(p.vanTijd)}</span>
-              <span class="periode-duur">${p.duur}</span>
-            </div>
+    // Is dit de huidige periode?
+    const isNu = new Date(p.vanTijd).getTime() <= nuMs && new Date(p.totTijd).getTime() > nuMs;
+
+    const huishoudCbs = HUISHOUD.map(h => {
+      // Normale en dure periodes: huishoud ook disabled (heeft geen zin)
+      const dis = p.klasse === 'norm' || p.klasse === 'duur';
+      return `<td><input type="checkbox" class="${cbKls}" data-pid="${pid}" data-key="${h.id}"
+        ${k[h.id]?'checked':''} ${dis?'disabled style="opacity:.25;cursor:not-allowed"':''}></td>`;
+    }).join('');
+
+    const grootDefs = [
+      {id:'eco'},{id:'ev_won'},{id:'ev_sch'},
+      {id:'wp_won'},{id:'wp_sch'},{id:cfg.isDuur?'bat_ontladen':'bat_laden'}
+    ];
+    const grootCbs = grootDefs.map((v,vi) => {
+      const checked = k[v.id];
+      const ovKey   = v.id==='bat_laden'||v.id==='bat_ontladen'?'bat':v.id;
+      const ov      = overrides[ovKey];
+      const negBat  = !cfg.isDuur && v.id==='bat_laden' && p.klasse==='neg';
+      const duurBat = cfg.isDuur && v.id==='bat_ontladen' && p.klasse==='duur';
+      const forced  = negBat || duurBat || ov==='aan' || ov==='uit';
+      const style   = forced?'opacity:.4;cursor:not-allowed':'';
+      const tooltip = negBat?'★ Negatief: batterij laden verplicht'
+                    : duurBat?'★ Duur: batterij ontladen'
+                    : forced?'Override: '+ov:'';
+      return `<td${vi===0?' class="td-sep"':''}><input type="checkbox" class="${cbKls}"
+        data-pid="${pid}" data-key="${v.id}" ${checked?'checked':''}
+        ${forced?'disabled':''} style="${style}" title="${tooltip}"></td>`;
+    }).join('');
+
+    const tr = document.createElement('tr');
+    tr.className = cfg.rowKls + (isNu?' row-current':'');
+    tr.innerHTML = `
+      <td class="td-periode">
+        <div class="periode-band">
+          <div class="periode-kleurband" style="background:${cfg.kleur}${isNu?';width:6px':''}"></div>
+          <div class="periode-info">
+            <span class="periode-tijd">${isNu?'▶ ':''}<b>${fmtTime(p.vanTijd)}</b> – ${fmtTime(p.totTijd)}</span>
+            <span class="periode-dag">${fmtDag(p.vanTijd)}</span>
+            <span class="periode-duur">${p.duur}</span>
           </div>
-        </td>
-        <td class="td-prijs" style="color:var(--${prCls})">${gemCt}</td>
-        ${huishoudCbs}
-        ${grootCbs}
-        <td class="td-sep td-piek ${piekKls}" id="piek-cel-${pid}">${piek.toFixed(1)}</td>`;
-      tbody.appendChild(tr);
-      heeftRijen = true;
-    }
-    // Scheiding tussen secties
-    if (sec.periodes.length) {
-      const sep = document.createElement('tr');
-      sep.className = 'row-sep';
-      sep.innerHTML = `<td colspan="${cols.length}"></td>`;
-      tbody.appendChild(sep);
-    }
+        </div>
+      </td>
+      <td class="td-prijs" style="color:var(--${cfg.prCls})">${gemCt}</td>
+      ${huishoudCbs}
+      ${grootCbs}
+      <td class="td-sep td-piek ${piekKls}" id="piek-cel-${pid}">${piek.toFixed(1)}</td>`;
+    tbody.appendChild(tr);
   }
 
-  if (!heeftRijen) {
-    tbody.innerHTML = `<tr><td colspan="${cols.length}" style="text-align:center;color:var(--muted);font-size:.75rem;padding:20px">Geen periodes gevonden</td></tr>`;
+  if (!alleChron.length) {
+    tbody.innerHTML = `<tr><td colspan="${cols.length}" style="text-align:center;color:var(--muted);font-size:.75rem;padding:20px">Geen data beschikbaar</td></tr>`;
   }
 
   // Checkbox listeners
@@ -809,7 +850,6 @@ function updateArbitrage(tijden, prijzen) {
       if (!periodeKeuzes[pid]) periodeKeuzes[pid] = {};
       periodeKeuzes[pid][key] = cb.checked;
       slaKeuzeOp();
-      // Update piek-cel
       const klasse = pid.split('_')[0];
       const piek   = berekenPiekVoorPeriode(pid, klasse);
       const cel    = document.getElementById(`piek-cel-${pid}`);
@@ -821,7 +861,7 @@ function updateArbitrage(tijden, prijzen) {
     });
   });
 
-  // Winst berekening
+  // Winst
   const allG = [..._periodesNeg,..._periodesGoen].sort((a,b)=>a.gem-b.gem);
   const allD = [..._periodesDuur].sort((a,b)=>b.gem-a.gem);
   const spread = Math.max(0,(allD[0]?.gem||0)/10-(allG[0]?.gem||0)/10);
@@ -959,59 +999,119 @@ function berekenSimulatie(tijden, prijzen) {
   return slots;
 }
 
-// LED kleuren per pixel
-function ledKleur(slot, pixelIdx) {
+// LED kleuren per pixel (12 pixels)
+function ledKleur(slot, d) {
   if (!slot) return { bg:'#111', glow:false };
+  const id = d.id;
 
-  if (pixelIdx <= 4) {
-    // Verbruikers 0–4
-    const v   = VERBRUIKERS[pixelIdx];
-    const kw  = slot.actief[v.id] || 0;
-    if (kw === 0) return { bg:'#1a1a1a', glow:false };
-    const intens = kw / v.kw;
-    // Groen gradient op basis van intensiteit
-    const r = Math.round(42  * (1-intens) + 168 * intens);
-    const g = Math.round(138 * (1-intens) + 255 * intens);
-    const b = Math.round(62  * (1-intens) + 62  * intens);
-    return { bg:`rgb(${r},${g},${b})`, glow:true, color:`rgb(${r},${g},${b})` };
+  // Helper: groen gradient op basis van intensiteit 0-1
+  function groenGrad(intens) {
+    const r = Math.round(20  + intens*148);
+    const g = Math.round(80  + intens*175);
+    const b = Math.round(30  + intens*32);
+    return `rgb(${r},${g},${b})`;
   }
 
-  if (pixelIdx === 5) {
-    // Batterij
-    if (slot.batActie==='laden')   return { bg:'#2a8a3e', glow:true, color:'#2a8a3e' };
-    if (slot.batActie==='ontladen') return { bg:'#d29922', glow:true, color:'#d29922' };
-    const socPct = slot.soc;
-    if (socPct>70) return { bg:'#1a3a1a', glow:false };
-    if (socPct>30) return { bg:'#2a2a1a', glow:false };
+  if (id === 'solar') {
+    if (slot.solar < 0.3) return { bg:'#111', glow:false };
+    const intens = Math.min(1, slot.solar / (SOLAR_MAX[seizoen]||5));
+    const c = groenGrad(intens);
+    return { bg:c, glow:intens>0.5, color:c };
+  }
+
+  if (id === 'prijs') {
+    const c = kleur(slot.ct);
+    return { bg:c, glow:slot.ct<0, color:c };
+  }
+
+  if (id === 'netto') {
+    if (slot.netto >  0.5) return { bg:'#2a8a3e', glow:true,  color:'#2a8a3e' };
+    if (slot.netto < -0.5) return { bg:'#f85149', glow:false };
+    return { bg:'#333', glow:false };
+  }
+
+  if (id === 'bat') {
+    if (slot.batActie==='laden')    return { bg:'#2a8a3e', glow:true,  color:'#2a8a3e' };
+    if (slot.batActie==='ontladen') return { bg:'#d29922', glow:true,  color:'#d29922' };
+    if (slot.soc > 80) return { bg:'#1a4a2a', glow:false };
+    if (slot.soc > 30) return { bg:'#2a2a1a', glow:false };
     return { bg:'#3a1a1a', glow:false };
   }
 
-  if (pixelIdx === 6) {
-    // EPEX klasse
-    const c = kleur(slot.ct);
-    return { bg:c + '99', glow:slot.ct<0, color:c };
+  // Verbruikers ECO, Tesla, EV, WP's
+  if (['eco','ev_won','ev_sch','wp_won','wp_sch'].includes(id)) {
+    const v = VERBRUIKERS.find(v=>v.id===id);
+    const kw = slot.actief[id] || 0;
+    if (kw === 0) return { bg:'#1a1a1a', glow:false };
+    const intens = kw / (v?.kw||1);
+    const c = groenGrad(intens);
+    return { bg:c, glow:true, color:c };
   }
 
-  if (pixelIdx === 7) {
-    // Netto
-    if (slot.netto > 0.5)  return { bg:'#2a8a3e', glow:true,  color:'#2a8a3e' };
-    if (slot.netto < -0.5) return { bg:'#f8514999', glow:false };
-    return { bg:'#333', glow:false };
+  // Advies-pixels: Koken en Wassen
+  // Groen = goed moment (goedkoop + piek heeft ruimte)
+  // Geel = normaal (kan, maar niet ideaal)
+  // Rood = duur of piek vol
+  if (id === 'koken' || id === 'wassen') {
+    const kwNodig = id==='koken' ? 3.5 : 2.0;
+    const ruimte  = MAX_PIEK - slot.load;
+    if (slot.ct < 0)             return { bg:'#a8ff3e', glow:true,  color:'#a8ff3e' }; // negatief = DOEN!
+    if (slot.ct < DREMPEL_GROEN && ruimte >= kwNodig)
+                                 return { bg:'#2a8a3e', glow:true,  color:'#2a8a3e' }; // goedkoop + ruimte
+    if (slot.ct < DREMPEL_GEEL && ruimte >= kwNodig)
+                                 return { bg:'#d29922', glow:false };                   // normaal, ruimte
+    if (ruimte < kwNodig)        return { bg:'#7a2020', glow:false };                   // piek vol
+                                 return { bg:'#f85149', glow:false };                   // duur
+  }
+
+  if (id === 'piek') {
+    const pct = slot.load / MAX_PIEK;
+    if (pct > 1)    return { bg:'#f85149', glow:true,  color:'#f85149' };
+    if (pct > 0.85) return { bg:'#d29922', glow:false };
+    if (pct > 0.3)  return { bg:'#2a8a3e', glow:false };
+    return { bg:'#111', glow:false };
   }
 
   return { bg:'#111', glow:false };
 }
 
-const LED_LABELS = ['ECO\nSCH','Tesla\nWON','EV\nSCH','WP\nWON','WP\nSCH','Bat','EPEX','Netto'];
+
+// 12 LED pixels definitie
+const LED_DEFS = [
+  // Groep 1: Energie situatie
+  { id:'solar',  sym:'☀️',  titel:'Solar',   groep:1 },
+  { id:'prijs',  sym:'💰',  titel:'Prijs',   groep:1 },
+  { id:'netto',  sym:'⚖️',  titel:'Netto',   groep:1 },
+  // Groep 2: Batterij
+  { id:'bat',    sym:'🔋',  titel:'Batterij',groep:2 },
+  // Groep 3: Automatische verbruikers
+  { id:'eco',    sym:'♨️',  titel:'ECO',     groep:3 },
+  { id:'ev_won', sym:'🚗',  titel:'Tesla',   groep:3 },
+  { id:'ev_sch', sym:'⚡',  titel:'EV SCH',  groep:3 },
+  { id:'wp_won', sym:'🏠',  titel:'WP WON',  groep:3 },
+  { id:'wp_sch', sym:'🏚️', titel:'WP SCH',  groep:3 },
+  // Groep 4: Huishoud advies
+  { id:'koken',  sym:'🍳',  titel:'Koken?',  groep:4 },
+  { id:'wassen', sym:'👕',  titel:'Wassen?', groep:4 },
+  // Groep 5: Piek
+  { id:'piek',   sym:'📊',  titel:'Piek',    groep:5 },
+];
 
 function initLedStrip() {
   const strip = document.getElementById('led-strip');
   strip.innerHTML = '';
-  for (let i=0; i<8; i++) {
+  let prevGroep = 0;
+  for (let i=0; i<LED_DEFS.length; i++) {
+    const d = LED_DEFS[i];
+    if (d.groep !== prevGroep && prevGroep !== 0) {
+      strip.innerHTML += '<div class="led-groep-sep"></div>';
+    }
+    prevGroep = d.groep;
     strip.innerHTML += `
       <div class="led-pixel-wrap">
+        <div class="led-sym">${d.sym}</div>
         <div class="led-pixel" id="led-${i}" style="background:#111"></div>
-        <div class="led-label">${LED_LABELS[i].replace('\n','<br>')}</div>
+        <div class="led-label">${d.titel}</div>
       </div>`;
   }
 }
@@ -1049,13 +1149,15 @@ function tekenSimulatieSlot(absSlot) {
   document.getElementById('sim-tijdstip').textContent =
     `${fmtDag(s.iso)} ${fmtTime(s.iso)}  ·  EPEX ${s.ct.toFixed(1)} ct/kWh`;
 
-  // LEDs
-  for (let i=0; i<8; i++) {
+  // LEDs (12 pixels)
+  for (let i=0; i<LED_DEFS.length; i++) {
     const pixel = document.getElementById(`led-${i}`);
-    const lk = ledKleur(s, i);
+    if (!pixel) continue;
+    const lk = ledKleur(s, LED_DEFS[i]);
     pixel.style.background = lk.bg;
     if (lk.glow && lk.color) {
-      pixel.style.boxShadow = `0 0 14px 4px ${lk.color}88`;
+      pixel.style.setProperty('--glow-clr', lk.color);
+      pixel.style.boxShadow = `0 0 16px 5px ${lk.color}99`;
       pixel.classList.add('aan');
     } else {
       pixel.style.boxShadow = 'none';
