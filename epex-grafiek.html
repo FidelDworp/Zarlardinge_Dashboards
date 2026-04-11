@@ -7,123 +7,197 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg:      #0d1117;
-    --panel:   #161b22;
-    --border:  #21262d;
-    --green:   #2a8a3e;  /* donkerder goedkoop */
-    --lime:    #a8ff3e;   /* superhel negatief */
-    --yellow:  #d29922;
-    --red:     #f85149;
-    --blue:    #58a6ff;
-    --muted:   #8b949e;
-    --text:    #e6edf3;
-    --mono:    'Space Mono', monospace;
-    --sans:    'DM Sans', sans-serif;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    min-height: 100vh;
-    padding: 20px 16px 48px;
-    max-width: 960px;
-    margin: 0 auto;
-  }
-  header {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    margin-bottom: 24px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 14px;
-    flex-wrap: wrap;
-  }
-  header h1 { font-family: var(--mono); font-size: 1rem; font-weight: 700; letter-spacing: .05em; }
-  header .sub { font-size: .78rem; color: var(--muted); }
-  .dot {
-    display: inline-block; width: 8px; height: 8px;
-    border-radius: 50%; background: var(--green);
-    animation: pulse 2s ease-in-out infinite; margin-right: 6px;
-  }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+:root {
+  --bg:     #0d1117;
+  --panel:  #161b22;
+  --border: #21262d;
+  --green:  #2a8a3e;
+  --lime:   #a8ff3e;
+  --yellow: #d29922;
+  --red:    #f85149;
+  --blue:   #58a6ff;
+  --muted:  #8b949e;
+  --text:   #e6edf3;
+  --mono:   'Space Mono', monospace;
+  --sans:   'DM Sans', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; padding:20px 16px 48px; max-width:960px; margin:0 auto; }
 
-  .cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
-    gap: 10px; margin-bottom: 16px;
-  }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
-  .card .label { font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 5px; font-family: var(--mono); }
-  .card .value { font-family: var(--mono); font-size: 1.45rem; font-weight: 700; line-height: 1; }
-  .card .unit  { font-size: .75rem; color: var(--muted); margin-top: 4px; }
-  .card .when  { font-size: .72rem; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
-  .badge { display: inline-block; font-size: .66rem; font-family: var(--mono); padding: 2px 7px; border-radius: 4px; margin-top: 7px; }
-  .green  { color: var(--green); }
-  .lime   { color: var(--lime); }
-  .yellow { color: var(--yellow); }
-  .red    { color: var(--red); }
-  .blue   { color: var(--blue); }
-  .badge.green  { background: rgba(63,185,80,.15);  color: var(--green); }
-  .badge.yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
-  .badge.red    { background: rgba(248,81,73,.15);  color: var(--red); }
-  .badge.lime   { background: rgba(168,255,62,.15);  color: var(--lime); }
-  .lime { color: var(--lime); }
+/* HEADER */
+header { display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--border); padding-bottom:14px; flex-wrap:wrap; }
+header h1 { font-family:var(--mono); font-size:1rem; font-weight:700; letter-spacing:.05em; }
+.dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--lime); animation:pulse 2s ease-in-out infinite; margin-right:6px; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-  .chart-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px 18px 14px; margin-bottom: 16px; }
-  .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
-  .chart-title { font-family: var(--mono); font-size: .73rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-  .legend { display: flex; gap: 12px; font-size: .7rem; color: var(--muted); flex-wrap: wrap; }
-  .legend span { display: flex; align-items: center; gap: 5px; }
-  .leg-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
-  canvas { width: 100% !important; }
+/* KLEUREN */
+.green  { color:var(--green); } .lime { color:var(--lime); } .yellow { color:var(--yellow); } .red { color:var(--red); } .blue { color:var(--blue); }
+.badge { display:inline-block; font-size:.66rem; font-family:var(--mono); padding:2px 7px; border-radius:4px; margin-top:7px; }
+.badge.green  { background:rgba(63,185,80,.15);  color:var(--green); }
+.badge.yellow { background:rgba(210,153,34,.15); color:var(--yellow); }
+.badge.red    { background:rgba(248,81,73,.15);  color:var(--red); }
+.badge.lime   { background:rgba(168,255,62,.15); color:var(--lime); }
 
-  .dag-labels { display: flex; font-family: var(--mono); font-size: .68rem; color: var(--muted); margin-bottom: 4px; }
-  .dag-labels span { flex: 1; text-align: center; }
+/* GRAFIEK */
+.chart-wrap { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:18px 18px 14px; margin-bottom:16px; }
+.chart-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
+.chart-title { font-family:var(--mono); font-size:.73rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.legend { display:flex; gap:12px; font-size:.7rem; color:var(--muted); flex-wrap:wrap; }
+.legend span { display:flex; align-items:center; gap:5px; }
+.leg-dot { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+canvas { width:100% !important; }
+.dag-labels { display:flex; font-family:var(--mono); font-size:.68rem; color:var(--muted); margin-bottom:4px; }
+.dag-labels span { flex:1; text-align:center; }
 
-  .arb-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 16px; }
-  .arb-header { font-family: var(--mono); font-size: .73rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; }
-  .arb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
-  .arb-col { display: flex; flex-direction: column; gap: 6px; }
-  .arb-col-title { font-family: var(--mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
-  .arb-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
-  .arb-item.rank-1     { border-color: rgba(63,185,80,.4); }
-  .arb-item.rank-1-red { border-color: rgba(248,81,73,.4); }
-  .arb-rank  { font-family: var(--mono); font-size: .6rem; color: var(--muted); margin-right: 8px; }
-  .arb-time  { font-family: var(--mono); font-size: .82rem; color: var(--text); }
-  .arb-dag   { font-size: .65rem; color: var(--muted); margin-left: 4px; }
-  .arb-price  { font-family: var(--mono); font-size: .9rem; font-weight: 700; }
-  .arb-subkop { font-family: var(--mono); font-size: .65rem; text-transform: uppercase; letter-spacing: .05em; margin: 8px 0 4px; }
-  .arb-subkop:first-child { margin-top: 0; }
-  .arb-item.rank-lime { border-color: rgba(168,255,62,.5); }
-  .arb-winst { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--muted); flex-wrap: wrap; }
-  .arb-winst-val { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--green); margin-left: 4px; }
+/* ARBITRAGE */
+.arb-wrap { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:18px; margin-bottom:16px; }
+.arb-header { font-family:var(--mono); font-size:.73rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:14px; }
+.arb-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:start; }
+.arb-col { display:flex; flex-direction:column; gap:6px; }
+.arb-col-title { font-family:var(--mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+.arb-subkop { font-family:var(--mono); font-size:.65rem; text-transform:uppercase; letter-spacing:.05em; margin:8px 0 4px; }
+.arb-subkop:first-child { margin-top:0; }
+
+.arb-item { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px 12px; margin-bottom:2px; }
+.arb-item.rank-1     { border-color:rgba(63,185,80,.4); }
+.arb-item.rank-1-red { border-color:rgba(248,81,73,.4); }
+.arb-item.rank-lime  { border-color:rgba(168,255,62,.5); }
+.arb-item-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.arb-rank  { font-family:var(--mono); font-size:.6rem; color:var(--muted); margin-right:6px; }
+.arb-time  { font-family:var(--mono); font-size:.82rem; color:var(--text); }
+.arb-dag   { font-size:.65rem; color:var(--muted); margin-left:4px; }
+.arb-price { font-family:var(--mono); font-size:.9rem; font-weight:700; }
+.arb-sub   { font-size:.65rem; color:var(--muted); font-family:var(--mono); margin-bottom:7px; }
+
+/* CHECKBOXES */
+.cb-grid { display:flex; flex-wrap:wrap; gap:4px 10px; }
+.cb-item { display:flex; align-items:center; gap:4px; font-size:.68rem; color:var(--muted); cursor:pointer; white-space:nowrap; }
+.cb-item input[type=checkbox] { accent-color:var(--lime); width:12px; height:12px; cursor:pointer; }
+.cb-item:hover { color:var(--text); }
+
+.arb-winst { margin-top:16px; padding-top:14px; border-top:1px solid var(--border); display:flex; align-items:center; gap:8px; font-size:.82rem; color:var(--muted); flex-wrap:wrap; }
+.arb-winst-val { font-family:var(--mono); font-size:1.1rem; font-weight:700; color:var(--green); margin-left:4px; }
+
+/* SIMULATIE */
+.sim-wrap { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:18px; margin-bottom:16px; }
+.sim-header { font-family:var(--mono); font-size:.73rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+.sim-tijdstip { font-family:var(--mono); font-size:.85rem; color:var(--text); }
+
+/* TIJDSCHUIF */
+.sim-slider-wrap { margin-bottom:18px; }
+.sim-slider-labels { display:flex; justify-content:space-between; font-family:var(--mono); font-size:.62rem; color:var(--muted); margin-bottom:4px; }
+input[type=range].sim-slider {
+  width:100%; accent-color:var(--blue); height:4px;
+  background:var(--border); border-radius:2px; outline:none; cursor:pointer;
+  -webkit-appearance:none; appearance:none;
+}
+input[type=range].sim-slider::-webkit-slider-thumb {
+  -webkit-appearance:none; width:14px; height:14px;
+  border-radius:50%; background:var(--blue); cursor:pointer;
+}
+
+/* LED STRIP */
+.sim-strip-wrap { margin-bottom:16px; }
+.sim-strip-title { font-family:var(--mono); font-size:.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px; }
+.led-strip { display:flex; gap:8px; justify-content:center; margin-bottom:8px; flex-wrap:wrap; }
+.led-pixel-wrap { display:flex; flex-direction:column; align-items:center; gap:5px; }
+.led-pixel {
+  width:36px; height:36px; border-radius:50%;
+  background:#111; border:2px solid #333;
+  box-shadow:0 0 0 0 transparent;
+  transition:background .3s, box-shadow .3s;
+  position:relative;
+}
+.led-pixel.aan { box-shadow:0 0 12px 3px currentColor; }
+.led-label { font-family:var(--mono); font-size:.52rem; color:var(--muted); text-align:center; line-height:1.3; max-width:40px; }
+
+/* SOC BALK */
+.soc-wrap { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px 14px; margin-bottom:12px; }
+.soc-header { display:flex; justify-content:space-between; font-family:var(--mono); font-size:.68rem; color:var(--muted); margin-bottom:6px; }
+.soc-pct { font-size:.9rem; font-weight:700; }
+.soc-bar-bg { background:#21262d; border-radius:4px; height:10px; overflow:hidden; }
+.soc-bar-fill { height:100%; border-radius:4px; transition:width .4s, background .4s; }
+.soc-actie { font-size:.65rem; color:var(--muted); font-family:var(--mono); margin-top:5px; }
+
+/* SOLAR + NETTO */
+.sim-metrics { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px; }
+.sim-metric { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px 12px; }
+.sim-metric-label { font-family:var(--mono); font-size:.62rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+.sim-metric-val { font-family:var(--mono); font-size:1rem; font-weight:700; }
+
+/* VERBRUIKERSLIJST */
+.sim-devices { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.sim-dev-row { background:var(--bg); border:1px solid var(--border); border-radius:5px; padding:7px 10px; display:flex; justify-content:space-between; align-items:center; font-size:.72rem; }
+.sim-dev-naam { font-family:var(--mono); color:var(--muted); }
+.sim-dev-status { font-family:var(--mono); font-size:.72rem; font-weight:700; }
+
+/* INSTELLINGEN */
+.instellingen { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px 18px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-top:4px; }
+.inst-title { font-family:var(--mono); font-size:.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.inst-item { display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:.72rem; color:var(--text); }
+.inst-input-wrap { display:flex; align-items:center; gap:4px; background:var(--bg); border:1px solid var(--border); border-radius:5px; padding:4px 8px; }
+.inst-input-wrap input[type=number] { background:transparent; border:none; outline:none; color:var(--text); font-family:var(--mono); font-size:.82rem; font-weight:700; width:44px; text-align:right; }
+.inst-input-wrap select { background:var(--bg); border:none; outline:none; color:var(--text); font-family:var(--mono); font-size:.75rem; cursor:pointer; }
+.inst-unit { font-size:.65rem; color:var(--muted); }
+.inst-bron { font-size:.65rem; color:var(--muted); font-family:var(--mono); margin-left:auto; }
+.inst-bron a { color:var(--muted); }
+
+#status-msg { font-size:.75rem; color:var(--muted); font-family:var(--mono); text-align:center; padding:40px; display:none; }
 
 
-  .instellingen { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 4px; }
-  .inst-title { font-family: var(--mono); font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-right: 4px; }
-  .inst-item { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: .75rem; color: var(--text); cursor: default; }
-  .inst-input-wrap { display: flex; align-items: center; gap: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; }
-  .inst-input-wrap input { background: transparent; border: none; outline: none; color: var(--text); font-family: var(--mono); font-size: .82rem; font-weight: 700; width: 44px; text-align: right; }
-  .inst-unit { font-size: .68rem; color: var(--muted); }
-  .inst-bron { font-size: .65rem; color: var(--muted); font-family: var(--mono); margin-left: auto; }
-  .inst-bron a { color: var(--muted); }
-  #status-msg { font-size: .75rem; color: var(--muted); font-family: var(--mono); text-align: center; padding: 40px; display: none; }
+/* PIEK METER */
+.piek-wrap { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px 14px; margin-bottom:12px; }
+.piek-header { display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:.68rem; color:var(--muted); margin-bottom:6px; }
+.piek-kw { font-size:.9rem; font-weight:700; }
+.piek-bar-bg { background:#21262d; border-radius:4px; height:14px; position:relative; overflow:visible; }
+.piek-bar-fill { height:100%; border-radius:4px; transition:width .3s, background .3s; }
+.piek-bar-limiet {
+  position:absolute; top:-3px; bottom:-3px; width:3px;
+  background:white; border-radius:2px; transition:left .3s;
+}
+.piek-status { font-size:.68rem; font-family:var(--mono); margin-top:5px; display:flex; justify-content:space-between; }
+.piek-afgesch { font-size:.65rem; color:var(--yellow); font-family:var(--mono); margin-top:4px; min-height:1em; }
 
-  @media (max-width: 500px) {
-    .arb-grid { grid-template-columns: 1fr; }
-  }
+/* APPARATEN MET OVERRIDE */
+.sim-dev-row { background:var(--bg); border:1px solid var(--border); border-radius:5px; padding:7px 10px; display:flex; justify-content:space-between; align-items:center; gap:6px; }
+.sim-dev-info { display:flex; flex-direction:column; gap:1px; flex:1; }
+.sim-dev-naam { font-family:var(--mono); font-size:.7rem; color:var(--muted); }
+.sim-dev-kw   { font-family:var(--mono); font-size:.75rem; font-weight:700; }
+.sim-dev-piek { font-size:.6rem; color:var(--yellow); font-family:var(--mono); }
+.override-btn-group { display:flex; gap:2px; }
+.override-btn {
+  font-family:var(--mono); font-size:.58rem; padding:2px 5px;
+  border-radius:3px; border:1px solid var(--border);
+  background:var(--bg); color:var(--muted); cursor:pointer;
+  transition:all .15s;
+}
+.override-btn.active-auto  { background:rgba(88,166,255,.2);  color:var(--blue);   border-color:var(--blue); }
+.override-btn.active-aan   { background:rgba(210,153,34,.2);  color:var(--yellow); border-color:var(--yellow); }
+.override-btn.active-uit   { background:rgba(139,148,158,.15);color:var(--muted);  border-color:var(--muted); }
+
+/* PIEK KOSTEN */
+.piek-kost { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px 14px; margin-top:12px; }
+.piek-kost-title { font-family:var(--mono); font-size:.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; }
+.piek-kost-row { display:flex; justify-content:space-between; font-size:.75rem; margin-bottom:4px; }
+.piek-kost-row span:first-child { color:var(--muted); font-family:var(--mono); font-size:.7rem; }
+.piek-kost-row span:last-child  { font-family:var(--mono); font-weight:700; }
+.piek-besparing { color:var(--green); }
+
+@media (max-width:560px) {
+  .arb-grid  { grid-template-columns:1fr; }
+  .sim-metrics { grid-template-columns:1fr 1fr; }
+  .sim-devices { grid-template-columns:1fr; }
+}
 </style>
 </head>
 <body>
 
 <header>
   <h1><span class="dot"></span>ZARLARDINGE ENERGIE</h1>
-  <span class="sub" style="display:none"><span id="datum"></span></span>
+  <span style="display:none"><span id="datum"></span></span>
 </header>
 
-
+<!-- GRAFIEK -->
 <div class="chart-wrap">
   <div class="chart-header">
     <span class="chart-title">Dag-ahead prijzen 48u — EPEX SPOT BE</span>
@@ -143,27 +217,123 @@
   <canvas id="epexChart" height="200"></canvas>
 </div>
 
+<!-- ARBITRAGE + CHECKBOXES -->
 <div class="arb-wrap">
   <div class="arb-header">⚡ Arbitrage — beste momenten komende 48u</div>
   <div class="arb-grid">
     <div class="arb-col">
       <div class="arb-col-title green">↓ Best om te verbruiken</div>
-      <div style="font-size:.65rem;color:var(--muted);margin-bottom:6px;font-family:var(--mono)">EV lader · Boiler · Batterij laden</div>
+      <div style="font-size:.63rem;color:var(--muted);margin-bottom:6px;font-family:var(--mono)">Vink aan welke verbruikers actief mogen zijn</div>
       <div id="arb-goedkoop"></div>
     </div>
     <div class="arb-col">
       <div class="arb-col-title red">↑ Best om batterij te ontladen</div>
-      <div style="font-size:.65rem;color:var(--muted);margin-bottom:6px;font-family:var(--mono)">Vermijd grote verbruikers</div>
+      <div style="font-size:.63rem;color:var(--muted);margin-bottom:6px;font-family:var(--mono)">Vermijd grote verbruikers</div>
       <div id="arb-duur"></div>
     </div>
   </div>
   <div class="arb-winst">
     <span>Opbrengst van batterijarbitrage per 24u:</span>
-    <span class="arb-winst-val" id="arb-winst-val">— </span>
-    <span style="color:var(--muted)">/24u</span>
+    <span class="arb-winst-val" id="arb-winst-val">—</span>
   </div>
 </div>
 
+<!-- LED SIMULATIE -->
+<div class="sim-wrap">
+  <div class="sim-header">
+    <span>💡 Simulatie — verbruikers</span>
+    <span class="sim-tijdstip" id="sim-tijdstip">—</span>
+  </div>
+
+  <!-- Tijdschuif -->
+  <div class="sim-slider-wrap">
+    <div class="sim-slider-labels">
+      <span>Nu</span>
+      <span id="sim-slider-mid">+24u</span>
+      <span id="sim-slider-end">+48u</span>
+    </div>
+    <input type="range" class="sim-slider" id="sim-slider" min="0" max="47" value="0" step="1">
+  </div>
+
+  <!-- LED Strip -->
+  <div class="sim-strip-wrap">
+    <div class="sim-strip-title">LED-strip kastje (8 pixels)</div>
+    <div class="led-strip" id="led-strip">
+      <!-- Gevuld door JS -->
+    </div>
+  </div>
+
+  <!-- SOC Batterij -->
+  <div class="soc-wrap">
+    <div class="soc-header">
+      <span>🔋 Batterij SOC</span>
+      <span class="soc-pct" id="soc-pct">50%</span>
+    </div>
+    <div class="soc-bar-bg">
+      <div class="soc-bar-fill" id="soc-bar" style="width:50%;background:var(--blue)"></div>
+    </div>
+    <div class="soc-actie" id="soc-actie">—</div>
+  </div>
+
+  <!-- PIEK METER -->
+  <div class="piek-wrap">
+    <div class="piek-header">
+      <span>⚡ Vermogen</span>
+      <span class="piek-kw"><span id="piek-kw">—</span> / <span id="piek-max-kw">—</span> kW</span>
+    </div>
+    <div class="piek-bar-bg">
+      <div class="piek-bar-fill" id="piek-bar"></div>
+      <div class="piek-bar-limiet" id="piek-limiet"></div>
+    </div>
+    <div class="piek-status">
+      <span id="piek-status-lbl">—</span>
+      <span id="piek-status-reden" style="color:var(--muted);font-size:.62rem;font-family:var(--mono)"></span>
+    </div>
+    <div class="piek-afgesch" id="piek-afgesch"></div>
+  </div>
+
+  <!-- Metrics -->
+  <div class="sim-metrics">
+    <div class="sim-metric">
+      <div class="sim-metric-label">Solar</div>
+      <div class="sim-metric-val green" id="sim-solar">— kW</div>
+    </div>
+    <div class="sim-metric">
+      <div class="sim-metric-label">Verbruik</div>
+      <div class="sim-metric-val yellow" id="sim-load">— kW</div>
+    </div>
+    <div class="sim-metric">
+      <div class="sim-metric-label">Netto</div>
+      <div class="sim-metric-val" id="sim-netto">—</div>
+    </div>
+  </div>
+
+  <!-- Apparaten met override -->
+  <div class="sim-devices" id="sim-devices"></div>
+
+  <!-- Piek kosten -->
+  <div class="piek-kost">
+    <div class="piek-kost-title">📊 Capaciteitstarief (2028)</div>
+    <div class="piek-kost-row">
+      <span>Hoogste piek in simulatie</span>
+      <span id="piek-hoogste">— kW</span>
+    </div>
+    <div class="piek-kost-row">
+      <span>Zonder piekbeheer</span>
+      <span id="piek-kost-zonder" style="color:var(--red)">—</span>
+    </div>
+    <div class="piek-kost-row">
+      <span>Met piekbeheer</span>
+      <span id="piek-kost-met" style="color:var(--green)">—</span>
+    </div>
+    <div class="piek-kost-row" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--border)">
+      <span>Besparing</span>
+      <span class="piek-besparing" id="piek-besparing">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- INSTELLINGEN -->
 <div class="instellingen">
   <span class="inst-title">⚙ Instellingen</span>
   <label class="inst-item">
@@ -180,31 +350,91 @@
       <span class="inst-unit">kWh</span>
     </span>
   </label>
-  <span class="inst-bron">Bron: <a href="https://energy-charts.info" target="_blank">energy-charts.info</a></span>
+  <label class="inst-item">
+    <span>Start SOC</span>
+    <span class="inst-input-wrap">
+      <input id="inp-soc" type="number" value="50" step="5" min="0" max="100">
+      <span class="inst-unit">%</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Seizoen</span>
+    <span class="inst-input-wrap">
+      <select id="inp-seizoen">
+        <option value="zomer">Zomer (8 kW)</option>
+        <option value="lente" selected>Lente/Herfst (5 kW)</option>
+        <option value="winter">Winter (3 kW)</option>
+      </select>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Max piek</span>
+    <span class="inst-input-wrap">
+      <input id="inp-piek" type="number" value="8" step="0.5" min="1" max="30">
+      <span class="inst-unit">kW</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Cap. tarief</span>
+    <span class="inst-input-wrap">
+      <input id="inp-cap" type="number" value="4.80" step="0.10" min="0" max="20">
+      <span class="inst-unit">€/kW/mnd</span>
+    </span>
+  </label>
+    <span class="inst-bron">Bron: <a href="https://energy-charts.info" target="_blank">energy-charts.info</a></span>
 </div>
 
 <script>
-const VAST_DEFAULT = 28.0;
-const DREMPEL_GROEN = 10;
-const DREMPEL_GEEL  = 20;
+// ─── CONSTANTEN ───────────────────────────────────────────────────────────────
+const VAST_DEFAULT   = 28.0;
+const DREMPEL_GROEN  = 10;   // ct/kWh
+const DREMPEL_GEEL   = 20;   // ct/kWh
 
-// Lees opgeslagen waarden uit localStorage (blijven bewaard na refresh)
-let BAT_KWH = parseFloat(localStorage.getItem('bat_kwh'))  || 10;
-let vast     = parseFloat(localStorage.getItem('vast_prijs')) || VAST_DEFAULT;
+// Solar max per seizoen (kW)
+const SOLAR_MAX = { zomer: 8, lente: 5, winter: 3 };
 
-let chart     = null;
-let allPrices = [];
-let allTimes  = [];
+// Verbruikers definitie
+const VERBRUIKERS = [
+  { id:'eco',    naam:'ECO-boiler', sub:'SCH', kw:2,  regelbaar:false, pixel:0 },
+  { id:'ev_won', naam:'Tesla',      sub:'WON', kw:11, regelbaar:true,  pixel:1 },
+  { id:'ev_sch', naam:'EV-lader',   sub:'SCH', kw:11, regelbaar:true,  pixel:2 },
+  { id:'wp_won', naam:'WP',         sub:'WON', kw:9,  regelbaar:false, pixel:3 },
+  { id:'wp_sch', naam:'WP',         sub:'SCH', kw:9,  regelbaar:false, pixel:4 },
+];
 
-// Stel inputs in op opgeslagen waarden zodra DOM klaar is
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('inp-vast').value = vast;
-  document.getElementById('inp-bat').value  = BAT_KWH;
-});
+// Standaard checkboxes per prijsklasse
+const CB_DEFAULTS = {
+  neg:  { eco:true,  ev_won:true,  ev_sch:true,  wp_won:true,  wp_sch:true,  bat_laden:true,  bat_ontladen:false },
+  goen: { eco:true,  ev_won:true,  ev_sch:true,  wp_won:false, wp_sch:false, bat_laden:true,  bat_ontladen:false },
+  duur: { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:true  },
+};
 
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let chart         = null;
+let allTimes      = [];
+let allPrices     = [];
+let periodeKeuzes = {};  // key = periode-id → { eco, ev_won, ... }
+let simSlot       = 0;   // huidig geselecteerd slot in de slider
+
+let BAT_KWH   = parseFloat(localStorage.getItem('bat_kwh'))    || 10;
+let vast      = parseFloat(localStorage.getItem('vast_prijs'))  || VAST_DEFAULT;
+let SOC_START = parseFloat(localStorage.getItem('soc_start'))   || 50;
+let seizoen   = localStorage.getItem('seizoen') || 'lente';
+let MAX_PIEK  = parseFloat(localStorage.getItem('max_piek'))    || 8;
+let CAP_TAR   = parseFloat(localStorage.getItem('cap_tar'))     || 4.80;
+
+// Override per apparaat: 'auto'|'aan'|'uit'
+let overrides = {};
+try { overrides = JSON.parse(localStorage.getItem('overrides')||'{}'); } catch(e){}
+
+// Afschakelvolgorde bij piekbedreiging (eerste = eerst af)
+// Maarten's EV eerst, Filip's Tesla later
+const PIEK_PRIO = ['ev_sch','bat_laden','eco','wp_sch','ev_won','wp_won'];
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
 function kleur(ct) {
-  if (ct < 0)             return '#a8ff3e'; // negatief = superhel lime
-  if (ct < DREMPEL_GROEN) return '#2a8a3e'; // donker groen
+  if (ct < 0)             return '#a8ff3e';
+  if (ct < DREMPEL_GROEN) return '#2a8a3e';
   if (ct < DREMPEL_GEEL)  return '#d29922';
   return '#f85149';
 }
@@ -215,203 +445,221 @@ function klasLabel(ct) {
   return ['red', 'Duur'];
 }
 function fmtTime(iso) {
-  return new Date(iso).toLocaleTimeString('nl-BE',
-    { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Brussels' });
+  return new Date(iso).toLocaleTimeString('nl-BE', { hour:'2-digit', minute:'2-digit', timeZone:'Europe/Brussels' });
 }
 function fmtDag(iso) {
-  const d = new Date(iso);
-  const nu = new Date();
+  const d = new Date(iso), nu = new Date();
   if (d.toDateString() === nu.toDateString()) return 'vandaag';
   const m = new Date(nu); m.setDate(nu.getDate()+1);
   if (d.toDateString() === m.toDateString()) return 'morgen';
-  return d.toLocaleDateString('nl-BE', { weekday: 'short' });
+  return d.toLocaleDateString('nl-BE', { weekday:'short' });
 }
-function huidigUur(tijden) {
+function huidigSlot(tijden) {
   const nu = Date.now();
-  for (let i = tijden.length-1; i >= 0; i--) {
+  for (let i = tijden.length-1; i >= 0; i--)
     if (new Date(tijden[i]).getTime() <= nu) return i;
-  }
   return 0;
 }
+function detecteerInterval(tijden) {
+  return tijden.length < 2 ? 3600000 : new Date(tijden[1]).getTime() - new Date(tijden[0]).getTime();
+}
+function fmtDuur(nSlots, intervalMs) {
+  const totMin = nSlots * intervalMs / 60000;
+  const u = Math.floor(totMin/60), m = totMin%60;
+  if (u===0) return `${m} min`;
+  if (m===0) return u===1?'1 uur':`${u} uur`;
+  return `${u}u${String(m).padStart(2,'0')}`;
+}
 
+// Solar vermogen op tijdstip (sinusoïde 07:00–20:00)
+function solarKw(iso) {
+  const d = new Date(iso);
+  const uur = d.getHours() + d.getMinutes()/60;
+  const rise = 7, set = 20, noon = (rise+set)/2;
+  if (uur < rise || uur >= set) return 0;
+  const max = SOLAR_MAX[seizoen] || 5;
+  return max * Math.sin(Math.PI * (uur - rise) / (set - rise));
+}
+
+// ─── GRAFIEK ──────────────────────────────────────────────────────────────────
 function renderChart(tijden, prijzen) {
   const ctx    = document.getElementById('epexChart').getContext('2d');
   const labels = tijden.map(t => fmtTime(t));
-  const nuIdx  = huidigUur(tijden);
+  const nuIdx  = huidigSlot(tijden);
 
-  const nu     = new Date();
-  const morgen = new Date(nu); morgen.setDate(nu.getDate()+1); morgen.setHours(0,0,0,0);
-  let midIdx   = -1;
-  for (let i = 0; i < tijden.length; i++) {
-    if (new Date(tijden[i]).getTime() >= morgen.getTime()) { midIdx = i; break; }
-  }
+  // Middernacht scheidingslijn
+  const nu = new Date(), morgen = new Date(nu);
+  morgen.setDate(nu.getDate()+1); morgen.setHours(0,0,0,0);
+  let midIdx = tijden.findIndex(t => new Date(t).getTime() >= morgen.getTime());
 
-  const barColors    = prijzen.map((p,i) => kleur(p/10) + (i === nuIdx ? '' : '99'));
-  const borderColors = prijzen.map((p,i) => i === nuIdx ? '#ffffff' : kleur(p/10));
-  const vastLine     = prijzen.map(() => vast * 10);
+  const barColors    = prijzen.map((p,i) => kleur(p/10) + (i===nuIdx?'':'99'));
+  const borderColors = prijzen.map((p,i) => i===nuIdx?'#ffffff':kleur(p/10));
+  const vastLine     = prijzen.map(() => vast*10);
 
   if (chart) chart.destroy();
   document.getElementById('status-msg').style.display = 'none';
   document.getElementById('epexChart').style.display  = 'block';
 
-  const dagLijn = {
-    id: 'dagLijn',
+  const lijnenPlugin = {
+    id: 'lijnen',
     afterDraw(ch) {
-      if (midIdx < 0) return;
-      const { ctx, scales: {x, y} } = ch;
-      const xPos = x.getPixelForValue(midIdx - 0.5);
+      const { ctx, scales:{x,y} } = ch;
       ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(xPos, y.top);
-      ctx.lineTo(xPos, y.bottom);
-      ctx.strokeStyle = 'rgba(88,166,255,0.4)';
-      ctx.lineWidth   = 1.5;
-      ctx.setLineDash([4,4]);
-      ctx.stroke();
+
+      // Dag-scheidingslijn (blauw)
+      if (midIdx >= 0) {
+        const xPos = x.getPixelForValue(midIdx - 0.5);
+        ctx.beginPath(); ctx.moveTo(xPos,y.top); ctx.lineTo(xPos,y.bottom);
+        ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
+        ctx.setLineDash([4,4]); ctx.stroke();
+      }
+
+      // Tijdlijn NU (wit)
+      const nuFrac = (Date.now() - new Date(tijden[nuIdx]).getTime()) / detecteerInterval(tijden);
+      const nuXPos = x.getPixelForValue(nuIdx + nuFrac);
+      ctx.beginPath(); ctx.moveTo(nuXPos,y.top); ctx.lineTo(nuXPos,y.bottom);
+      ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
+      ctx.setLineDash([3,3]); ctx.stroke();
+
+      // Slider-positie (blauw helder) als niet op huidig slot
+      if (simSlot !== nuIdx) {
+        const sXPos = x.getPixelForValue(simSlot);
+        ctx.beginPath(); ctx.moveTo(sXPos,y.top); ctx.lineTo(sXPos,y.bottom);
+        ctx.strokeStyle='rgba(88,166,255,0.9)'; ctx.lineWidth=2;
+        ctx.setLineDash([]); ctx.stroke();
+      }
+
       ctx.restore();
     }
   };
 
   chart = new Chart(ctx, {
-    plugins: [dagLijn],
+    plugins: [lijnenPlugin],
     data: {
       labels,
       datasets: [
-        { type:'bar',  label:'EPEX (€/MWh)', data:prijzen, backgroundColor:barColors, borderColor:borderColors, borderWidth:1.5, borderRadius:3, order:2 },
-        { type:'line', label:`Vast`, data:vastLine, borderColor:'rgba(139,148,158,0.5)', borderWidth:1.5, borderDash:[4,3], pointRadius:0, fill:false, order:1 }
+        { type:'bar',  data:prijzen, backgroundColor:barColors, borderColor:borderColors, borderWidth:1.5, borderRadius:3, order:2 },
+        { type:'line', data:vastLine, borderColor:'rgba(139,148,158,0.5)', borderWidth:1.5, borderDash:[4,3], pointRadius:0, fill:false, order:1 }
       ]
     },
     options: {
-      responsive: true,
-      interaction: { mode:'index', intersect:false },
-      plugins: {
-        legend: { display:false },
-        tooltip: {
+      responsive:true,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
           backgroundColor:'#161b22', borderColor:'#21262d', borderWidth:1,
           titleColor:'#8b949e', bodyColor:'#e6edf3',
           titleFont:{family:'Space Mono',size:11}, bodyFont:{family:'DM Sans',size:12},
-          callbacks: {
-            title: (items) => {
-              const i = items[0].dataIndex;
-              return `${labels[i]}  (${fmtDag(tijden[i])})`;
-            },
-            label: (item) => {
-              if (item.datasetIndex === 0) return ` EPEX: ${(item.raw/10).toFixed(1)} ct/kWh`;
-              return ` Vast: ${vast} ct/kWh`;
-            }
+          callbacks:{
+            title:(items)=>`${labels[items[0].dataIndex]}  (${fmtDag(tijden[items[0].dataIndex])})`,
+            label:(item)=>item.datasetIndex===0?` EPEX: ${(item.raw/10).toFixed(1)} ct/kWh`:` Vast: ${vast} ct/kWh`
           }
         }
       },
-      scales: {
-        x: { ticks:{color:'#8b949e', font:{family:'Space Mono',size:9}, maxRotation:0, maxTicksLimit:16}, grid:{color:'rgba(33,38,45,0.8)'} },
-        y: { ticks:{color:'#8b949e', font:{family:'Space Mono',size:10}, callback:v=>(v/10).toFixed(0)+' ct'}, grid:{color:'rgba(33,38,45,0.8)'} }
+      scales:{
+        x:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:9},maxRotation:0,maxTicksLimit:16}, grid:{color:'rgba(33,38,45,0.8)'} },
+        y:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:10},callback:v=>(v/10).toFixed(0)+' ct'}, grid:{color:'rgba(33,38,45,0.8)'} }
       }
     }
   });
 }
 
-function updateKaarten(tijden, prijzen) {
-  // Dag-labels boven grafiek
-  const nu = new Date();
-  const morgen = new Date(nu); morgen.setDate(nu.getDate()+1);
-  document.getElementById('datum').textContent =
-    nu.toLocaleDateString('nl-BE', {weekday:'long', day:'numeric', month:'long'});
-  document.getElementById('dag-label-1').textContent =
-    `▶ Vandaag ${nu.toLocaleDateString('nl-BE', {day:'numeric', month:'short'})}`;
-  document.getElementById('dag-label-2').textContent =
-    `Morgen ${morgen.toLocaleDateString('nl-BE', {day:'numeric', month:'short'})}`;
-}
-
-// Detecteer interval tussen datapunten (15min of 60min)
-function detecteerInterval(tijden) {
-  if (tijden.length < 2) return 3600000;
-  return new Date(tijden[1]).getTime() - new Date(tijden[0]).getTime();
-}
-
-// Formateer duur in uren en minuten
-function fmtDuur(nSlots, intervalMs) {
-  const totMin = nSlots * intervalMs / 60000;
-  const uren   = Math.floor(totMin / 60);
-  const min    = totMin % 60;
-  if (uren === 0)       return `${min} min`;
-  if (min === 0)        return uren === 1 ? '1 uur' : `${uren} uur`;
-  return `${uren}u${String(min).padStart(2,'0')}`;
-}
-
-// Groepeer aaneengesloten slots met dezelfde prijsklasse
-// drempelMin/drempelMax in €/MWh (null = geen grens)
+// ─── PERIODES ─────────────────────────────────────────────────────────────────
 function groepeerPeriodes(tijden, prijzen, drempelMin, drempelMax) {
-  const nu          = Date.now();
-  const intervalMs  = detecteerInterval(tijden);
-  const periodes    = [];
-  let start = null, som = 0, n = 0;
-
-  for (let i = 0; i <= prijzen.length; i++) {
+  const nu = Date.now(), ivl = detecteerInterval(tijden);
+  const periodes = [];
+  let start=null, som=0, n=0;
+  for (let i=0; i<=prijzen.length; i++) {
     const p = prijzen[i];
-    const inGroep = i < prijzen.length
-      && (drempelMin === null || p >= drempelMin)
-      && (drempelMax === null || p <  drempelMax);
-
+    const inGroep = i<prijzen.length
+      && (drempelMin===null || p>=drempelMin)
+      && (drempelMax===null || p<drempelMax);
     if (inGroep) {
-      if (start === null) { start = i; som = 0; n = 0; }
-      som += p; n++;
-    } else if (start !== null) {
-      // Eindtijd = start laatste slot + 1 interval
-      const totTijd = new Date(new Date(tijden[i-1]).getTime() + intervalMs).toISOString();
-      // Toon ook deels-toekomstige periodes (begonnen maar nog niet voorbij)
-      if (new Date(totTijd).getTime() > nu) {
-        periodes.push({
-          vanTijd: tijden[start],
-          totTijd,
-          gem:  som / n,
-          duur: fmtDuur(n, intervalMs)
-        });
-      }
-      start = null;
+      if (start===null){start=i;som=0;n=0;}
+      som+=p; n++;
+    } else if (start!==null) {
+      const totTijd = new Date(new Date(tijden[i-1]).getTime()+ivl).toISOString();
+      if (new Date(totTijd).getTime()>nu)
+        periodes.push({vanTijd:tijden[start],totTijd,gem:som/n,duur:fmtDuur(n,ivl),nSlots:n,startIdx:start});
+      start=null;
     }
   }
   return periodes;
 }
 
-function updateArbitrage(tijden, prijzen) {
-  // Goedkoop: negatief (< 0) en groen (0 – DREMPEL_GROEN ct)
-  const periodesNeg  = groepeerPeriodes(tijden, prijzen, null,              0);
-  const periodesGoen = groepeerPeriodes(tijden, prijzen, 0,                 DREMPEL_GROEN * 10);
-  // Duur: rood (>= DREMPEL_GEEL ct)
-  const periodesDuur = groepeerPeriodes(tijden, prijzen, DREMPEL_GEEL * 10, null);
+// Geef keuzes voor een periode-id terug (met defaults)
+function getKeuze(periodeId, klasse) {
+  if (!periodeKeuzes[periodeId]) {
+    periodeKeuzes[periodeId] = { ...CB_DEFAULTS[klasse] };
+  }
+  return periodeKeuzes[periodeId];
+}
+function slaKeuzeOp() {
+  try { localStorage.setItem('periode_keuzes', JSON.stringify(periodeKeuzes)); } catch(e){}
+}
 
-  function maakItem(p, rank, klr, borderKls) {
-    const gemCt = (p.gem / 10).toFixed(1);
-    const uren  = p.duur === 1 ? '1 uur' : `${p.duur} uur`;
-    return `<div class="arb-item ${borderKls}">
-      <span style="display:flex;flex-direction:column;gap:2px">
-        <span>
-          <span class="arb-rank">#${rank+1}</span>
-          <span class="arb-time">${fmtTime(p.vanTijd)} – ${fmtTime(p.totTijd)}</span>
-          <span class="arb-dag">${fmtDag(p.vanTijd)}</span>
-        </span>
-        <span style="font-size:.65rem;color:var(--muted);padding-left:22px;font-family:var(--mono)">${p.duur} · gem. ${gemCt} ct</span>
+// ─── ARBITRAGE + CHECKBOXES ───────────────────────────────────────────────────
+let _periodesNeg=[], _periodesGoen=[], _periodesDuur=[];
+
+function maakPeriodeCard(p, rank, klasse, klr, borderKls) {
+  const periodeId = `${klasse}_${p.vanTijd}`;
+  const keuze     = getKeuze(periodeId, klasse);
+  const gemCt     = (p.gem/10).toFixed(1);
+
+  // Checkboxes afhankelijk van kolom
+  const isOntladen = klasse === 'duur';
+  const cbDefs = isOntladen
+    ? [{ id:'bat_ontladen', label:'Bat ontladen' }]
+    : [
+        { id:'eco',    label:'ECO-boiler' },
+        { id:'ev_won', label:'Tesla WON'  },
+        { id:'ev_sch', label:'EV-lader'   },
+        { id:'wp_won', label:'WP WON'     },
+        { id:'wp_sch', label:'WP SCH'     },
+        { id:'bat_laden', label:'Bat laden' },
+      ];
+
+  const cbsHtml = cbDefs.map(cb => `
+    <label class="cb-item">
+      <input type="checkbox" data-periode="${periodeId}" data-key="${cb.id}"
+        ${keuze[cb.id] ? 'checked' : ''}>
+      ${cb.label}
+    </label>`).join('');
+
+  return `<div class="arb-item ${borderKls}">
+    <div class="arb-item-top">
+      <span>
+        <span class="arb-rank">#${rank+1}</span>
+        <span class="arb-time">${fmtTime(p.vanTijd)} – ${fmtTime(p.totTijd)}</span>
+        <span class="arb-dag">${fmtDag(p.vanTijd)}</span>
       </span>
-      <span class="arb-price" style="color:${klr};align-self:center">${gemCt} ct</span>
-    </div>`;
-  }
+      <span class="arb-price" style="color:${klr}">${gemCt} ct</span>
+    </div>
+    <div class="arb-sub">${p.duur} · gem. ${gemCt} ct/kWh</div>
+    <div class="cb-grid">${cbsHtml}</div>
+  </div>`;
+}
 
-  // Linker kolom: negatief bovenaan (superhel), daarna groen
+function updateArbitrage(tijden, prijzen) {
+  _periodesNeg  = groepeerPeriodes(tijden, prijzen, null, 0);
+  _periodesGoen = groepeerPeriodes(tijden, prijzen, 0,    DREMPEL_GROEN*10);
+  _periodesDuur = groepeerPeriodes(tijden, prijzen, DREMPEL_GEEL*10, null);
+
   let htmlG = '';
-  if (periodesNeg.length) {
-    htmlG += `<div class="arb-subkop" style="color:var(--lime)">★ Negatieve prijs — wordt betaald om te verbruiken</div>`;
-    htmlG += periodesNeg.map((p,i) => maakItem(p, i, 'var(--lime)', i===0?'rank-lime':'')).join('');
+  if (_periodesNeg.length) {
+    htmlG += `<div class="arb-subkop" style="color:var(--lime)">★ Negatieve prijs</div>`;
+    htmlG += _periodesNeg.map((p,i) => maakPeriodeCard(p,i,'neg','var(--lime)',i===0?'rank-lime':'')).join('');
   }
-  if (periodesGoen.length) {
-    htmlG += `<div class="arb-subkop" style="color:var(--green)">Goedkoop (0 – ${DREMPEL_GROEN} ct)</div>`;
-    htmlG += periodesGoen.map((p,i) => maakItem(p, i, 'var(--green)', i===0?'rank-1':'')).join('');
+  if (_periodesGoen.length) {
+    htmlG += `<div class="arb-subkop" style="color:var(--green)">Goedkoop (0–${DREMPEL_GROEN} ct)</div>`;
+    htmlG += _periodesGoen.map((p,i) => maakPeriodeCard(p,i,'goen','var(--green)',i===0?'rank-1':'')).join('');
   }
   if (!htmlG) htmlG = '<div style="color:var(--muted);font-size:.75rem;padding:8px">Geen goedkope periodes gevonden</div>';
 
-  // Rechter kolom: duur
   let htmlD = '';
-  if (periodesDuur.length) {
-    htmlD += periodesDuur.map((p,i) => maakItem(p, i, 'var(--red)', i===0?'rank-1-red':'')).join('');
+  if (_periodesDuur.length) {
+    htmlD += _periodesDuur.map((p,i) => maakPeriodeCard(p,i,'duur','var(--red)',i===0?'rank-1-red':'')).join('');
   } else {
     htmlD = '<div style="color:var(--muted);font-size:.75rem;padding:8px">Geen dure periodes gevonden</div>';
   }
@@ -419,152 +667,497 @@ function updateArbitrage(tijden, prijzen) {
   document.getElementById('arb-goedkoop').innerHTML = htmlG;
   document.getElementById('arb-duur').innerHTML     = htmlD;
 
-  // Winst: beste negatieve of groenste periode vs duurste rode periode
-  const allGoedkoop = [...periodesNeg, ...periodesGoen].sort((a,b) => a.gem - b.gem);
-  const allDuur     = [...periodesDuur].sort((a,b) => b.gem - a.gem);
-  const goedkCt     = allGoedkoop.length ? allGoedkoop[0].gem / 10 : 0;
-  const duurCt      = allDuur.length     ? allDuur[0].gem     / 10 : 0;
-  const spread      = Math.max(0, duurCt - goedkCt);
-  const winst       = (spread * BAT_KWH * 0.92 / 100).toFixed(2);
-  document.getElementById('arb-winst-val').textContent = `€\u00a0${winst}`;
+  // Checkbox event listeners
+  document.querySelectorAll('input[data-periode]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const pid = cb.dataset.periode, key = cb.dataset.key;
+      if (!periodeKeuzes[pid]) periodeKeuzes[pid] = {};
+      periodeKeuzes[pid][key] = cb.checked;
+      slaKeuzeOp();
+      updateSimulatie();
+    });
+  });
+
+  // Winst
+  const allG = [..._periodesNeg,..._periodesGoen].sort((a,b)=>a.gem-b.gem);
+  const allD = [..._periodesDuur].sort((a,b)=>b.gem-a.gem);
+  const spread = Math.max(0, (allD[0]?.gem||0)/10 - (allG[0]?.gem||0)/10);
+  document.getElementById('arb-winst-val').textContent = `€ ${(spread*BAT_KWH*0.92/100).toFixed(2)} /24u`;
+
+  updateSimulatie();
 }
 
+// ─── SIMULATIE ─────────────────────────────────────────────────────────────────
+
+// Bereken voor elk slot welke apparaten actief zijn op basis van checkboxes + piekbeheer
+function berekenSimulatie(tijden, prijzen) {
+  const ivl = detecteerInterval(tijden);
+  const slots = [];
+  let soc = SOC_START;
+  let piekZonderBeheer = 0; // hoogste piek zonder ingreep
+
+  function isGeplandActief(isoTijd, apparaatId) {
+    // Override eerst
+    const ov = overrides[apparaatId];
+    if (ov === 'aan') return true;
+    if (ov === 'uit') return false;
+    // Anders: checkboxes
+    const allesPeriodes = [
+      ..._periodesNeg.map(p=>({...p,klasse:'neg'})),
+      ..._periodesGoen.map(p=>({...p,klasse:'goen'})),
+      ..._periodesDuur.map(p=>({...p,klasse:'duur'})),
+    ];
+    for (const p of allesPeriodes) {
+      const pid   = `${p.klasse}_${p.vanTijd}`;
+      const keuze = periodeKeuzes[pid] || CB_DEFAULTS[p.klasse];
+      if (isoTijd >= p.vanTijd && isoTijd < p.totTijd && keuze[apparaatId]) return true;
+    }
+    return false;
+  }
+
+  for (let i=0; i<tijden.length; i++) {
+    const iso   = tijden[i];
+    const ct    = prijzen[i]/10;
+    const solar = solarKw(iso);
+
+    // Stap 1: bereken gewenst vermogen per apparaat (voor piekberekening zonder beheer)
+    const gewenst = {};
+    for (const v of VERBRUIKERS) {
+      gewenst[v.id] = isGeplandActief(iso, v.id) ? v.kw : 0;
+    }
+    // Energy sharing
+    if (gewenst['ev_won'] > 0 && gewenst['ev_sch'] > 0) {
+      gewenst['ev_won'] = 7; gewenst['ev_sch'] = 7;
+    }
+
+    const batLaden = isGeplandActief(iso, 'bat_laden');
+    const batOntl  = isGeplandActief(iso, 'bat_ontladen');
+    const batMax   = Math.min(5, BAT_KWH / 2);
+    let batKwGewenst = 0;
+    if (batLaden && soc < 95)  batKwGewenst =  batMax;
+    if (batOntl  && soc > 15)  batKwGewenst = -batMax;
+
+    const loadGewenst = Object.values(gewenst).reduce((a,b)=>a+b,0)
+                      + Math.max(0, batKwGewenst);
+    piekZonderBeheer = Math.max(piekZonderBeheer, loadGewenst);
+
+    // Stap 2: piekbeheer — snij af in volgorde van prioriteit
+    const actief    = {...gewenst};
+    let batKw       = batKwGewenst;
+    const afgesch   = []; // welke apparaten werden teruggedraaid
+
+    let totaal = Object.values(actief).reduce((a,b)=>a+b,0) + Math.max(0,batKw);
+
+    if (totaal > MAX_PIEK) {
+      for (const id of PIEK_PRIO) {
+        if (totaal <= MAX_PIEK) break;
+        // Batterij laden apart behandelen
+        if (id === 'bat_laden') {
+          if (batKw > 0) {
+            const red = Math.min(batKw, totaal - MAX_PIEK);
+            batKw    -= red;
+            totaal   -= red;
+            if (red > 0.1) afgesch.push('Bat.laden');
+          }
+          continue;
+        }
+        const v = VERBRUIKERS.find(v=>v.id===id);
+        if (!v || actief[id] === 0) continue;
+        // Override 'aan' = nooit afschakelen door piekbeheer
+        if (overrides[id] === 'aan') continue;
+
+        if (v.regelbaar) {
+          // Reduceer gradueel
+          const red = Math.min(actief[id], totaal - MAX_PIEK);
+          actief[id] -= red;
+          totaal     -= red;
+          if (red > 0.1) afgesch.push(`${v.naam}${v.sub} ↓${actief[id].toFixed(1)}kW`);
+          if (actief[id] < 0.5) { actief[id]=0; }
+        } else {
+          // Aan/uit: volledig uitschakelen
+          totaal    -= actief[id];
+          afgesch.push(`${v.naam}${v.sub}`);
+          actief[id] = 0;
+        }
+      }
+    }
+
+    // Stap 3: batterij actie na piekbeheer
+    let batActie = 'idle';
+    if (batKw > 0.05)  { batActie = 'laden';    totaal += batKw; }
+    if (batKw < -0.05) { batActie = 'ontladen'; }
+
+    // SOC update
+    const uren = ivl / 3600000;
+    if (batActie==='laden')    soc = Math.min(100, soc + (batKw*uren*0.95/BAT_KWH)*100);
+    if (batActie==='ontladen') soc = Math.max(0,   soc - (Math.abs(batKw)*uren/0.95/BAT_KWH)*100);
+
+    const load  = Object.values(actief).reduce((a,b)=>a+b,0) + Math.max(0,batKw);
+    const netto = solar - load;
+    slots.push({
+      iso, ct, solar, load, netto, soc,
+      actief, batKw, batActie,
+      piekKw: load, afgesch,
+      loadGewenst // voor kostenberekening zonder beheer
+    });
+  }
+
+  // Bewaar hoogste piek zonder beheer voor kostensectie
+  slots._piekZonder = piekZonderBeheer;
+  return slots;
+}
+
+// LED kleuren per pixel
+function ledKleur(slot, pixelIdx) {
+  if (!slot) return { bg:'#111', glow:false };
+
+  if (pixelIdx <= 4) {
+    // Verbruikers 0–4
+    const v   = VERBRUIKERS[pixelIdx];
+    const kw  = slot.actief[v.id] || 0;
+    if (kw === 0) return { bg:'#1a1a1a', glow:false };
+    const intens = kw / v.kw;
+    // Groen gradient op basis van intensiteit
+    const r = Math.round(42  * (1-intens) + 168 * intens);
+    const g = Math.round(138 * (1-intens) + 255 * intens);
+    const b = Math.round(62  * (1-intens) + 62  * intens);
+    return { bg:`rgb(${r},${g},${b})`, glow:true, color:`rgb(${r},${g},${b})` };
+  }
+
+  if (pixelIdx === 5) {
+    // Batterij
+    if (slot.batActie==='laden')   return { bg:'#2a8a3e', glow:true, color:'#2a8a3e' };
+    if (slot.batActie==='ontladen') return { bg:'#d29922', glow:true, color:'#d29922' };
+    const socPct = slot.soc;
+    if (socPct>70) return { bg:'#1a3a1a', glow:false };
+    if (socPct>30) return { bg:'#2a2a1a', glow:false };
+    return { bg:'#3a1a1a', glow:false };
+  }
+
+  if (pixelIdx === 6) {
+    // EPEX klasse
+    const c = kleur(slot.ct);
+    return { bg:c + '99', glow:slot.ct<0, color:c };
+  }
+
+  if (pixelIdx === 7) {
+    // Netto
+    if (slot.netto > 0.5)  return { bg:'#2a8a3e', glow:true,  color:'#2a8a3e' };
+    if (slot.netto < -0.5) return { bg:'#f8514999', glow:false };
+    return { bg:'#333', glow:false };
+  }
+
+  return { bg:'#111', glow:false };
+}
+
+const LED_LABELS = ['ECO\nSCH','Tesla\nWON','EV\nSCH','WP\nWON','WP\nSCH','Bat','EPEX','Netto'];
+
+function initLedStrip() {
+  const strip = document.getElementById('led-strip');
+  strip.innerHTML = '';
+  for (let i=0; i<8; i++) {
+    strip.innerHTML += `
+      <div class="led-pixel-wrap">
+        <div class="led-pixel" id="led-${i}" style="background:#111"></div>
+        <div class="led-label">${LED_LABELS[i].replace('\n','<br>')}</div>
+      </div>`;
+  }
+}
+
+let _simSlots = [];
+
+function updateSimulatie() {
+  if (!allTimes.length) return;
+
+  _simSlots = berekenSimulatie(allTimes, allPrices);
+  if (!_simSlots.length) return;
+
+  // Slider range
+  const nuIdx = huidigSlot(allTimes);
+  const slider = document.getElementById('sim-slider');
+  slider.min   = 0;
+  slider.max   = _simSlots.length - 1 - nuIdx;
+  slider.value = simSlot;
+
+  // Slider labels
+  const ivl = detecteerInterval(allTimes);
+  const slotsPerUur = 3600000 / ivl;
+  document.getElementById('sim-slider-mid').textContent = `+${Math.round((_simSlots.length-nuIdx)/slotsPerUur/2)}u`;
+  document.getElementById('sim-slider-end').textContent = `+${Math.round((_simSlots.length-nuIdx)/slotsPerUur)}u`;
+
+  tekenSimulatieSlot(nuIdx + simSlot);
+}
+
+function tekenSimulatieSlot(absSlot) {
+  const s = _simSlots[absSlot];
+  if (!s) return;
+
+  // Tijdstip
+  const d = new Date(s.iso);
+  document.getElementById('sim-tijdstip').textContent =
+    `${fmtDag(s.iso)} ${fmtTime(s.iso)}  ·  EPEX ${s.ct.toFixed(1)} ct/kWh`;
+
+  // LEDs
+  for (let i=0; i<8; i++) {
+    const pixel = document.getElementById(`led-${i}`);
+    const lk = ledKleur(s, i);
+    pixel.style.background = lk.bg;
+    if (lk.glow && lk.color) {
+      pixel.style.boxShadow = `0 0 14px 4px ${lk.color}88`;
+      pixel.classList.add('aan');
+    } else {
+      pixel.style.boxShadow = 'none';
+      pixel.classList.remove('aan');
+    }
+  }
+
+  // SOC
+  const socPct = Math.round(s.soc);
+  document.getElementById('soc-pct').textContent = `${socPct}%`;
+  const bar = document.getElementById('soc-bar');
+  bar.style.width = `${socPct}%`;
+  bar.style.background = socPct>60?'#2a8a3e':socPct>25?'#d29922':'#f85149';
+
+  const actieStr = s.batActie==='laden'
+    ? `↑ Laden ${s.batKw.toFixed(1)} kW`
+    : s.batActie==='ontladen'
+      ? `↓ Ontladen ${Math.abs(s.batKw).toFixed(1)} kW`
+      : 'Idle';
+  document.getElementById('soc-actie').textContent = actieStr;
+
+  // Metrics
+  document.getElementById('sim-solar').textContent = `${s.solar.toFixed(1)} kW`;
+  document.getElementById('sim-load').textContent  = `${s.load.toFixed(1)} kW`;
+  const nettoEl = document.getElementById('sim-netto');
+  if (s.netto > 0.1) {
+    nettoEl.textContent = `+${s.netto.toFixed(1)} kW ▲`;
+    nettoEl.className   = 'sim-metric-val green';
+  } else if (s.netto < -0.1) {
+    nettoEl.textContent = `${s.netto.toFixed(1)} kW ▼`;
+    nettoEl.className   = 'sim-metric-val red';
+  } else {
+    nettoEl.textContent = '≈ 0 kW';
+    nettoEl.className   = 'sim-metric-val';
+  }
+
+  // PIEK METER
+  const piekPct = Math.min(100, (s.load / MAX_PIEK) * 100);
+  const overschreden = s.load > MAX_PIEK;
+  const piekKlr = overschreden ? '#f85149' : s.load > MAX_PIEK*0.85 ? '#d29922' : '#2a8a3e';
+  document.getElementById('piek-kw').textContent   = s.load.toFixed(1);
+  document.getElementById('piek-max-kw').textContent = MAX_PIEK.toFixed(1);
+  document.getElementById('piek-bar').style.width      = `${Math.min(100,piekPct)}%`;
+  document.getElementById('piek-bar').style.background = piekKlr;
+  // Limietlijn positie
+  document.getElementById('piek-limiet').style.left = `calc(${Math.min(99,(MAX_PIEK/Math.max(s.load,MAX_PIEK+1))*100)}% - 1px)`;
+  const statusEl = document.getElementById('piek-status-lbl');
+  if (overschreden) {
+    statusEl.innerHTML = `<span style="color:var(--red)">⚠ PIEK OVERSCHREDEN +${(s.load-MAX_PIEK).toFixed(1)} kW</span>`;
+  } else if (s.load > MAX_PIEK*0.85) {
+    statusEl.innerHTML = `<span style="color:var(--yellow)">↗ Bijna piek (${(MAX_PIEK-s.load).toFixed(1)} kW marge)</span>`;
+  } else {
+    statusEl.innerHTML = `<span style="color:var(--green)">✓ Binnen piek</span>`;
+  }
+  // Afgeschakelde apparaten
+  document.getElementById('piek-afgesch').textContent =
+    s.afgesch.length ? `↓ Piekbeheer: ${s.afgesch.join(' · ')} teruggedraaid` : '';
+
+  // APPARATEN MET OVERRIDE
+  const devEl = document.getElementById('sim-devices');
+  devEl.innerHTML = VERBRUIKERS.map(v => {
+    const kw     = s.actief[v.id] || 0;
+    const gewKw  = s.loadGewenst; // niet per verbruiker, toon actief kW
+    const klr    = kw > 0 ? 'var(--green)' : 'var(--muted)';
+    const lbl    = kw > 0 ? `${kw.toFixed(1)} kW` : 'uit';
+    const ov     = overrides[v.id] || 'auto';
+    const piked  = s.afgesch.some(a => a.includes(v.naam+v.sub));
+    return `<div class="sim-dev-row">
+      <div class="sim-dev-info">
+        <span class="sim-dev-naam">${v.naam} <span style="opacity:.5">${v.sub}</span></span>
+        <span class="sim-dev-kw" style="color:${klr}">${lbl}${piked?'<span class="sim-dev-piek"> ↓ piek</span>':''}</span>
+      </div>
+      <div class="override-btn-group">
+        <button class="override-btn ${ov==='auto'?'active-auto':''}" onclick="setOverride('${v.id}','auto')">AUTO</button>
+        <button class="override-btn ${ov==='aan'?'active-aan':''}"  onclick="setOverride('${v.id}','aan')">AAN</button>
+        <button class="override-btn ${ov==='uit'?'active-uit':''}"  onclick="setOverride('${v.id}','uit')">UIT</button>
+      </div>
+    </div>`;
+  }).join('') + (() => {
+    const ov = overrides['bat'] || 'auto';
+    const klr = s.batActie!=='idle'?'var(--yellow)':'var(--muted)';
+    const lbl = s.batActie==='laden'?`↑ ${s.batKw.toFixed(1)} kW`:s.batActie==='ontladen'?`↓ ${Math.abs(s.batKw).toFixed(1)} kW`:'idle';
+    return `<div class="sim-dev-row">
+      <div class="sim-dev-info">
+        <span class="sim-dev-naam">Batterij <span style="opacity:.5">SOC ${Math.round(s.soc)}%</span></span>
+        <span class="sim-dev-kw" style="color:${klr}">${lbl}</span>
+      </div>
+      <div class="override-btn-group">
+        <button class="override-btn ${ov==='auto'?'active-auto':''}" onclick="setOverride('bat','auto')">AUTO</button>
+        <button class="override-btn ${ov==='aan'?'active-aan':''}"  onclick="setOverride('bat','aan')">AAN</button>
+        <button class="override-btn ${ov==='uit'?'active-uit':''}"  onclick="setOverride('bat','uit')">UIT</button>
+      </div>
+    </div>`;
+  })();
+
+  // PIEK KOSTEN (herbereken over volledige sim)
+  const hoogsteMetBeheer  = Math.max(..._simSlots.map(sl=>sl.piekKw||0));
+  const hoogsteZonderBeheer = _simSlots._piekZonder || hoogsteMetBeheer;
+  const kostZonder = (hoogsteZonderBeheer * CAP_TAR).toFixed(2);
+  const kostMet    = (hoogsteMetBeheer    * CAP_TAR).toFixed(2);
+  const bespar     = Math.max(0, parseFloat(kostZonder) - parseFloat(kostMet)).toFixed(2);
+  document.getElementById('piek-hoogste').textContent   = `${hoogsteMetBeheer.toFixed(1)} kW`;
+  document.getElementById('piek-kost-zonder').textContent = `€ ${kostZonder} /mnd`;
+  document.getElementById('piek-kost-met').textContent    = `€ ${kostMet} /mnd`;
+  document.getElementById('piek-besparing').textContent   = parseFloat(bespar)>0 ? `€ ${bespar} /mnd` : '—';
+
+  if (chart) chart.update('none');
+}
+
+// ─── KAARTEN / DATUM ──────────────────────────────────────────────────────────
+function updateKaarten(tijden) {
+  const nu = new Date(), morgen = new Date(nu); morgen.setDate(nu.getDate()+1);
+  document.getElementById('datum').textContent = nu.toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('dag-label-1').textContent = `▶ Vandaag ${nu.toLocaleDateString('nl-BE',{day:'numeric',month:'short'})}`;
+  document.getElementById('dag-label-2').textContent = `Morgen ${morgen.toLocaleDateString('nl-BE',{day:'numeric',month:'short'})}`;
+}
+
+// ─── DATA LADEN ───────────────────────────────────────────────────────────────
 function demoData() {
   const basis = new Date(); basis.setHours(0,0,0,0);
   const v = [42,38,35,32,30,28,31,55,88,102,95,87,76,72,68,74,89,115,130,118,95,78,60,48];
   const m = [45,40,36,33,31,29,34,58,91,105,98,90,79,75,71,77,92,118,125,110,91,75,58,44];
-  const prijzen = [...v,...m];
-  const tijden  = prijzen.map((_,i) => { const d=new Date(basis); d.setHours(i); return d.toISOString(); });
-  return { tijden, prijzen };
+  const prijzen=[...v,...m];
+  const tijden=prijzen.map((_,i)=>{const d=new Date(basis);d.setHours(i);return d.toISOString();});
+  return {tijden,prijzen};
 }
 
 async function haalDag(j,m,d) {
-  const apiUrl = `https://api.energy-charts.info/price?bzn=BE&start=${j}-${m}-${d}&end=${j}-${m}-${d}`;
-  const url    = `https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`;
-  const res    = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const apiUrl=`https://api.energy-charts.info/price?bzn=BE&start=${j}-${m}-${d}&end=${j}-${m}-${d}`;
+  const url=`https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`;
+  const res=await fetch(url);
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
-function slaDataOp(tijden, prijzen) {
-  try {
-    localStorage.setItem('epex_tijden',  JSON.stringify(tijden));
-    localStorage.setItem('epex_prijzen', JSON.stringify(prijzen));
-    localStorage.setItem('epex_ts',      Date.now().toString());
-  } catch(e) { console.warn('Cache opslaan mislukt:', e); }
+function slaDataOp(t,p) {
+  try{localStorage.setItem('epex_tijden',JSON.stringify(t));localStorage.setItem('epex_prijzen',JSON.stringify(p));localStorage.setItem('epex_ts',Date.now().toString());}catch(e){}
 }
 
 function laadCache() {
   try {
-    const ts      = parseInt(localStorage.getItem('epex_ts') || '0');
-    const oudheid = Date.now() - ts;
-    if (oudheid > 26 * 3600000) return null; // cache ouder dan 26u: negeren
-    const tijden  = JSON.parse(localStorage.getItem('epex_tijden')  || 'null');
-    const prijzen = JSON.parse(localStorage.getItem('epex_prijzen') || 'null');
-    if (!tijden || !prijzen || tijden.length === 0) return null;
-    // Filter: enkel slots waarvan het einde nog in de toekomst ligt
-    const nu  = Date.now();
-    const ivl = new Date(tijden[1]).getTime() - new Date(tijden[0]).getTime();
-    const idx = tijden.findIndex((t,i) => new Date(t).getTime() + ivl > nu);
-    if (idx < 0) return null; // alles voorbij
-    return { tijden: tijden.slice(idx), prijzen: prijzen.slice(idx) };
-  } catch(e) { return null; }
+    const ts=parseInt(localStorage.getItem('epex_ts')||'0');
+    if(Date.now()-ts>26*3600000) return null;
+    const tijden=JSON.parse(localStorage.getItem('epex_tijden')||'null');
+    const prijzen=JSON.parse(localStorage.getItem('epex_prijzen')||'null');
+    if(!tijden||!prijzen||!tijden.length) return null;
+    const ivl=new Date(tijden[1]).getTime()-new Date(tijden[0]).getTime();
+    const idx=tijden.findIndex((t)=>new Date(t).getTime()+ivl>Date.now());
+    if(idx<0) return null;
+    return {tijden:tijden.slice(idx),prijzen:prijzen.slice(idx)};
+  } catch(e){return null;}
 }
 
-function toonData(tijden, prijzen, bron) {
-  allTimes  = tijden;
-  allPrices = prijzen;
-  renderChart(tijden, prijzen);
-  updateKaarten(tijden, prijzen);
-  updateArbitrage(tijden, prijzen);
-
-  // Verwijder oude banners
-  document.querySelectorAll('.data-banner').forEach(b => b.remove());
-  if (bron !== 'live') {
-    const b = document.createElement('div');
-    b.className   = 'data-banner';
-    b.style.cssText = 'font-size:.68rem;font-family:Space Mono,monospace;text-align:center;margin-top:10px;';
-    b.style.color = bron === 'cache' ? '#58a6ff' : '#d29922';
-    b.textContent = bron === 'cache'
-      ? 'ℹ Gecachte data — live refresh volgt bij volgende uurlijkse poging'
-      : '⚠ Demo-data — gebruik localhost of GitHub Pages voor live data';
+function toonData(tijden,prijzen,bron) {
+  allTimes=tijden; allPrices=prijzen;
+  renderChart(tijden,prijzen);
+  updateKaarten(tijden);
+  updateArbitrage(tijden,prijzen);
+  document.querySelectorAll('.data-banner').forEach(b=>b.remove());
+  if(bron!=='live'){
+    const b=document.createElement('div');
+    b.className='data-banner';
+    b.style.cssText='font-size:.68rem;font-family:Space Mono,monospace;text-align:center;margin-top:10px;';
+    b.style.color=bron==='cache'?'#58a6ff':'#d29922';
+    b.textContent=bron==='cache'?'ℹ Gecachte data':'⚠ Demo-data';
     document.querySelector('.chart-wrap').appendChild(b);
   }
 }
 
 async function laadEPEX() {
-  document.getElementById('status-msg').style.display = 'block';
-  document.getElementById('epexChart').style.display  = 'none';
-
-  const nu     = new Date();
-  const morgen = new Date(nu); morgen.setDate(nu.getDate()+1);
-  const gisteren = new Date(nu); gisteren.setDate(nu.getDate()-1);
-  const ymd = d => [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')];
-
-  // Probeer vandaag + morgen op te halen
-  // Als morgen nog niet beschikbaar is (vóór ~13u): enkel vandaag is ook goed
+  document.getElementById('status-msg').style.display='block';
+  document.getElementById('epexChart').style.display='none';
+  const nu=new Date(),morgen=new Date(nu);morgen.setDate(nu.getDate()+1);
+  const ymd=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')];
   try {
-    const resultaten = await Promise.allSettled([
-      haalDag(...ymd(nu)),
-      haalDag(...ymd(morgen))
-    ]);
-
-    const dV = resultaten[0].status === 'fulfilled' ? resultaten[0].value : null;
-    const dM = resultaten[1].status === 'fulfilled' ? resultaten[1].value : null;
-
-    if (!dV || !dV.price || dV.price.length === 0) throw new Error('Geen data voor vandaag');
-
-    const tV = dV.unix_seconds.map(s => new Date(s*1000).toISOString());
-    const tM = dM && dM.unix_seconds ? dM.unix_seconds.map(s => new Date(s*1000).toISOString()) : [];
-    const tijden  = [...tV, ...tM];
-    const prijzen = [...(dV.price||[]), ...(dM && dM.price ? dM.price : [])];
-
-    slaDataOp(tijden, prijzen); // bewaar in cache
-
-    const morgenBeschikbaar = tM.length > 0;
-    toonData(tijden, prijzen, 'live');
-
-    // Info als morgen nog niet beschikbaar is
-    if (!morgenBeschikbaar) {
-      const b = document.createElement('div');
-      b.className   = 'data-banner';
-      b.style.cssText = 'font-size:.68rem;color:#58a6ff;font-family:Space Mono,monospace;text-align:center;margin-top:10px;';
-      b.textContent = 'ℹ Prijzen voor morgen nog niet gepubliceerd (verschijnen ~13u)';
+    const r=await Promise.allSettled([haalDag(...ymd(nu)),haalDag(...ymd(morgen))]);
+    const dV=r[0].status==='fulfilled'?r[0].value:null;
+    const dM=r[1].status==='fulfilled'?r[1].value:null;
+    if(!dV||!dV.price||!dV.price.length) throw new Error('Geen data');
+    const tV=dV.unix_seconds.map(s=>new Date(s*1000).toISOString());
+    const tM=dM&&dM.unix_seconds?dM.unix_seconds.map(s=>new Date(s*1000).toISOString()):[];
+    const tijden=[...tV,...tM],prijzen=[...(dV.price||[]),...(dM?.price||[])];
+    slaDataOp(tijden,prijzen);
+    toonData(tijden,prijzen,'live');
+    if(!tM.length){
+      const b=document.createElement('div');b.className='data-banner';
+      b.style.cssText='font-size:.68rem;color:#58a6ff;font-family:Space Mono,monospace;text-align:center;margin-top:10px;';
+      b.textContent='ℹ Prijzen voor morgen nog niet gepubliceerd (~13u)';
       document.querySelector('.chart-wrap').appendChild(b);
     }
-
   } catch(e) {
-    console.warn('API fout:', e.message);
-
-    // Probeer cache
-    const cache = laadCache();
-    if (cache) {
-      console.info('Cache gebruikt:', cache.tijden.length, 'slots');
-      toonData(cache.tijden, cache.prijzen, 'cache');
-      return;
-    }
-
-    // Laatste redmiddel: demo-data
-    const { tijden, prijzen } = demoData();
-    toonData(tijden, prijzen, 'demo');
+    const cache=laadCache();
+    if(cache){toonData(cache.tijden,cache.prijzen,'cache');return;}
+    const{tijden,prijzen}=demoData();toonData(tijden,prijzen,'demo');
   }
 }
 
-function herbereken() {
-  if (allPrices.length) { renderChart(allTimes,allPrices); updateKaarten(allTimes,allPrices); updateArbitrage(allTimes,allPrices); }
+// ─── EVENT LISTENERS ──────────────────────────────────────────────────────────
+// Override instellen
+function setOverride(id, waarde) {
+  overrides[id] = waarde;
+  try { localStorage.setItem('overrides', JSON.stringify(overrides)); } catch(e){}
+  updateSimulatie();
 }
-document.getElementById('inp-vast').addEventListener('change', e => {
-  vast = parseFloat(e.target.value) || VAST_DEFAULT;
-  localStorage.setItem('vast_prijs', vast);
-  document.getElementById('prijs-vast').textContent = vast.toFixed(1);
-  herbereken();
+
+function herbereken(){if(allPrices.length){renderChart(allTimes,allPrices);updateArbitrage(allTimes,allPrices);}}
+
+document.getElementById('inp-vast').addEventListener('change',e=>{
+  vast=parseFloat(e.target.value)||VAST_DEFAULT;
+  localStorage.setItem('vast_prijs',vast);herbereken();
 });
-document.getElementById('inp-bat').addEventListener('change', e => {
-  BAT_KWH = parseFloat(e.target.value) || 10;
-  localStorage.setItem('bat_kwh', BAT_KWH);
-  herbereken();
+document.getElementById('inp-bat').addEventListener('change',e=>{
+  BAT_KWH=parseFloat(e.target.value)||10;
+  localStorage.setItem('bat_kwh',BAT_KWH);updateSimulatie();
+});
+document.getElementById('inp-soc').addEventListener('change',e=>{
+  SOC_START=parseFloat(e.target.value)||50;
+  localStorage.setItem('soc_start',SOC_START);updateSimulatie();
+});
+document.getElementById('inp-seizoen').addEventListener('change',e=>{
+  seizoen=e.target.value;
+  localStorage.setItem('seizoen',seizoen);updateSimulatie();
+});
+document.getElementById('inp-piek').addEventListener('change',e=>{
+  MAX_PIEK=parseFloat(e.target.value)||8;
+  localStorage.setItem('max_piek',MAX_PIEK);updateSimulatie();
+});
+document.getElementById('inp-cap').addEventListener('change',e=>{
+  CAP_TAR=parseFloat(e.target.value)||4.80;
+  localStorage.setItem('cap_tar',CAP_TAR);updateSimulatie();
+});
+document.getElementById('sim-slider').addEventListener('input',e=>{
+  simSlot=parseInt(e.target.value);
+  const nuIdx=huidigSlot(allTimes);
+  tekenSimulatieSlot(nuIdx+simSlot);
+  if(chart) chart.update('none');
 });
 
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+// Herstel opgeslagen instellingen
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('inp-vast').value   = vast;
+  document.getElementById('inp-bat').value    = BAT_KWH;
+  document.getElementById('inp-soc').value    = SOC_START;
+  document.getElementById('inp-seizoen').value= seizoen;
+  document.getElementById('inp-piek').value   = MAX_PIEK;
+  document.getElementById('inp-cap').value    = CAP_TAR;
+  try {
+    const opgeslagen = localStorage.getItem('periode_keuzes');
+    if(opgeslagen) periodeKeuzes = JSON.parse(opgeslagen);
+  } catch(e){}
+});
+
+initLedStrip();
 laadEPEX();
 setInterval(laadEPEX, 60*60*1000);
 </script>
