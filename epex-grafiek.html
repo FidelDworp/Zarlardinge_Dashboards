@@ -424,12 +424,13 @@ const VERBRUIKERS = [
 ];
 
 // Standaard checkboxes per prijsklasse
-// CB_DEFAULTS: startwaarden voor nieuwe periodes (grootverbruikers ALTIJD uit — sturing via simulatie)
-// Gebruiker vinkt manueel aan wat hij wil activeren per periode
+// CB_DEFAULTS: slimme startwaarden voor grootverbruikers per prijsklasse
+// Huishoudtoestellen starten altijd UIT (gebruiker kiest bewust)
+// Grootverbruikers: algoritme beslist, rekening houdend met override-knoppen
 const CB_DEFAULTS = {
-  neg:  { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:false },
-  goen: { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:false },
-  duur: { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:false },
+  neg:  { eco:true,  ev_won:true,  ev_sch:true,  wp_won:true,  wp_sch:true,  bat_laden:true,  bat_ontladen:false },
+  goen: { eco:true,  ev_won:true,  ev_sch:true,  wp_won:false, wp_sch:false, bat_laden:true,  bat_ontladen:false },
+  duur: { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:true  },
 };
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
@@ -625,13 +626,48 @@ const HUISHOUD = [
 // Geef keuzes voor een periode-id terug (met defaults)
 function getKeuze(periodeId, klasse) {
   if (!periodeKeuzes[periodeId]) {
+    // Init: algoritme-defaults voor grootverbruikers
     periodeKeuzes[periodeId] = { ...CB_DEFAULTS[klasse] };
-    // Huishoudtoestellen: standaard ALTIJD uit — gebruiker kiest bewust
-    for (const h of HUISHOUD) {
-      periodeKeuzes[periodeId][h.id] = false;
+    // Huishoudtoestellen altijd uit (manuele keuze)
+    for (const h of HUISHOUD) periodeKeuzes[periodeId][h.id] = false;
+  }
+  // Pas overrides toe op grootverbruikers — override wint altijd
+  const k = { ...periodeKeuzes[periodeId] };
+  for (const v of VERBRUIKERS) {
+    const ov = overrides[v.id];
+    if (ov === 'aan') k[v.id] = true;
+    if (ov === 'uit') k[v.id] = false;
+  }
+  // Batterij override
+  const batOv = overrides['bat'];
+  if (batOv === 'aan') { k['bat_laden'] = true;  k['bat_ontladen'] = false; }
+  if (batOv === 'uit') { k['bat_laden'] = false; k['bat_ontladen'] = false; }
+
+  // Piekbeheer: als totaal grootverbruikers al boven MAX_PIEK → snij af in prioriteit
+  let kwGroot = 0;
+  const evBeide = k['ev_won'] && k['ev_sch'];
+  kwGroot += k['eco']    ? 2  : 0;
+  kwGroot += k['ev_won'] ? (evBeide ? 7 : 11) : 0;
+  kwGroot += k['ev_sch'] ? (evBeide ? 7 : 11) : 0;
+  kwGroot += k['wp_won'] ? 9  : 0;
+  kwGroot += k['wp_sch'] ? 9  : 0;
+  kwGroot += k['bat_laden'] ? Math.min(5, BAT_KWH/2) : 0;
+
+  if (kwGroot > MAX_PIEK) {
+    for (const id of PIEK_PRIO) {
+      if (kwGroot <= MAX_PIEK) break;
+      if (overrides[id==='bat_laden'?'bat':id] === 'aan') continue; // override AAN: niet afschakelen
+      if (id === 'bat_laden') {
+        if (k['bat_laden']) { kwGroot -= Math.min(5, BAT_KWH/2); k['bat_laden'] = false; }
+        continue;
+      }
+      const vkw = id==='ev_won'||id==='ev_sch' ? (k['ev_won']&&k['ev_sch']?7:11)
+                : id==='wp_won'||id==='wp_sch' ? 9
+                : id==='eco' ? 2 : 0;
+      if (k[id]) { kwGroot -= vkw; k[id] = false; }
     }
   }
-  return periodeKeuzes[periodeId];
+  return k;
 }
 function slaKeuzeOp() {
   try { localStorage.setItem('periode_keuzes', JSON.stringify(periodeKeuzes)); } catch(e){}
@@ -709,12 +745,22 @@ function updateArbitrage(tijden, prijzen) {
       const huishoudCbs = HUISHOUD.map(h => `
         <td><input type="checkbox" class="${cbKls}" data-pid="${pid}" data-key="${h.id}" ${k[h.id]?'checked':''}></td>`).join('');
 
-      // Groot checkboxes
-      const grootCbs = [
-        {id:'eco',naam:'eco'}, {id:'ev_won',naam:'ev_won'}, {id:'ev_sch',naam:'ev_sch'},
-        {id:'wp_won',naam:'wp_won'}, {id:'wp_sch',naam:'wp_sch'}, {id:'bat_laden',naam:'bat'}
-      ].map((v,vi) => `
-        <td${vi===0?' class="td-sep"':''}><input type="checkbox" class="${cbKls}" data-pid="${pid}" data-key="${isDuur&&vi===5?'bat_ontladen':v.id}" ${(isDuur&&vi===5?k['bat_ontladen']:k[v.id])?'checked':''}></td>`).join('');
+      // Groot checkboxes — tonen algoritmebeslissing, rekening houdend met override
+      const grootDefs = [
+        {id:'eco'}, {id:'ev_won'}, {id:'ev_sch'},
+        {id:'wp_won'}, {id:'wp_sch'}, {id: isDuur ? 'bat_ontladen' : 'bat_laden'}
+      ];
+      const grootCbs = grootDefs.map((v,vi) => {
+        const checked = k[v.id];
+        const ovKey   = v.id==='bat_laden'||v.id==='bat_ontladen' ? 'bat' : v.id;
+        const ov      = overrides[ovKey];
+        // Readonly als override actief (AAN of UIT) — gebruiker ziet dat het geforceerd is
+        const forced  = ov === 'aan' || ov === 'uit';
+        const style   = forced ? 'opacity:.4;cursor:not-allowed' : '';
+        return `<td${vi===0?' class="td-sep"':''}><input type="checkbox" class="${cbKls}"
+          data-pid="${pid}" data-key="${v.id}" ${checked?'checked':''}
+          ${forced?'disabled':''} style="${style}" title="${forced?'Override: '+ov:''}"></td>`;
+      }).join('');
 
       const tr = document.createElement('tr');
       tr.className = sec.rowKls;
@@ -1198,10 +1244,24 @@ async function laadEPEX() {
 }
 
 // ─── EVENT LISTENERS ──────────────────────────────────────────────────────────
-// Override instellen
+// Override instellen — hertekent tabel + simulatie
 function setOverride(id, waarde) {
   overrides[id] = waarde;
   try { localStorage.setItem('overrides', JSON.stringify(overrides)); } catch(e){}
+  // Reset periode-keuzes voor grootverbruikers zodat algoritme opnieuw berekent
+  for (const pid in periodeKeuzes) {
+    const klasse = pid.split('_')[0];
+    const base   = CB_DEFAULTS[klasse] || {};
+    for (const v of VERBRUIKERS) {
+      // Alleen resetten als het niet door gebruiker manueel gewijzigd is
+      // (we herschrijven enkel de auto-waarden)
+      periodeKeuzes[pid][v.id] = base[v.id] || false;
+    }
+    periodeKeuzes[pid]['bat_laden']    = base['bat_laden']    || false;
+    periodeKeuzes[pid]['bat_ontladen'] = base['bat_ontladen'] || false;
+  }
+  slaKeuzeOp();
+  if (allPrices.length) updateArbitrage(allTimes, allPrices);
   updateSimulatie();
 }
 
