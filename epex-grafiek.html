@@ -638,10 +638,12 @@ function getKeuze(periodeId, klasse) {
     if (ov === 'aan') k[v.id] = true;
     if (ov === 'uit') k[v.id] = false;
   }
-  // Batterij override
+  // Batterij override — maar bij negatieve prijs: laden is ALTIJD verplicht (gratis energie!)
   const batOv = overrides['bat'];
   if (batOv === 'aan') { k['bat_laden'] = true;  k['bat_ontladen'] = false; }
   if (batOv === 'uit') { k['bat_laden'] = false; k['bat_ontladen'] = false; }
+  // Negatieve prijs: forceer laden, nooit blokkeren
+  if (klasse === 'neg') { k['bat_laden'] = true; k['bat_ontladen'] = false; }
 
   // Piekbeheer: als totaal grootverbruikers al boven MAX_PIEK → snij af in prioriteit
   let kwGroot = 0;
@@ -658,6 +660,8 @@ function getKeuze(periodeId, klasse) {
       if (kwGroot <= MAX_PIEK) break;
       if (overrides[id==='bat_laden'?'bat':id] === 'aan') continue; // override AAN: niet afschakelen
       if (id === 'bat_laden') {
+        // Bij negatieve prijs: batterij laden nooit afschakelen — gratis energie, vol laden!
+        if (klasse === 'neg') continue;
         if (k['bat_laden']) { kwGroot -= Math.min(5, BAT_KWH/2); k['bat_laden'] = false; }
         continue;
       }
@@ -755,11 +759,14 @@ function updateArbitrage(tijden, prijzen) {
         const ovKey   = v.id==='bat_laden'||v.id==='bat_ontladen' ? 'bat' : v.id;
         const ov      = overrides[ovKey];
         // Readonly als override actief (AAN of UIT) — gebruiker ziet dat het geforceerd is
-        const forced  = ov === 'aan' || ov === 'uit';
+        // Batterij laden bij negatief: altijd geforceerd
+        const negBat  = !isDuur && v.id==='bat_laden' && sec.klasse==='neg';
+        const forced  = negBat || ov === 'aan' || ov === 'uit';
         const style   = forced ? 'opacity:.4;cursor:not-allowed' : '';
+        const tooltip = negBat ? '★ Negatieve prijs: batterij laden verplicht' : forced ? 'Override: '+ov : '';
         return `<td${vi===0?' class="td-sep"':''}><input type="checkbox" class="${cbKls}"
           data-pid="${pid}" data-key="${v.id}" ${checked?'checked':''}
-          ${forced?'disabled':''} style="${style}" title="${forced?'Override: '+ov:''}"></td>`;
+          ${forced?'disabled':''} style="${style}" title="${tooltip}"></td>`;
       }).join('');
 
       const tr = document.createElement('tr');
@@ -875,7 +882,10 @@ function berekenSimulatie(tijden, prijzen) {
     const batOntl  = isGeplandActief(iso, 'bat_ontladen');
     const batMax   = Math.min(5, BAT_KWH / 2);
     let batKwGewenst = 0;
-    if (batLaden && soc < 95)  batKwGewenst =  batMax;
+    // Bij negatieve prijs: laad zo snel mogelijk (max 0.5C of 7.4kW)
+    if (batLaden && soc < 99) {
+      batKwGewenst = ct < 0 ? Math.min(BAT_KWH * 0.5, 7.4) : batMax;
+    }
     if (batOntl  && soc > 15)  batKwGewenst = -batMax;
 
     const loadGewenst = Object.values(gewenst).reduce((a,b)=>a+b,0)
