@@ -738,13 +738,15 @@ function slaKeuzeOp() {
 
 
 function berekenPiekVoorPeriode(periodeId, klasse) {
+  // Eenvoudige som van alle aangevinkte toestellen — geen energy sharing, geen piekbeheer
+  // Toont het werkelijke netafname als alles tegelijk aan is
   const k = getKeuze(periodeId, klasse);
   let kw = 0;
-  for (const h of HUISHOUD) { if (k[h.id]) kw += h.kw; }
-  for (const v of VERBRUIKERS) { if (k[v.id]) kw += v.id==='ev_won'||v.id==='ev_sch' ? (k['ev_won']&&k['ev_sch'] ? 6 : v.kw) : v.kw; }
+  for (const h of HUISHOUD)   { if (k[h.id])          kw += h.kw; }
+  for (const v of VERBRUIKERS){ if (k[v.id])          kw += v.kw; }
   const batMax = Math.min(5, BAT_KWH/2);
-  if (k['bat_laden'])    kw += batMax;
-  if (k['bat_ontladen']) kw -= batMax;
+  if (k['bat_laden'])                                  kw += batMax;
+  // bat_ontladen vermindert netto-afname maar telt niet mee in piek (piek = afname)
   return Math.max(0, kw);
 }
 
