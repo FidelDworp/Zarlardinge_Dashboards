@@ -179,6 +179,10 @@ input[type=range].sim-slider::-webkit-slider-thumb {
 .inst-bron a { color:var(--muted); }
 
 #status-msg { font-size:.75rem; color:var(--muted); font-family:var(--mono); text-align:center; padding:40px; display:none; }
+.opslag-uitleg { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px 18px; margin-top:8px; }
+.opslag-titel  { font-family:var(--mono); font-size:.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; }
+.opslag-tekst  { font-size:.75rem; color:var(--muted); line-height:1.6; }
+.opslag-tekst b { color:var(--text); }
 
 
 /* PIEK METER */
@@ -242,7 +246,8 @@ input[type=range].sim-slider::-webkit-slider-thumb {
       <span><span class="leg-dot" style="background:var(--green)"></span>Goedkoop</span>
       <span><span class="leg-dot" style="background:var(--yellow)"></span>Normaal</span>
       <span><span class="leg-dot" style="background:var(--red)"></span>Duur</span>
-      <span><span style="border-bottom:2px dashed var(--muted);display:inline-block;width:14px;margin-bottom:3px"></span>Vast</span>
+      <span><span style="display:inline-block;width:14px;height:8px;background:rgba(139,148,158,0.35);border-radius:2px;vertical-align:middle"></span> Nettarief</span>
+      <span><span style="border-bottom:2px dashed rgba(255,255,255,0.7);display:inline-block;width:14px;margin-bottom:3px"></span> Vast</span>
     </div>
   </div>
   <div class="dag-labels">
@@ -405,7 +410,27 @@ input[type=range].sim-slider::-webkit-slider-thumb {
       <span class="inst-unit">€/kW/mnd</span>
     </span>
   </label>
-    <span class="inst-bron">Bron: <a href="https://energy-charts.info" target="_blank">energy-charts.info</a></span>
+  <label class="inst-item">
+    <span>Vaste opslag</span>
+    <span class="inst-input-wrap">
+      <input id="inp-opslag" type="number" value="21" step="1" min="0" max="100">
+      <span class="inst-unit">ct/kWh</span>
+    </span>
+  </label>
+  <span class="inst-bron">Bron: <a href="https://energy-charts.info" target="_blank">energy-charts.info</a></span>
+</div>
+
+<!-- UITLEG VASTE OPSLAG -->
+<div class="opslag-uitleg">
+  <div class="opslag-titel">ℹ️ Wat is "Vaste opslag"?</div>
+  <div class="opslag-tekst">
+    De EPEX-prijs is de kale groothandelsprijs. Wat je werkelijk betaalt bevat ook:
+    distributienettarief (Fluvius ~9 ct), transmissie (Elia ~1 ct), energieheffing &amp; accijnzen (~2 ct),
+    hernieuwbare bijdragen (~1.5 ct), BTW 21%. Samen ca. <b>16–21 ct/kWh</b> bovenop de EPEX-prijs.
+    Bij een dynamisch contract na 2028 wordt dit de reële kostprijs per kWh.
+    De grijze balk in de grafiek toont deze opslag — de totale balk is wat je echt betaalt.
+    De <b>arbitrage-spread verandert niet</b>: de vaste opslag telt overal mee en valt weg in het verschil.
+  </div>
 </div>
 
 <script>
@@ -442,7 +467,8 @@ let periodeKeuzes = {};  // key = periode-id → { eco, ev_won, ... }
 let simSlot       = 0;   // huidig geselecteerd slot in de slider
 
 let BAT_KWH   = parseFloat(localStorage.getItem('bat_kwh'))    || 10;
-let vast      = parseFloat(localStorage.getItem('vast_prijs'))  || VAST_DEFAULT;
+let vast       = parseFloat(localStorage.getItem('vast_prijs'))  || VAST_DEFAULT;
+let OPSLAG_PCT = parseFloat(localStorage.getItem('opslag_pct')) || 21; // % vaste opslag bovenop EPEX
 let SOC_START = parseFloat(localStorage.getItem('soc_start'))   || 50;
 let SOLAR_MAX_KW = parseFloat(localStorage.getItem('solar_max_kw')) || 8;
 let MAX_PIEK  = parseFloat(localStorage.getItem('max_piek'))    || 15;
@@ -519,6 +545,8 @@ function renderChart(tijden, prijzen) {
   const barColors    = prijzen.map((p,i) => kleur(p/10) + (i===nuIdx?'':'99'));
   const borderColors = prijzen.map((p,i) => i===nuIdx?'#ffffff':kleur(p/10));
   const vastLine     = prijzen.map(() => vast*10);
+  // Vaste opslag: grijs balkje bovenop elke EPEX-balk
+  const opslagData   = prijzen.map(() => OPSLAG_PCT * 10); // ct → €/MWh schaal
 
   if (chart) chart.destroy();
   document.getElementById('status-msg').style.display = 'none';
@@ -562,8 +590,9 @@ function renderChart(tijden, prijzen) {
     data: {
       labels,
       datasets: [
-        { type:'bar',  data:prijzen, backgroundColor:barColors, borderColor:borderColors, borderWidth:1.5, borderRadius:3, order:2 },
-        { type:'line', data:vastLine, borderColor:'rgba(139,148,158,0.5)', borderWidth:1.5, borderDash:[4,3], pointRadius:0, fill:false, order:1 }
+        { type:'bar',  data:prijzen,    backgroundColor:barColors,                   borderColor:borderColors, borderWidth:1.5, borderRadius:0, order:3, stack:'prijs' },
+        { type:'bar',  data:opslagData,  backgroundColor:'rgba(139,148,158,0.25)',   borderColor:'transparent', borderWidth:0, borderRadius:3, order:2, stack:'prijs' },
+        { type:'line', data:vastLine,    borderColor:'rgba(255,255,255,0.7)',        borderWidth:2, borderDash:[5,3], pointRadius:0, fill:false, order:1 }
       ]
     },
     options: {
@@ -577,7 +606,16 @@ function renderChart(tijden, prijzen) {
           titleFont:{family:'Space Mono',size:11}, bodyFont:{family:'DM Sans',size:12},
           callbacks:{
             title:(items)=>`${labels[items[0].dataIndex]}  (${fmtDag(tijden[items[0].dataIndex])})`,
-            label:(item)=>item.datasetIndex===0?` EPEX: ${(item.raw/10).toFixed(1)} ct/kWh`:` Vast: ${vast} ct/kWh`
+            label:(item)=>{
+              if (item.datasetIndex===0) {
+                const epex = (item.raw/10).toFixed(1);
+                const tot  = (item.raw/10 + OPSLAG_PCT).toFixed(1);
+                return [` EPEX:    ${epex} ct/kWh`, ` + opslag: ${OPSLAG_PCT} ct/kWh`, ` = totaal: ${tot} ct/kWh`];
+              }
+              if (item.datasetIndex===1) return null;
+              return ` Vast contract: ${vast} ct/kWh`;
+            },
+            filter:(item)=>item.datasetIndex!==1
           }
         }
       },
@@ -1448,6 +1486,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('inp-soc').value    = SOC_START;
   document.getElementById('inp-solar-max').value = SOLAR_MAX_KW;
   document.getElementById('inp-piek').value   = MAX_PIEK;
+  document.getElementById('inp-opslag').value = OPSLAG_PCT;
   document.getElementById('inp-cap').value    = CAP_TAR;
   try {
     const opgeslagen = localStorage.getItem('periode_keuzes');
