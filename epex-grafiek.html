@@ -436,7 +436,7 @@ input[type=range].sim-slider::-webkit-slider-thumb {
     De grijze balk toont de opslag, de gekleurde balk de kale EPEX. De witte stippellijn is je vaste contract.
     <b>Wanneer de totale balk boven de stippellijn uitkomt = dynamisch contract duurder dan vast.</b>
     <br>
-    De <b>arbitrage-spread verandert niet</b> door de opslag: die telt overal gelijk mee en valt weg in het verschil.
+    De <b>arbitrage-spread verandert niet</b> door de opslag: die telt overal gelijk mee en valt weg in het verschil. De winnende tijdvensters blijven dezelfde.
   </div>
 </div>
 
@@ -490,6 +490,13 @@ try { overrides = JSON.parse(localStorage.getItem('overrides')||'{}'); } catch(e
 const PIEK_PRIO = ['ev_sch','bat_laden','eco','wp_sch','ev_won','wp_won'];
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
+// Reële prijs = EPEX spotprijs + vaste opslag (nettarief + heffingen + BTW)
+// ct = kale EPEX in ct/kWh
+function reelePrijs(ct) { return ct + OPSLAG_CT; }
+
+// Kleurdrempel op basis van reële prijs
+function kleurReeel(ct) { return kleur(reelePrijs(ct)); }
+
 function kleur(ct) {
   if (ct < 0)             return '#a8ff3e';
   if (ct < DREMPEL_GROEN) return '#2a8a3e';
@@ -808,7 +815,7 @@ function updateArbitrage(tijden, prijzen) {
   const thead = document.getElementById('matrix-thead');
   const cols = [
     { sym:'⏰', sub:'Periode', kw:'',           cls:'th-left', title:'Periode' },
-    { sym:'💰', sub:'Prijs',   kw:'ct/kWh',     cls:'',        title:'Prijs'   },
+    { sym:'💰', sub:'Prijs',   kw:'ct/kWh',     cls:'',        title:'Reële prijs (EPEX + opslag)'   },
     ...HUISHOUD.map((h,i) => ({ sym:h.sym, sub:h.naam, kw:h.kw+'kW', cls:i===0?'th-sep':'', title:h.naam })),
     { sym:'♨️',  sub:'ECO',    kw:'2kW',         cls:'th-sep',  title:'ECO-boiler SCH' },
     { sym:'🚙',  sub:'EV WON',      kw:'9kW',    cls:'',        title:'EV WON (Filip, wit)'   },
@@ -851,9 +858,12 @@ function updateArbitrage(tijden, prijzen) {
     }
 
     const k      = getRawKeuze(pid, p.klasse); // tabel toont ruwe keuze
-    const gemCt  = (p.gem/10).toFixed(1);
+    const epexCt = p.gem / 10;
+    const reeel  = reelePrijs(epexCt);          // reële prijs = EPEX + opslag
+    const gemCt  = reeel.toFixed(1);            // toon reële prijs in tabel
     const piek   = berekenPiekVoorPeriode(pid, p.klasse);
-    const piekKls = piek > MAX_PIEK ? 'over' : piek > MAX_PIEK*0.85 ? 'warn' : 'ok';
+    const piekPct = MAX_PIEK > 0 ? piek / MAX_PIEK : 0;
+    const piekKls = piekPct > 1 ? 'over' : piekPct > 0.9 ? 'warn-hi' : piekPct > 0.75 ? 'warn' : piekPct > 0.5 ? 'notice' : 'ok';
     const cbKls   = cfg.isDuur ? 'mx-cb cb-duur' : 'mx-cb';
 
     // Is dit de huidige periode?
@@ -901,7 +911,7 @@ function updateArbitrage(tijden, prijzen) {
           </div>
         </div>
       </td>
-      <td class="td-prijs" style="color:var(--${cfg.prCls})">${gemCt}</td>
+      <td class="td-prijs" style="color:${kleur(reeel)}">${gemCt}</td>
       ${huishoudCbs}
       ${grootCbs}
       <td class="td-sep td-piek ${piekKls}" id="piek-cel-${pid}">${piek.toFixed(1)}</td>`;
@@ -935,7 +945,11 @@ function updateArbitrage(tijden, prijzen) {
   // Winst
   const allG = [..._periodesNeg,..._periodesGoen].sort((a,b)=>a.gem-b.gem);
   const allD = [..._periodesDuur].sort((a,b)=>b.gem-a.gem);
-  const spread = Math.max(0,(allD[0]?.gem||0)/10-(allG[0]?.gem||0)/10);
+  // Spread op reële prijs: opslag valt weg in het verschil → zelfde als kale EPEX spread
+  // Maar we tonen het expliciet voor transparantie
+  const goedkCt = reelePrijs((allG[0]?.gem||0)/10);
+  const duurCt  = reelePrijs((allD[0]?.gem||0)/10);
+  const spread  = Math.max(0, duurCt - goedkCt);
   document.getElementById('arb-winst-val').textContent = `€ ${(spread*BAT_KWH*0.92/100).toFixed(2)} /24u`;
 
   updateSimulatie();
@@ -1222,7 +1236,7 @@ function tekenSimulatieSlot(absSlot) {
   const bat_lbl = s.batActie==='laden'?` · 🔋↑${s.batKw.toFixed(1)}kW`:s.batActie==='ontladen'?` · 🔋↓${Math.abs(s.batKw).toFixed(1)}kW`:`· 🔋${soc_r}%`;
   document.getElementById('sim-titel').textContent = `💡 Simulatie · ${s.load.toFixed(1)}kW verbruik${bat_lbl}`;
   document.getElementById('sim-tijdstip').textContent =
-    `${fmtDag(s.iso)} ${fmtTime(s.iso)}  ·  EPEX ${s.ct.toFixed(1)} ct/kWh`;
+    `${fmtDag(s.iso)} ${fmtTime(s.iso)}  ·  ${reelePrijs(s.ct).toFixed(1)} ct/kWh (EPEX ${s.ct.toFixed(1)})`;
 
   // LEDs (12 pixels)
   for (let i=0; i<LED_DEFS.length; i++) {
