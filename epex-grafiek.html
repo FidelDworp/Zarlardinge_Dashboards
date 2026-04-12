@@ -424,12 +424,19 @@ input[type=range].sim-slider::-webkit-slider-thumb {
 <div class="opslag-uitleg">
   <div class="opslag-titel">ℹ️ Wat is "Vaste opslag"?</div>
   <div class="opslag-tekst">
-    De EPEX-prijs is de kale groothandelsprijs. Wat je werkelijk betaalt bevat ook:
-    distributienettarief (Fluvius ~9 ct), transmissie (Elia ~1 ct), energieheffing &amp; accijnzen (~2 ct),
-    hernieuwbare bijdragen (~1.5 ct), BTW 21%. Samen ca. <b>16–21 ct/kWh</b> bovenop de EPEX-prijs.
-    Bij een dynamisch contract na 2028 wordt dit de reële kostprijs per kWh.
-    De grijze balk in de grafiek toont deze opslag — de totale balk is wat je echt betaalt.
-    De <b>arbitrage-spread verandert niet</b>: de vaste opslag telt overal mee en valt weg in het verschil.
+    De EPEX-prijs is de <b>kale groothandelsprijs</b> (€/MWh op de beurs). Wat je werkelijk betaalt is:
+    <br><br>
+    <b>Reële prijs = EPEX + vaste opslag (ct/kWh)</b>
+    <br><br>
+    De vaste opslag is een <b>absoluut bedrag in ct/kWh</b> — geen percentage — en bestaat uit:
+    distributienettarief Fluvius (~9 ct), transmissie Elia (~1 ct), energieheffing &amp; accijnzen (~2 ct),
+    bijdrage hernieuwbaar/WKK (~1.5 ct), BTW 6%. Samen typisch <b>16–21 ct/kWh</b>.
+    Dit bedrag is <b>vast en onafhankelijk van de EPEX-prijs</b> — ook bij negatieve prijzen betaal je dit.
+    <br><br>
+    De grijze balk toont de opslag, de gekleurde balk de kale EPEX. De witte stippellijn is je vaste contract.
+    <b>Wanneer de totale balk boven de stippellijn uitkomt = dynamisch contract duurder dan vast.</b>
+    <br>
+    De <b>arbitrage-spread verandert niet</b> door de opslag: die telt overal gelijk mee en valt weg in het verschil.
   </div>
 </div>
 
@@ -468,7 +475,7 @@ let simSlot       = 0;   // huidig geselecteerd slot in de slider
 
 let BAT_KWH   = parseFloat(localStorage.getItem('bat_kwh'))    || 10;
 let vast       = parseFloat(localStorage.getItem('vast_prijs'))  || VAST_DEFAULT;
-let OPSLAG_PCT = parseFloat(localStorage.getItem('opslag_pct')) || 21; // % vaste opslag bovenop EPEX
+let OPSLAG_CT  = parseFloat(localStorage.getItem('opslag_ct'))  || 21; // ct/kWh vaste opslag (nettarief + heffingen + BTW)
 let SOC_START = parseFloat(localStorage.getItem('soc_start'))   || 50;
 let SOLAR_MAX_KW = parseFloat(localStorage.getItem('solar_max_kw')) || 8;
 let MAX_PIEK  = parseFloat(localStorage.getItem('max_piek'))    || 15;
@@ -546,7 +553,7 @@ function renderChart(tijden, prijzen) {
   const borderColors = prijzen.map((p,i) => i===nuIdx?'#ffffff':kleur(p/10));
   const vastLine     = prijzen.map(() => vast*10);
   // Vaste opslag: grijs balkje bovenop elke EPEX-balk
-  const opslagData   = prijzen.map(() => OPSLAG_PCT * 10); // ct → €/MWh schaal
+  const opslagData   = prijzen.map(() => OPSLAG_CT * 10); // ct → €/MWh schaal
 
   if (chart) chart.destroy();
   document.getElementById('status-msg').style.display = 'none';
@@ -609,8 +616,8 @@ function renderChart(tijden, prijzen) {
             label:(item)=>{
               if (item.datasetIndex===0) {
                 const epex = (item.raw/10).toFixed(1);
-                const tot  = (item.raw/10 + OPSLAG_PCT).toFixed(1);
-                return [` EPEX:    ${epex} ct/kWh`, ` + opslag: ${OPSLAG_PCT} ct/kWh`, ` = totaal: ${tot} ct/kWh`];
+                const tot  = (item.raw/10 + OPSLAG_CT).toFixed(1);
+                return [` EPEX:    ${epex} ct/kWh`, ` + opslag: ${OPSLAG_CT} ct/kWh`, ` = totaal: ${tot} ct/kWh`];
               }
               if (item.datasetIndex===1) return null;
               return ` Vast contract: ${vast} ct/kWh`;
@@ -1486,7 +1493,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('inp-soc').value    = SOC_START;
   document.getElementById('inp-solar-max').value = SOLAR_MAX_KW;
   document.getElementById('inp-piek').value   = MAX_PIEK;
-  document.getElementById('inp-opslag').value = OPSLAG_PCT;
+  document.getElementById('inp-opslag').value = OPSLAG_CT;
   document.getElementById('inp-cap').value    = CAP_TAR;
   try {
     const opgeslagen = localStorage.getItem('periode_keuzes');
