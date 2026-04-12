@@ -582,8 +582,14 @@ function renderChart(tijden, prijzen) {
         }
       },
       scales:{
-        x:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:9},maxRotation:0,maxTicksLimit:16,
-          callback:(v,i,vals)=>{ const lbl=fmtTime(allTimes[i]||''); return lbl.replace(':00',''); }
+        x:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:9},maxRotation:0,maxTicksLimit:24,
+          callback:(v,i)=>{
+            if (!allTimes[i]) return '';
+            const d = new Date(allTimes[i]);
+            const min = d.getMinutes();
+            // Toon enkel hele uren, sla kwartieren over
+            return min === 0 ? String(d.getHours()) : '';
+          }
         }, grid:{color:'rgba(33,38,45,0.8)'} },
         y:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:10},callback:v=>(v/10).toFixed(0)+' ct'}, grid:{color:'rgba(33,38,45,0.8)'} }
       }
