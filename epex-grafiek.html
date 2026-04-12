@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EPEX Dag-Ahead — Zarlardinge</title>
+<title>Zarlardinge Smart Energy</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -25,7 +25,7 @@
 body { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; padding:20px 16px 48px; max-width:960px; margin:0 auto; }
 
 /* HEADER */
-header { display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--border); padding-bottom:14px; flex-wrap:wrap; }
+header { display:flex; align-items:baseline; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
 header h1 { font-family:var(--mono); font-size:1rem; font-weight:700; letter-spacing:.05em; }
 .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--lime); animation:pulse 2s ease-in-out infinite; margin-right:6px; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
@@ -64,7 +64,7 @@ table.matrix th {
 table.matrix th .th-sym  { font-size:1rem; display:block; line-height:1; margin-bottom:2px; }
 table.matrix th .th-kw   { font-size:.52rem; color:var(--muted); display:block; }
 table.matrix th.th-left  { text-align:left; min-width:110px; padding-left:8px; }
-table.matrix th.th-sep   { border-left:1px solid var(--border); }
+table.matrix th.th-sep   { border-left:3px dashed rgba(88,166,255,0.5); }
 
 table.matrix td {
   text-align:center; padding:5px 3px; border-bottom:1px solid rgba(33,38,45,0.6);
@@ -73,7 +73,7 @@ table.matrix td {
 table.matrix td.td-periode {
   text-align:left; padding-left:0; white-space:nowrap;
 }
-table.matrix td.td-sep { border-left:1px solid var(--border); }
+table.matrix td.td-sep { border-left:3px dashed rgba(88,166,255,0.5); }
 
 /* Kleurband links van periode */
 .periode-band {
@@ -229,7 +229,7 @@ input[type=range].sim-slider::-webkit-slider-thumb {
 <body>
 
 <header>
-  <h1><span class="dot"></span>ZARLARDINGE ENERGIE</h1>
+  <h1><span class="dot"></span>ZARLARDINGE SMART ENERGY</h1>
   <span style="display:none"><span id="datum"></span></span>
 </header>
 
@@ -268,7 +268,7 @@ input[type=range].sim-slider::-webkit-slider-thumb {
 <!-- LED SIMULATIE -->
 <div class="sim-wrap">
   <div class="sim-header">
-    <span>💡 Simulatie — verbruikers</span>
+    <span id="sim-titel">💡 Simulatie slider: Verbruik &amp; Batterij</span>
     <span class="sim-tijdstip" id="sim-tijdstip">—</span>
   </div>
 
@@ -385,13 +385,10 @@ input[type=range].sim-slider::-webkit-slider-thumb {
     </span>
   </label>
   <label class="inst-item">
-    <span>Seizoen</span>
+    <span>Solar max</span>
     <span class="inst-input-wrap">
-      <select id="inp-seizoen">
-        <option value="zomer">Zomer (8 kW)</option>
-        <option value="lente" selected>Lente/Herfst (5 kW)</option>
-        <option value="winter">Winter (3 kW)</option>
-      </select>
+      <input id="inp-solar-max" type="number" value="8" step="0.5" min="0.5" max="20">
+      <span class="inst-unit">kW</span>
     </span>
   </label>
   <label class="inst-item">
@@ -417,13 +414,10 @@ const VAST_DEFAULT   = 28.0;
 const DREMPEL_GROEN  = 10;   // ct/kWh
 const DREMPEL_GEEL   = 20;   // ct/kWh
 
-// Solar max per seizoen (kW)
-const SOLAR_MAX = { zomer: 8, lente: 5, winter: 3 };
-
 // Verbruikers definitie
 const VERBRUIKERS = [
   { id:'eco',    naam:'ECO-boiler', sub:'SCH', kw:2,  regelbaar:false, pixel:0 },
-  { id:'ev_won', naam:'Tesla',      sub:'WON', kw:9,  regelbaar:true,  pixel:1 },  // wit
+  { id:'ev_won', naam:'EV',         sub:'WON', kw:9,  regelbaar:true,  pixel:1 },  // wit
   { id:'ev_sch', naam:'EV-lader',   sub:'SCH', kw:9,  regelbaar:true,  pixel:2 },  // rood
   { id:'wp_won', naam:'WP',         sub:'WON', kw:2.5, regelbaar:false, pixel:3 }, // elektrisch compressorvermogen
   { id:'wp_sch', naam:'WP',         sub:'SCH', kw:2.5, regelbaar:false, pixel:4 }, // elektrisch compressorvermogen
@@ -450,7 +444,7 @@ let simSlot       = 0;   // huidig geselecteerd slot in de slider
 let BAT_KWH   = parseFloat(localStorage.getItem('bat_kwh'))    || 10;
 let vast      = parseFloat(localStorage.getItem('vast_prijs'))  || VAST_DEFAULT;
 let SOC_START = parseFloat(localStorage.getItem('soc_start'))   || 50;
-let seizoen   = localStorage.getItem('seizoen') || 'lente';
+let SOLAR_MAX_KW = parseFloat(localStorage.getItem('solar_max_kw')) || 8;
 let MAX_PIEK  = parseFloat(localStorage.getItem('max_piek'))    || 15;
 let CAP_TAR   = parseFloat(localStorage.getItem('cap_tar'))     || 4.80;
 
@@ -506,10 +500,9 @@ function fmtDuur(nSlots, intervalMs) {
 function solarKw(iso) {
   const d = new Date(iso);
   const uur = d.getHours() + d.getMinutes()/60;
-  const rise = 7, set = 20, noon = (rise+set)/2;
+  const rise = 7, set = 20;
   if (uur < rise || uur >= set) return 0;
-  const max = SOLAR_MAX[seizoen] || 5;
-  return max * Math.sin(Math.PI * (uur - rise) / (set - rise));
+  return SOLAR_MAX_KW * Math.sin(Math.PI * (uur - rise) / (set - rise));
 }
 
 // ─── GRAFIEK ──────────────────────────────────────────────────────────────────
@@ -589,7 +582,9 @@ function renderChart(tijden, prijzen) {
         }
       },
       scales:{
-        x:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:9},maxRotation:0,maxTicksLimit:16}, grid:{color:'rgba(33,38,45,0.8)'} },
+        x:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:9},maxRotation:0,maxTicksLimit:16,
+          callback:(v,i,vals)=>{ const lbl=fmtTime(allTimes[i]||''); return lbl.replace(':00',''); }
+        }, grid:{color:'rgba(33,38,45,0.8)'} },
         y:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:10},callback:v=>(v/10).toFixed(0)+' ct'}, grid:{color:'rgba(33,38,45,0.8)'} }
       }
     }
@@ -765,7 +760,7 @@ function updateArbitrage(tijden, prijzen) {
     { sym:'💰', sub:'Prijs',   kw:'ct/kWh',     cls:'',        title:'Prijs'   },
     ...HUISHOUD.map((h,i) => ({ sym:h.sym, sub:h.naam, kw:h.kw+'kW', cls:i===0?'th-sep':'', title:h.naam })),
     { sym:'♨️',  sub:'ECO',    kw:'2kW',         cls:'th-sep',  title:'ECO-boiler SCH' },
-    { sym:'🚙',  sub:'Tesla WON',  kw:'9kW',    cls:'',        title:'Tesla WON (Filip, wit)'   },
+    { sym:'🚙',  sub:'EV WON',      kw:'9kW',    cls:'',        title:'EV WON (Filip, wit)'   },
     { sym:'🚗',  sub:'EV SCH',     kw:'9kW',    cls:'',        title:'EV-lader SCH (Maarten, rood)' },
     { sym:'🏠',  sub:'WP WON', kw:'2.5kW',       cls:'',        title:'WP WON (elektrisch)' },
     { sym:'🏚️', sub:'WP SCH', kw:'2.5kW',       cls:'',        title:'WP SCH (elektrisch)' },
@@ -1039,7 +1034,7 @@ function ledKleur(slot, d) {
 
   if (id === 'solar') {
     if (slot.solar < 0.3) return { bg:'#111', glow:false };
-    const intens = Math.min(1, slot.solar / (SOLAR_MAX[seizoen]||5));
+    const intens = Math.min(1, slot.solar / (SOLAR_MAX_KW||8));
     const c = groenGrad(intens);
     return { bg:c, glow:intens>0.5, color:c };
   }
@@ -1111,7 +1106,7 @@ const LED_DEFS = [
   { id:'bat',    sym:'🔋',  titel:'Batterij',groep:2 },
   // Groep 3: Automatische verbruikers
   { id:'eco',    sym:'♨️',  titel:'ECO',     groep:3 },
-  { id:'ev_won', sym:'🚙',  titel:'Tesla WON',groep:3 },
+  { id:'ev_won', sym:'🚙',  titel:'EV WON',   groep:3 },
   { id:'ev_sch', sym:'🚗',  titel:'EV SCH',  groep:3 },
   { id:'wp_won', sym:'🏠',  titel:'WP WON',  groep:3 },
   { id:'wp_sch', sym:'🏚️', titel:'WP SCH',  groep:3 },
@@ -1171,6 +1166,10 @@ function tekenSimulatieSlot(absSlot) {
 
   // Tijdstip
   const d = new Date(s.iso);
+  // Dynamische titel op basis van slot
+  const soc_r = Math.round(s.soc);
+  const bat_lbl = s.batActie==='laden'?` · 🔋↑${s.batKw.toFixed(1)}kW`:s.batActie==='ontladen'?` · 🔋↓${Math.abs(s.batKw).toFixed(1)}kW`:`· 🔋${soc_r}%`;
+  document.getElementById('sim-titel').textContent = `💡 Simulatie · ${s.load.toFixed(1)}kW verbruik${bat_lbl}`;
   document.getElementById('sim-tijdstip').textContent =
     `${fmtDag(s.iso)} ${fmtTime(s.iso)}  ·  EPEX ${s.ct.toFixed(1)} ct/kWh`;
 
@@ -1416,9 +1415,9 @@ document.getElementById('inp-soc').addEventListener('change',e=>{
   SOC_START=parseFloat(e.target.value)||50;
   localStorage.setItem('soc_start',SOC_START);updateSimulatie();
 });
-document.getElementById('inp-seizoen').addEventListener('change',e=>{
-  seizoen=e.target.value;
-  localStorage.setItem('seizoen',seizoen);updateSimulatie();
+document.getElementById('inp-solar-max').addEventListener('change',e=>{
+  SOLAR_MAX_KW=parseFloat(e.target.value)||8;
+  localStorage.setItem('solar_max_kw',SOLAR_MAX_KW);updateSimulatie();
 });
 document.getElementById('inp-piek').addEventListener('change',e=>{
   MAX_PIEK=parseFloat(e.target.value)||8;
@@ -1441,7 +1440,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('inp-vast').value   = vast;
   document.getElementById('inp-bat').value    = BAT_KWH;
   document.getElementById('inp-soc').value    = SOC_START;
-  document.getElementById('inp-seizoen').value= seizoen;
+  document.getElementById('inp-solar-max').value = SOLAR_MAX_KW;
   document.getElementById('inp-piek').value   = MAX_PIEK;
   document.getElementById('inp-cap').value    = CAP_TAR;
   try {
