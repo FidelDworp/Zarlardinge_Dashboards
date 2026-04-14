@@ -277,7 +277,7 @@ input[type=range].sim-slider::-webkit-slider-thumb {
     <div class="legend">
       <span><span class="leg-dot" style="background:#2a8a3e"></span>Laden kW</span>
       <span><span class="leg-dot" style="background:#d29922"></span>Ontladen kW</span>
-      <span><span style="border-bottom:2px solid rgba(88,166,255,0.6);display:inline-block;width:14px;margin-bottom:3px"></span>SOC %</span>
+      <span><span style="border-bottom:2px solid rgba(88,166,255,0.85);display:inline-block;width:14px;margin-bottom:3px"></span>SOC kWh</span>
     </div>
   </div>
   <canvas id="batChart" height="100"></canvas>
@@ -1550,10 +1550,11 @@ function renderSolarChart() {
       },
       scales: {
         x: {
+          display: true,
           ticks: {
             color:'#8b949e', font:{family:'Space Mono',size:9},
-            maxRotation:0, maxTicksLimit:24,
-            callback:(v,i) => labels[i]
+            maxRotation:0, maxTicksLimit:96,
+            callback:(v,i) => labels[i] || ''
           },
           grid: { color:'rgba(33,38,45,0.8)' }
         },
@@ -1607,9 +1608,12 @@ function renderBatChart() {
     return (d.getMinutes() === 0 && d.getHours() % 2 === 0) ? String(d.getHours()) : '';
   });
 
-  // Kleur laden: groen, gedimde versie voor verleden
-  const laadKleuren   = laadData.map((v,i)   => v > 0 ? (i<=nuIdx?'#2a8a3e99':'#2a8a3edd') : 'transparent');
-  const ontlaadKleuren= ontlaadData.map((v,i) => v < 0 ? (i<=nuIdx?'#d2992299':'#d29922dd') : 'transparent');
+  // Kleur laden/ontladen — gebruik nuIdxB (batterij scope)
+  const laadKleuren    = laadData.map((v,i)    => v !== null && v > 0 ? (i<=nuIdxB?'#2a8a3edd':'#2a8a3e55') : 'transparent');
+  const ontlaadKleuren = ontlaadData.map((v,i) => v !== null && v < 0 ? (i<=nuIdxB?'#d29922dd':'#d2992255') : 'transparent');
+
+  // SOC omzetten naar kWh voor rechter y-as
+  const socKwhData = socData.map(v => v !== null ? parseFloat((v * BAT_KWH / 100).toFixed(2)) : null);
 
   // Bat: zelfde lijnen als EPEX
   const nu3 = new Date(), morgen3 = new Date(nu3);
@@ -1667,15 +1671,15 @@ function renderBatChart() {
         },
         {
           type: 'line',
-          label: 'SOC (%)',
-          data: socData,
-          borderColor: 'rgba(88,166,255,0.7)',
-          borderWidth: 1.5,
+          label: 'SOC (kWh)',
+          data: socKwhData,
+          borderColor: 'rgba(88,166,255,0.85)',
+          borderWidth: 2,
           pointRadius: 0,
-          fill: false,
+          fill: {target:'origin', above:'rgba(88,166,255,0.08)'},
           tension: 0.3,
           order: 1,
-          yAxisID: 'ySoc'
+          yAxisID: 'yKwh'
         }
       ]
     },
@@ -1698,7 +1702,7 @@ function renderBatChart() {
             label: (item) => {
               if (item.datasetIndex === 0 && item.raw > 0)   return ` Laden:    ${item.raw.toFixed(2)} kW`;
               if (item.datasetIndex === 1 && item.raw < 0)   return ` Ontladen: ${Math.abs(item.raw).toFixed(2)} kW`;
-              if (item.datasetIndex === 2 && item.raw !== null) return ` SOC:      ${item.raw.toFixed(1)} %`;
+              if (item.datasetIndex === 2 && item.raw !== null) return ` SOC: ${item.raw.toFixed(2)} kWh (${(item.raw/BAT_KWH*100).toFixed(0)}%)`;
               return null;
             },
             filter: (item) => {
@@ -1711,10 +1715,11 @@ function renderBatChart() {
       },
       scales: {
         x: {
+          display: true,
           ticks: {
             color:'#8b949e', font:{family:'Space Mono',size:9},
-            maxRotation:0, maxTicksLimit:24,
-            callback:(v,i) => labels[i]
+            maxRotation:0, maxTicksLimit:96,
+            callback:(v,i) => labels[i] || ''
           },
           grid: { color:'rgba(33,38,45,0.8)' }
         },
@@ -1727,12 +1732,13 @@ function renderBatChart() {
           },
           grid: { color:'rgba(33,38,45,0.8)' }
         },
-        ySoc: {
+        yKwh: {
           position: 'right',
-          min: 0, max: 100,
+          min: 0,
+          max: BAT_KWH,
           ticks: {
-            color:'rgba(88,166,255,0.7)', font:{family:'Space Mono',size:10},
-            callback: v => v + '%',
+            color:'rgba(88,166,255,0.85)', font:{family:'Space Mono',size:10},
+            callback: v => v.toFixed(0)+' kWh',
             maxTicksLimit: 5
           },
           grid: { display:false }
