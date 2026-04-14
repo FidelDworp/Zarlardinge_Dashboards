@@ -1458,13 +1458,18 @@ function tekenSimulatieSlot(absSlot) {
 
 // ─── KAARTEN / DATUM ──────────────────────────────────────────────────────────
 function renderSolarChart() {
-  const tijden = pastTijden;  // alleen vandaag 00:00 → nu
+  const tijden = allTimes;  // zelfde x-as als EPEX (00:00 → +48u)
   if (!tijden.length) return;
+  const nu = Date.now();
   const ctx = document.getElementById('solarChart').getContext('2d');
 
   // Bereken solar per slot
-  const solarData = tijden.map(t => parseFloat(solarKw(t).toFixed(2)));
-  const labels    = tijden.map(t => {
+  const solarData = tijden.map(t => {
+    // Alleen verleden tonen — toekomst leeg laten
+    if (new Date(t).getTime() > nu) return null;
+    return parseFloat(solarKw(t).toFixed(2));
+  });
+  const labels = tijden.map(t => {
     const d = new Date(t);
     return (d.getMinutes() === 0 && d.getHours() % 2 === 0) ? String(d.getHours()) : '';
   });
@@ -1476,26 +1481,34 @@ function renderSolarChart() {
   // Huidig slot markeren
   const nuIdx = huidigSlot(tijden);
 
-  // Kleur per slot: geel als er solar is, dimmer voor verleden
-  const barColors = solarData.map((v, i) => {
-    if (v <= 0) return 'rgba(50,50,50,0.3)';
+  const barColors = solarData.map((v) => {
+    if (v === null || v <= 0) return 'transparent';
     const intens = v / maxSolar;
     const r = Math.round(200 + intens * 55);
     const g = Math.round(140 + intens * 65);
-    const b = 20;
-    const alpha = i <= nuIdx ? '99' : 'dd';
-    return `rgba(${r},${g},${b},${i === nuIdx ? 1 : 0.6})`;
+    return `rgba(${r},${g},20,0.85)`;
   });
 
-  // Solar = verleden: toon alleen tijdlijn NU (rechts, einde van de grafiek)
+  // Solar: zelfde lijnen als EPEX (middernacht + NOW + slider)
+  const nu2 = new Date(), morgen2 = new Date(nu2);
+  morgen2.setDate(nu2.getDate()+1); morgen2.setHours(0,0,0,0);
+  const midIdxS = tijden.findIndex(t => new Date(t).getTime() >= morgen2.getTime());
+  const nuIdxS  = huidigSlot(tijden);
+  const nuFracS = (Date.now() - new Date(tijden[nuIdxS]).getTime()) / detecteerInterval(tijden);
+
   const lijnenPluginSolar = {
     id: 'lijnenSolar',
     afterDraw(ch) {
       const { ctx, scales:{x,y} } = ch;
       ctx.save();
-      // Nu-lijn = laatste punt = rechterrand
-      const lastX = x.getPixelForValue(tijden.length - 1);
-      ctx.beginPath(); ctx.moveTo(lastX,y.top); ctx.lineTo(lastX,y.bottom);
+      if (midIdxS >= 0) {
+        const xPos = x.getPixelForValue(midIdxS - 0.5);
+        ctx.beginPath(); ctx.moveTo(xPos,y.top); ctx.lineTo(xPos,y.bottom);
+        ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
+        ctx.setLineDash([4,4]); ctx.stroke();
+      }
+      const nuXPos = x.getPixelForValue(nuIdxS + nuFracS);
+      ctx.beginPath(); ctx.moveTo(nuXPos,y.top); ctx.lineTo(nuXPos,y.bottom);
       ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
       ctx.setLineDash([3,3]); ctx.stroke();
       ctx.restore();
@@ -1561,8 +1574,9 @@ function renderSolarChart() {
 
 
 function renderBatChart() {
-  const tijden = pastTijden;  // alleen vandaag 00:00 → nu
+  const tijden = allTimes;  // zelfde x-as als EPEX
   if (!tijden.length || !_simSlots.length) return;
+  const nuMs = Date.now();
   const ctx = document.getElementById('batChart').getContext('2d');
 
   // Haal bat data uit simSlots (al berekend)
@@ -1573,14 +1587,17 @@ function renderBatChart() {
     return idx >= 0 ? _simSlots[idx] : null;
   }
   const laadData    = tijden.map(t => {
+    if (new Date(t).getTime() > nuMs) return null;
     const s = simSlotVoorTijd(t);
     return (s && s.batActie === 'laden')    ?  parseFloat(s.batKw.toFixed(2)) : 0;
   });
   const ontlaadData = tijden.map(t => {
+    if (new Date(t).getTime() > nuMs) return null;
     const s = simSlotVoorTijd(t);
     return (s && s.batActie === 'ontladen') ? -parseFloat(Math.abs(s.batKw).toFixed(2)) : 0;
   });
   const socData = tijden.map(t => {
+    if (new Date(t).getTime() > nuMs) return null;
     const s = simSlotVoorTijd(t);
     return s ? parseFloat(s.soc.toFixed(1)) : null;
   });
@@ -1594,13 +1611,26 @@ function renderBatChart() {
   const laadKleuren   = laadData.map((v,i)   => v > 0 ? (i<=nuIdx?'#2a8a3e99':'#2a8a3edd') : 'transparent');
   const ontlaadKleuren= ontlaadData.map((v,i) => v < 0 ? (i<=nuIdx?'#d2992299':'#d29922dd') : 'transparent');
 
+  // Bat: zelfde lijnen als EPEX
+  const nu3 = new Date(), morgen3 = new Date(nu3);
+  morgen3.setDate(nu3.getDate()+1); morgen3.setHours(0,0,0,0);
+  const midIdxB = tijden.findIndex(t => new Date(t).getTime() >= morgen3.getTime());
+  const nuIdxB  = huidigSlot(tijden);
+  const nuFracB = (Date.now() - new Date(tijden[nuIdxB]).getTime()) / detecteerInterval(tijden);
+
   const lijnenPluginBat = {
     id: 'lijnenBat',
     afterDraw(ch) {
       const { ctx, scales:{x,y} } = ch;
       ctx.save();
-      const lastX = x.getPixelForValue(tijden.length - 1);
-      ctx.beginPath(); ctx.moveTo(lastX,y.top); ctx.lineTo(lastX,y.bottom);
+      if (midIdxB >= 0) {
+        const xPos = x.getPixelForValue(midIdxB - 0.5);
+        ctx.beginPath(); ctx.moveTo(xPos,y.top); ctx.lineTo(xPos,y.bottom);
+        ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
+        ctx.setLineDash([4,4]); ctx.stroke();
+      }
+      const nuXPos = x.getPixelForValue(nuIdxB + nuFracB);
+      ctx.beginPath(); ctx.moveTo(nuXPos,y.top); ctx.lineTo(nuXPos,y.bottom);
       ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
       ctx.setLineDash([3,3]); ctx.stroke();
       ctx.restore();
@@ -1749,8 +1779,9 @@ function laadCache() {
     const tijden=JSON.parse(localStorage.getItem('epex_tijden')||'null');
     const prijzen=JSON.parse(localStorage.getItem('epex_prijzen')||'null');
     if(!tijden||!prijzen||!tijden.length) return null;
-    const ivl=new Date(tijden[1]).getTime()-new Date(tijden[0]).getTime();
-    const idx=tijden.findIndex((t)=>new Date(t).getTime()+ivl>Date.now());
+    // Start van vandaag 00:00 — niet snijden op huidig slot
+    const vandaag = new Date(); vandaag.setHours(0,0,0,0);
+    const idx = tijden.findIndex(t => new Date(t).getTime() >= vandaag.getTime());
     if(idx<0) return null;
     return {tijden:tijden.slice(idx),prijzen:prijzen.slice(idx)};
   } catch(e){return null;}
