@@ -1575,32 +1575,27 @@ function renderSolarChart() {
 
 
 function renderBatChart() {
-  const tijden = allTimes;  // zelfde x-as als EPEX
+  const tijden = allTimes;
   if (!tijden.length || !_simSlots.length) return;
-  const nuMs = Date.now();
-  const ctx = document.getElementById('batChart').getContext('2d');
 
-  // Haal bat data uit simSlots (al berekend)
-  // simSlots loopt vanaf allTimes[0] — tijden en simSlots zijn gealigneerd
-  // Map pastTijden op _simSlots via allTimes (zelfde tijdreeks)
-  function simSlotVoorTijd(iso) {
-    const idx = allTimes.indexOf(iso);
-    return idx >= 0 ? _simSlots[idx] : null;
-  }
-  const laadData    = tijden.map(t => {
+  const nuMs   = Date.now();
+  const ctx    = document.getElementById('batChart').getContext('2d');
+
+  // Directe index: _simSlots[i] = slot voor allTimes[i]
+  const laadData    = tijden.map((t, i) => {
     if (new Date(t).getTime() > nuMs) return null;
-    const s = simSlotVoorTijd(t);
-    return (s && s.batActie === 'laden')    ?  parseFloat(s.batKw.toFixed(2)) : 0;
+    const s = _simSlots[i];
+    return (s && s.batActie === 'laden')    ? +s.batKw.toFixed(2)               : 0;
   });
-  const ontlaadData = tijden.map(t => {
+  const ontlaadData = tijden.map((t, i) => {
     if (new Date(t).getTime() > nuMs) return null;
-    const s = simSlotVoorTijd(t);
-    return (s && s.batActie === 'ontladen') ? -parseFloat(Math.abs(s.batKw).toFixed(2)) : 0;
+    const s = _simSlots[i];
+    return (s && s.batActie === 'ontladen') ? -Math.abs(s.batKw).toFixed(2)     : 0;
   });
-  const socData = tijden.map(t => {
+  const socKwhData  = tijden.map((t, i) => {
     if (new Date(t).getTime() > nuMs) return null;
-    const s = simSlotVoorTijd(t);
-    return s ? parseFloat(s.soc.toFixed(1)) : null;
+    const s = _simSlots[i];
+    return s ? +((s.soc * BAT_KWH / 100).toFixed(2)) : null;
   });
 
   const labels = tijden.map(t => {
@@ -1608,19 +1603,16 @@ function renderBatChart() {
     return (d.getMinutes() === 0 && d.getHours() % 2 === 0) ? String(d.getHours()) : '';
   });
 
-  // Kleur laden/ontladen — gebruik nuIdxB (batterij scope)
-  const laadKleuren    = laadData.map((v,i)    => v !== null && v > 0 ? (i<=nuIdxB?'#2a8a3edd':'#2a8a3e55') : 'transparent');
-  const ontlaadKleuren = ontlaadData.map((v,i) => v !== null && v < 0 ? (i<=nuIdxB?'#d29922dd':'#d2992255') : 'transparent');
+  // Kleurverloop laden/ontladen
+  const nuIdxB2       = huidigSlot(tijden);
+  const laadKleuren   = laadData.map((v, i)    => (v !== null && v > 0) ? (i <= nuIdxB2 ? '#2a8a3eee' : '#2a8a3e44') : 'transparent');
+  const ontlaadKleuren= ontlaadData.map((v, i) => (v !== null && v < 0) ? (i <= nuIdxB2 ? '#d29922ee' : '#d2992244') : 'transparent');
 
-  // SOC omzetten naar kWh voor rechter y-as
-  const socKwhData = socData.map(v => v !== null ? parseFloat((v * BAT_KWH / 100).toFixed(2)) : null);
-
-  // Bat: zelfde lijnen als EPEX
+  // Dezelfde verticale lijnen als EPEX en solar
   const nu3 = new Date(), morgen3 = new Date(nu3);
   morgen3.setDate(nu3.getDate()+1); morgen3.setHours(0,0,0,0);
   const midIdxB = tijden.findIndex(t => new Date(t).getTime() >= morgen3.getTime());
-  const nuIdxB  = huidigSlot(tijden);
-  const nuFracB = (Date.now() - new Date(tijden[nuIdxB]).getTime()) / detecteerInterval(tijden);
+  const nuFracB = (Date.now() - new Date(tijden[nuIdxB2]).getTime()) / detecteerInterval(tijden);
 
   const lijnenPluginBat = {
     id: 'lijnenBat',
@@ -1633,7 +1625,7 @@ function renderBatChart() {
         ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
         ctx.setLineDash([4,4]); ctx.stroke();
       }
-      const nuXPos = x.getPixelForValue(nuIdxB + nuFracB);
+      const nuXPos = x.getPixelForValue(nuIdxB2 + nuFracB);
       ctx.beginPath(); ctx.moveTo(nuXPos,y.top); ctx.lineTo(nuXPos,y.bottom);
       ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
       ctx.setLineDash([3,3]); ctx.stroke();
@@ -1648,38 +1640,25 @@ function renderBatChart() {
       labels,
       datasets: [
         {
-          type: 'bar',
-          label: 'Laden (kW)',
+          type: 'bar',  label: 'Laden (kW)',
           data: laadData,
           backgroundColor: laadKleuren,
-          borderColor: 'transparent',
-          borderRadius: 2,
-          order: 2,
-          stack: 'bat',
-          yAxisID: 'yKw'
+          borderColor: 'transparent', borderRadius: 2, order: 2, yAxisID: 'yKw'
         },
         {
-          type: 'bar',
-          label: 'Ontladen (kW)',
+          type: 'bar',  label: 'Ontladen (kW)',
           data: ontlaadData,
           backgroundColor: ontlaadKleuren,
-          borderColor: 'transparent',
-          borderRadius: 2,
-          order: 2,
-          stack: 'bat',
-          yAxisID: 'yKw'
+          borderColor: 'transparent', borderRadius: 2, order: 2, yAxisID: 'yKw'
         },
         {
-          type: 'line',
-          label: 'SOC (kWh)',
+          type: 'line', label: 'SOC (kWh)',
           data: socKwhData,
-          borderColor: 'rgba(88,166,255,0.85)',
-          borderWidth: 2,
-          pointRadius: 0,
-          fill: {target:'origin', above:'rgba(88,166,255,0.08)'},
-          tension: 0.3,
-          order: 1,
-          yAxisID: 'yKwh'
+          borderColor: 'rgba(88,166,255,0.9)',
+          borderWidth: 2, pointRadius: 0,
+          fill: { target:'origin', above:'rgba(88,166,255,0.08)' },
+          tension: 0.3, order: 1, yAxisID: 'yKwh',
+          spanGaps: false
         }
       ]
     },
@@ -1700,12 +1679,16 @@ function renderBatChart() {
               return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}  (${fmtDag(tijden[i])})`;
             },
             label: (item) => {
-              if (item.datasetIndex === 0 && item.raw > 0)   return ` Laden:    ${item.raw.toFixed(2)} kW`;
-              if (item.datasetIndex === 1 && item.raw < 0)   return ` Ontladen: ${Math.abs(item.raw).toFixed(2)} kW`;
-              if (item.datasetIndex === 2 && item.raw !== null) return ` SOC: ${item.raw.toFixed(2)} kWh (${(item.raw/BAT_KWH*100).toFixed(0)}%)`;
+              if (item.datasetIndex === 0 && item.raw > 0)    return ` Laden:    ${item.raw.toFixed(2)} kW`;
+              if (item.datasetIndex === 1 && item.raw < 0)    return ` Ontladen: ${Math.abs(item.raw).toFixed(2)} kW`;
+              if (item.datasetIndex === 2 && item.raw !== null) {
+                const pct = (item.raw / BAT_KWH * 100).toFixed(0);
+                return ` SOC: ${item.raw.toFixed(2)} kWh (${pct}%)`;
+              }
               return null;
             },
             filter: (item) => {
+              if (item.raw === null) return false;
               if (item.datasetIndex === 0) return item.raw > 0;
               if (item.datasetIndex === 1) return item.raw < 0;
               return true;
@@ -1734,8 +1717,7 @@ function renderBatChart() {
         },
         yKwh: {
           position: 'right',
-          min: 0,
-          max: BAT_KWH,
+          min: 0, max: BAT_KWH,
           ticks: {
             color:'rgba(88,166,255,0.85)', font:{family:'Space Mono',size:10},
             callback: v => v.toFixed(0)+' kWh',
