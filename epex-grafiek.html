@@ -1471,7 +1471,10 @@ function renderSolarChart() {
   });
   const labels = tijden.map(t => {
     const d = new Date(t);
-    return (d.getMinutes() === 0 && d.getHours() % 2 === 0) ? String(d.getHours()) : '';
+    // Toon elk uur dat even is (0,2,4...22) op hele uren
+    if (d.getMinutes() !== 0) return '';
+    const h = d.getHours();
+    return h % 2 === 0 ? String(h) : '';
   });
 
   // Max voor y-as
@@ -1592,15 +1595,18 @@ function renderBatChart() {
     const s = _simSlots[i];
     return (s && s.batActie === 'ontladen') ? -Math.abs(s.batKw).toFixed(2)     : 0;
   });
-  const socKwhData  = tijden.map((t, i) => {
+  const socPctData  = tijden.map((t, i) => {
     if (new Date(t).getTime() > nuMs) return null;
     const s = _simSlots[i];
-    return s ? +((s.soc * BAT_KWH / 100).toFixed(2)) : null;
+    return s ? +s.soc.toFixed(1) : null;
   });
 
   const labels = tijden.map(t => {
     const d = new Date(t);
-    return (d.getMinutes() === 0 && d.getHours() % 2 === 0) ? String(d.getHours()) : '';
+    // Toon elk uur dat even is (0,2,4...22) op hele uren
+    if (d.getMinutes() !== 0) return '';
+    const h = d.getHours();
+    return h % 2 === 0 ? String(h) : '';
   });
 
   // Kleurverloop laden/ontladen
@@ -1652,8 +1658,8 @@ function renderBatChart() {
           borderColor: 'transparent', borderRadius: 2, order: 2, yAxisID: 'yKw'
         },
         {
-          type: 'line', label: 'SOC (kWh)',
-          data: socKwhData,
+          type: 'line', label: 'SOC (%)',
+          data: socPctData,
           borderColor: 'rgba(88,166,255,0.9)',
           borderWidth: 2, pointRadius: 0,
           fill: { target:'origin', above:'rgba(88,166,255,0.08)' },
@@ -1682,8 +1688,8 @@ function renderBatChart() {
               if (item.datasetIndex === 0 && item.raw > 0)    return ` Laden:    ${item.raw.toFixed(2)} kW`;
               if (item.datasetIndex === 1 && item.raw < 0)    return ` Ontladen: ${Math.abs(item.raw).toFixed(2)} kW`;
               if (item.datasetIndex === 2 && item.raw !== null) {
-                const pct = (item.raw / BAT_KWH * 100).toFixed(0);
-                return ` SOC: ${item.raw.toFixed(2)} kWh (${pct}%)`;
+                const kwh = (item.raw * BAT_KWH / 100).toFixed(2);
+                return ` SOC: ${item.raw.toFixed(1)}%  (${kwh} kWh)`;
               }
               return null;
             },
@@ -1717,11 +1723,11 @@ function renderBatChart() {
         },
         yKwh: {
           position: 'right',
-          min: 0, max: BAT_KWH,
+          min: 0, max: 100,
           ticks: {
             color:'rgba(88,166,255,0.85)', font:{family:'Space Mono',size:10},
-            callback: v => v.toFixed(0)+' kWh',
-            maxTicksLimit: 5
+            callback: v => v.toFixed(0)+' %',
+            maxTicksLimit: 6
           },
           grid: { display:false }
         }
