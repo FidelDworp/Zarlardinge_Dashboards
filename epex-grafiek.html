@@ -735,7 +735,7 @@ function renderChart(tijden, prijzen) {
         }
       },
       scales:{
-        x:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:9},maxRotation:0,maxTicksLimit:96,
+        x:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:9},maxRotation:0,autoSkip:false,maxTicksLimit:96,
           callback:(v,i)=>{
             if (!allTimes[i]) return '';
             const d = new Date(allTimes[i]);
@@ -1469,13 +1469,15 @@ function renderSolarChart() {
     if (new Date(t).getTime() > nu) return null;
     return parseFloat(solarKw(t).toFixed(2));
   });
+  // Identieke labels als EPEX en solar grafiek
   const labels = tijden.map(t => {
     const d = new Date(t);
-    // Toon elk uur dat even is (0,2,4...22) op hele uren
     if (d.getMinutes() !== 0) return '';
     const h = d.getHours();
     return h % 2 === 0 ? String(h) : '';
   });
+  // Dummy dataset om x-as volle breedte te forceren (laatste slot altijd zichtbaar)
+  const dummyData = tijden.map((t,i) => i === tijden.length-1 ? 0 : null);
 
   // Max voor y-as
   const maxSolar = SOLAR_MAX_KW;
@@ -1556,7 +1558,7 @@ function renderSolarChart() {
           display: true,
           ticks: {
             color:'#8b949e', font:{family:'Space Mono',size:9},
-            maxRotation:0, maxTicksLimit:96,
+            maxRotation:0, autoSkip:false, maxTicksLimit:96,
             callback:(v,i) => labels[i] || ''
           },
           grid: { color:'rgba(33,38,45,0.8)' }
@@ -1595,19 +1597,27 @@ function renderBatChart() {
     const s = _simSlots[i];
     return (s && s.batActie === 'ontladen') ? -Math.abs(s.batKw).toFixed(2)     : 0;
   });
-  const socPctData  = tijden.map((t, i) => {
+  // SOC voor verleden slots; toekomst = null maar we bewaren de laatste waarde
+  // zodat de x-as de volle breedte behoudt
+  let lastSoc = SOC_START;
+  const socPctData = tijden.map((t, i) => {
     if (new Date(t).getTime() > nuMs) return null;
     const s = _simSlots[i];
-    return s ? +s.soc.toFixed(1) : null;
+    if (s) { lastSoc = +s.soc.toFixed(1); return lastSoc; }
+    return null;
   });
+  // Voeg één punt toe net na NU zodat x-as niet inkrimpt
+  // door 1 null-sentinel punt op de volle breedte te forceren via labels
 
+  // Identieke labels als EPEX en solar grafiek
   const labels = tijden.map(t => {
     const d = new Date(t);
-    // Toon elk uur dat even is (0,2,4...22) op hele uren
     if (d.getMinutes() !== 0) return '';
     const h = d.getHours();
     return h % 2 === 0 ? String(h) : '';
   });
+  // Dummy dataset om x-as volle breedte te forceren (laatste slot altijd zichtbaar)
+  const dummyData = tijden.map((t,i) => i === tijden.length-1 ? 0 : null);
 
   // Kleurverloop laden/ontladen
   const nuIdxB2       = huidigSlot(tijden);
@@ -1623,16 +1633,19 @@ function renderBatChart() {
   const lijnenPluginBat = {
     id: 'lijnenBat',
     afterDraw(ch) {
-      const { ctx, scales:{x,y} } = ch;
+      const { ctx, scales } = ch;
+      const x  = scales.x;
+      const yy = scales.yKw;  // gebruik yKw als hoogte-referentie
+      if (!x || !yy) return;
       ctx.save();
       if (midIdxB >= 0) {
         const xPos = x.getPixelForValue(midIdxB - 0.5);
-        ctx.beginPath(); ctx.moveTo(xPos,y.top); ctx.lineTo(xPos,y.bottom);
+        ctx.beginPath(); ctx.moveTo(xPos,yy.top); ctx.lineTo(xPos,yy.bottom);
         ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
         ctx.setLineDash([4,4]); ctx.stroke();
       }
       const nuXPos = x.getPixelForValue(nuIdxB2 + nuFracB);
-      ctx.beginPath(); ctx.moveTo(nuXPos,y.top); ctx.lineTo(nuXPos,y.bottom);
+      ctx.beginPath(); ctx.moveTo(nuXPos,yy.top); ctx.lineTo(nuXPos,yy.bottom);
       ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
       ctx.setLineDash([3,3]); ctx.stroke();
       ctx.restore();
@@ -1656,6 +1669,13 @@ function renderBatChart() {
           data: ontlaadData,
           backgroundColor: ontlaadKleuren,
           borderColor: 'transparent', borderRadius: 2, order: 2, yAxisID: 'yKw'
+        },
+        {
+          type: 'bar', label: '_dummy',
+          data: dummyData,
+          backgroundColor: 'transparent',
+          borderColor: 'transparent',
+          yAxisID: 'yKw'
         },
         {
           type: 'line', label: 'SOC (%)',
@@ -1685,18 +1705,19 @@ function renderBatChart() {
               return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}  (${fmtDag(tijden[i])})`;
             },
             label: (item) => {
-              if (item.datasetIndex === 0 && item.raw > 0)    return ` Laden:    ${item.raw.toFixed(2)} kW`;
-              if (item.datasetIndex === 1 && item.raw < 0)    return ` Ontladen: ${Math.abs(item.raw).toFixed(2)} kW`;
-              if (item.datasetIndex === 2 && item.raw !== null) {
+              if (item.datasetIndex === 1 && item.raw > 0)    return ` Laden:    ${item.raw.toFixed(2)} kW`;
+              if (item.datasetIndex === 2 && item.raw < 0)    return ` Ontladen: ${Math.abs(item.raw).toFixed(2)} kW`;
+              if (item.datasetIndex === 3 && item.raw !== null) {
                 const kwh = (item.raw * BAT_KWH / 100).toFixed(2);
                 return ` SOC: ${item.raw.toFixed(1)}%  (${kwh} kWh)`;
               }
               return null;
             },
             filter: (item) => {
+              if (item.datasetIndex === 0) return false; // dummy
               if (item.raw === null) return false;
-              if (item.datasetIndex === 0) return item.raw > 0;
-              if (item.datasetIndex === 1) return item.raw < 0;
+              if (item.datasetIndex === 1) return item.raw > 0;
+              if (item.datasetIndex === 2) return item.raw < 0;
               return true;
             }
           }
@@ -1705,9 +1726,11 @@ function renderBatChart() {
       scales: {
         x: {
           display: true,
+          type: 'category',
           ticks: {
             color:'#8b949e', font:{family:'Space Mono',size:9},
-            maxRotation:0, maxTicksLimit:96,
+            maxRotation:0,
+            autoSkip: false,
             callback:(v,i) => labels[i] || ''
           },
           grid: { color:'rgba(33,38,45,0.8)' }
@@ -1725,9 +1748,9 @@ function renderBatChart() {
           position: 'right',
           min: 0, max: 100,
           ticks: {
-            color:'rgba(88,166,255,0.85)', font:{family:'Space Mono',size:10},
-            callback: v => v.toFixed(0)+' %',
-            maxTicksLimit: 6
+            color:'rgba(88,166,255,0.85)', font:{family:'Space Mono',size:9},
+            callback: v => v % 25 === 0 ? v+' %' : '',
+            maxTicksLimit: 5
           },
           grid: { display:false }
         }
