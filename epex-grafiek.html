@@ -179,6 +179,12 @@ input[type=range].sim-slider::-webkit-slider-thumb {
 .inst-bron a { color:var(--muted); }
 
 #status-msg { font-size:.75rem; color:var(--muted); font-family:var(--mono); text-align:center; padding:40px; display:none; }
+.info-kaarten { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+.info-card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px 18px; }
+.info-label { font-family:var(--mono); font-size:.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
+.info-waarde { font-family:var(--mono); font-size:1.6rem; font-weight:700; line-height:1; margin-bottom:6px; }
+.info-sub { font-size:.7rem; color:var(--muted); font-family:var(--mono); }
+@media (max-width:500px) { .info-kaarten { grid-template-columns:1fr; } }
 .opslag-uitleg { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px 18px; margin-top:8px; }
 .opslag-titel  { font-family:var(--mono); font-size:.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; }
 .opslag-tekst  { font-size:.75rem; color:var(--muted); line-height:1.6; }
@@ -294,6 +300,20 @@ input[type=range].sim-slider::-webkit-slider-thumb {
     </div>
   </div>
   <canvas id="netChart" height="110"></canvas>
+</div>
+
+<!-- INFO KAARTEN -->
+<div class="info-kaarten">
+  <div class="info-card">
+    <div class="info-label">💶 Dagkost vandaag</div>
+    <div class="info-waarde" id="info-dagkost">—</div>
+    <div class="info-sub" id="info-dagkost-sub">WON + SCH gesimuleerd</div>
+  </div>
+  <div class="info-card">
+    <div class="info-label">📊 Dynamisch vs vast contract</div>
+    <div class="info-waarde" id="info-vergelijk">—</div>
+    <div class="info-sub" id="info-vergelijk-sub">besparing vandaag met dynamisch</div>
+  </div>
 </div>
 
 <!-- PLANNINGSMATRIX -->
@@ -1338,6 +1358,7 @@ function updateSimulatie() {
   tekenSimulatieSlot(nuIdx + simSlot);
   if (allTimes.length) renderBatChart();
   if (allTimes.length) renderNetChart();
+  updateDagkost();
 }
 
 function tekenSimulatieSlot(absSlot) {
@@ -1901,6 +1922,71 @@ function renderNetChart() {
       }
     }
   });
+}
+
+
+function updateDagkost() {
+  if (!_simSlots.length || !allTimes.length) return;
+
+  const nu    = new Date();
+  const vandaag = new Date(); vandaag.setHours(0,0,0,0);
+  const ivl   = detecteerInterval(allTimes) / 3600000; // uren per slot
+
+  const INJECTIE_CT = 5.0; // ct/kWh injectietarief na 2028
+
+  let kostDyn  = 0; // dynamisch contract kost
+  let kostVast = 0; // vast contract kost
+  let heeftData = false;
+
+  allTimes.forEach((t, i) => {
+    const d = new Date(t);
+    // Alleen vandaag, alleen verleden
+    if (d < vandaag || d > nu) return;
+    const s = _simSlots[i];
+    if (!s) return;
+    heeftData = true;
+
+    const epexCt  = allPrices[i] / 10;
+    const reeel   = reelePrijs(epexCt);          // ct/kWh reële prijs
+    const vastCt  = vast;                         // ct/kWh vast contract
+
+    // Netto per slot: positief = afname (kost), negatief = injectie (opbrengst)
+    const afname   = Math.max(0,  -s.netto) * ivl; // kWh afgenomen
+    const injectie = Math.max(0,   s.netto) * ivl; // kWh geïnjecteerd
+
+    // Kost dynamisch
+    kostDyn  += afname   * reeel    / 100;
+    kostDyn  -= injectie * INJECTIE_CT / 100;
+
+    // Kost vast
+    kostVast += afname   * vastCt   / 100;
+    kostVast -= injectie * INJECTIE_CT / 100;
+  });
+
+  if (!heeftData) return;
+
+  const besparing = kostVast - kostDyn;
+  const klr = besparing >= 0 ? 'var(--green)' : 'var(--red)';
+  const dynKlr = kostDyn < kostVast ? 'var(--green)' : 'var(--red)';
+
+  const dagkostEl = document.getElementById('info-dagkost');
+  dagkostEl.textContent = `€ ${kostDyn.toFixed(2)}`;
+  dagkostEl.style.color = kostDyn >= 0 ? 'var(--yellow)' : 'var(--green)';
+
+  document.getElementById('info-dagkost-sub').textContent =
+    `Kost t/m ${String(nu.getHours()).padStart(2,'0')}:${String(nu.getMinutes()).padStart(2,'0')} · vast contract zou € ${kostVast.toFixed(2)} zijn`;
+
+  const vergelijkEl = document.getElementById('info-vergelijk');
+  vergelijkEl.style.color = klr;
+  if (besparing >= 0) {
+    vergelijkEl.textContent = `€ ${besparing.toFixed(2)} goedkoper`;
+    document.getElementById('info-vergelijk-sub').textContent =
+      `Dynamisch (€ ${kostDyn.toFixed(2)}) vs vast (€ ${kostVast.toFixed(2)}) · besparing vandaag`;
+  } else {
+    vergelijkEl.textContent = `€ ${Math.abs(besparing).toFixed(2)} duurder`;
+    document.getElementById('info-vergelijk-sub').textContent =
+      `Dynamisch (€ ${kostDyn.toFixed(2)}) vs vast (€ ${kostVast.toFixed(2)}) · geen besparing vandaag`;
+  }
 }
 
 
