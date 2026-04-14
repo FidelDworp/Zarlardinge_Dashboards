@@ -531,6 +531,19 @@ let chartSolar    = null;
 let chartBat      = null;
 let allTimes      = [];
 let allPrices     = [];
+let pastTijden    = []; // vandaag 00:00 → nu (solar + batterij grafieken)
+
+function berekenPastTijden() {
+  if (!allTimes.length) return;
+  const ivl   = detecteerInterval(allTimes);
+  const nu    = Date.now();
+  const basis = new Date(); basis.setHours(0,0,0,0);
+  const arr   = [];
+  for (let t = basis.getTime(); t <= nu; t += ivl)
+    arr.push(new Date(t).toISOString());
+  pastTijden = arr;
+}
+
 let periodeKeuzes = {};  // key = periode-id → { eco, ev_won, ... }
 let simSlot       = 0;   // huidig geselecteerd slot in de slider
 
@@ -722,13 +735,11 @@ function renderChart(tijden, prijzen) {
         }
       },
       scales:{
-        x:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:9},maxRotation:0,maxTicksLimit:24,
+        x:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:9},maxRotation:0,maxTicksLimit:96,
           callback:(v,i)=>{
             if (!allTimes[i]) return '';
             const d = new Date(allTimes[i]);
-            const min = d.getMinutes();
-            // Toon enkel hele uren, sla kwartieren over
-            return min === 0 ? String(d.getHours()) : '';
+            return (d.getMinutes()===0 && d.getHours()%2===0) ? String(d.getHours()) : '';
           }
         }, grid:{color:'rgba(33,38,45,0.8)'} },
         y:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:10},callback:v=>(v/10).toFixed(0)+' ct'}, grid:{color:'rgba(33,38,45,0.8)'} }
@@ -1311,7 +1322,7 @@ function updateSimulatie() {
   document.getElementById('sim-slider-end').textContent = `+${Math.round((_simSlots.length-nuIdx)/slotsPerUur)}u`;
 
   tekenSimulatieSlot(nuIdx + simSlot);
-  if (allTimes.length) renderBatChart(allTimes);
+  if (allTimes.length) renderBatChart();
 }
 
 function tekenSimulatieSlot(absSlot) {
@@ -1446,7 +1457,8 @@ function tekenSimulatieSlot(absSlot) {
 }
 
 // ─── KAARTEN / DATUM ──────────────────────────────────────────────────────────
-function renderSolarChart(tijden) {
+function renderSolarChart() {
+  const tijden = pastTijden;  // alleen vandaag 00:00 → nu
   if (!tijden.length) return;
   const ctx = document.getElementById('solarChart').getContext('2d');
 
@@ -1454,7 +1466,7 @@ function renderSolarChart(tijden) {
   const solarData = tijden.map(t => parseFloat(solarKw(t).toFixed(2)));
   const labels    = tijden.map(t => {
     const d = new Date(t);
-    return d.getMinutes() === 0 ? String(d.getHours()) : '';
+    return (d.getMinutes() === 0 && d.getHours() % 2 === 0) ? String(d.getHours()) : '';
   });
 
   // Max voor y-as
@@ -1475,37 +1487,17 @@ function renderSolarChart(tijden) {
     return `rgba(${r},${g},${b},${i === nuIdx ? 1 : 0.6})`;
   });
 
-  // Dag-scheidingslijn (zelfde als EPEX grafiek)
-  const nu = new Date(), morgen = new Date(nu);
-  morgen.setDate(nu.getDate()+1); morgen.setHours(0,0,0,0);
-  let midIdx = tijden.findIndex(t => new Date(t).getTime() >= morgen.getTime());
-
-  const nuFrac = (Date.now() - new Date(tijden[nuIdx]).getTime()) / detecteerInterval(tijden);
-
+  // Solar = verleden: toon alleen tijdlijn NU (rechts, einde van de grafiek)
   const lijnenPluginSolar = {
     id: 'lijnenSolar',
     afterDraw(ch) {
       const { ctx, scales:{x,y} } = ch;
       ctx.save();
-      // Dag-scheidingslijn
-      if (midIdx >= 0) {
-        const xPos = x.getPixelForValue(midIdx - 0.5);
-        ctx.beginPath(); ctx.moveTo(xPos,y.top); ctx.lineTo(xPos,y.bottom);
-        ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
-        ctx.setLineDash([4,4]); ctx.stroke();
-      }
-      // Tijdlijn NU
-      const nuXPos = x.getPixelForValue(nuIdx + nuFrac);
-      ctx.beginPath(); ctx.moveTo(nuXPos,y.top); ctx.lineTo(nuXPos,y.bottom);
+      // Nu-lijn = laatste punt = rechterrand
+      const lastX = x.getPixelForValue(tijden.length - 1);
+      ctx.beginPath(); ctx.moveTo(lastX,y.top); ctx.lineTo(lastX,y.bottom);
       ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
       ctx.setLineDash([3,3]); ctx.stroke();
-      // Slider positie
-      if (simSlot !== nuIdx) {
-        const sXPos = x.getPixelForValue(simSlot);
-        ctx.beginPath(); ctx.moveTo(sXPos,y.top); ctx.lineTo(sXPos,y.bottom);
-        ctx.strokeStyle='rgba(88,166,255,0.9)'; ctx.lineWidth=2;
-        ctx.setLineDash([]); ctx.stroke();
-      }
       ctx.restore();
     }
   };
@@ -1568,37 +1560,34 @@ function renderSolarChart(tijden) {
 }
 
 
-function renderBatChart(tijden) {
+function renderBatChart() {
+  const tijden = pastTijden;  // alleen vandaag 00:00 → nu
   if (!tijden.length || !_simSlots.length) return;
   const ctx = document.getElementById('batChart').getContext('2d');
 
   // Haal bat data uit simSlots (al berekend)
   // simSlots loopt vanaf allTimes[0] — tijden en simSlots zijn gealigneerd
-  const laadData    = tijden.map((t, i) => {
-    const s = _simSlots[i];
+  // Map pastTijden op _simSlots via allTimes (zelfde tijdreeks)
+  function simSlotVoorTijd(iso) {
+    const idx = allTimes.indexOf(iso);
+    return idx >= 0 ? _simSlots[idx] : null;
+  }
+  const laadData    = tijden.map(t => {
+    const s = simSlotVoorTijd(t);
     return (s && s.batActie === 'laden')    ?  parseFloat(s.batKw.toFixed(2)) : 0;
   });
-  const ontlaadData = tijden.map((t, i) => {
-    const s = _simSlots[i];
+  const ontlaadData = tijden.map(t => {
+    const s = simSlotVoorTijd(t);
     return (s && s.batActie === 'ontladen') ? -parseFloat(Math.abs(s.batKw).toFixed(2)) : 0;
   });
-  const socData = tijden.map((t, i) => {
-    const s = _simSlots[i];
+  const socData = tijden.map(t => {
+    const s = simSlotVoorTijd(t);
     return s ? parseFloat(s.soc.toFixed(1)) : null;
   });
 
-  // Huidig slot
-  const nuIdx  = huidigSlot(tijden);
-  const nuFrac = (Date.now() - new Date(tijden[nuIdx]).getTime()) / detecteerInterval(tijden);
-
-  // Dag-scheiding
-  const nu = new Date(), morgen = new Date(nu);
-  morgen.setDate(nu.getDate()+1); morgen.setHours(0,0,0,0);
-  const midIdx = tijden.findIndex(t => new Date(t).getTime() >= morgen.getTime());
-
   const labels = tijden.map(t => {
     const d = new Date(t);
-    return d.getMinutes() === 0 ? String(d.getHours()) : '';
+    return (d.getMinutes() === 0 && d.getHours() % 2 === 0) ? String(d.getHours()) : '';
   });
 
   // Kleur laden: groen, gedimde versie voor verleden
@@ -1610,22 +1599,10 @@ function renderBatChart(tijden) {
     afterDraw(ch) {
       const { ctx, scales:{x,y} } = ch;
       ctx.save();
-      if (midIdx >= 0) {
-        const xPos = x.getPixelForValue(midIdx - 0.5);
-        ctx.beginPath(); ctx.moveTo(xPos,y.top); ctx.lineTo(xPos,y.bottom);
-        ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
-        ctx.setLineDash([4,4]); ctx.stroke();
-      }
-      const nuXPos = x.getPixelForValue(nuIdx + nuFrac);
-      ctx.beginPath(); ctx.moveTo(nuXPos,y.top); ctx.lineTo(nuXPos,y.bottom);
+      const lastX = x.getPixelForValue(tijden.length - 1);
+      ctx.beginPath(); ctx.moveTo(lastX,y.top); ctx.lineTo(lastX,y.bottom);
       ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
       ctx.setLineDash([3,3]); ctx.stroke();
-      if (simSlot !== nuIdx) {
-        const sXPos = x.getPixelForValue(simSlot);
-        ctx.beginPath(); ctx.moveTo(sXPos,y.top); ctx.lineTo(sXPos,y.bottom);
-        ctx.strokeStyle='rgba(88,166,255,0.9)'; ctx.lineWidth=2;
-        ctx.setLineDash([]); ctx.stroke();
-      }
       ctx.restore();
     }
   };
@@ -1781,8 +1758,9 @@ function laadCache() {
 
 function toonData(tijden,prijzen,bron) {
   allTimes=tijden; allPrices=prijzen;
+  berekenPastTijden();
   renderChart(tijden,prijzen);
-  renderSolarChart(tijden);
+  renderSolarChart();
   updateKaarten(tijden);
   updateArbitrage(tijden,prijzen);
   document.querySelectorAll('.data-banner').forEach(b=>b.remove());
@@ -1846,7 +1824,7 @@ function setOverride(id, waarde) {
   updateSimulatie();
 }
 
-function herbereken(){if(allPrices.length){renderChart(allTimes,allPrices);renderSolarChart(allTimes);updateArbitrage(allTimes,allPrices);}}
+function herbereken(){if(allPrices.length){renderChart(allTimes,allPrices);renderSolarChart();updateArbitrage(allTimes,allPrices);}}
 
 document.getElementById('inp-vast').addEventListener('change',e=>{
   vast=parseFloat(e.target.value)||VAST_DEFAULT;
