@@ -1,5 +1,5 @@
 /* ============================================================
-   Zarlar Dashboard v5.2
+   Zarlar Dashboard v5.3
    ESP32-C6 (32-pin 16MB) @ 192.168.0.60
    Filip Delannoy
 
@@ -45,6 +45,10 @@
        /matrix_test of Serial commando 'matrix-test'. Pas MATRIX_FLIP_H
        aan als kolommen gespiegeld zijn.
 
+   14apr26        v5.3  Poll fix: stream->readBytes() vervangen door getString()+strlcpy().
+                        readBytes(699) blokkeerde loop() tot timeout per controller → UI bevroor.
+                        Tijdelijke String per poll, onmiddellijk vrijgegeven na strlcpy → geen
+                        permanente heap-allocatie, geen fragmentatie, geen blocking.
    14apr26        v5.2  ROOT CAUSE FIX heap-fragmentatie:
                         struct Controller: String last_json → char last_json[700] (BSS).
                         Poll functies: HTTPClient stream → direct lezen in char buffer.
@@ -396,14 +400,12 @@ void pollESP32Controller(int i) {
   http.setConnectTimeout(2000);
   int code = http.GET();
   if (code == 200) {
-    WiFiClient* stream = http.getStreamPtr();
-    size_t n = stream->readBytes(controllers[i].last_json,
-                                 sizeof(controllers[i].last_json) - 1);
-    controllers[i].last_json[n] = '\0';
+    String body = http.getString();
+    http.end();
+    strlcpy(controllers[i].last_json, body.c_str(), sizeof(controllers[i].last_json));
     controllers[i].status    = STATUS_ONLINE;
     controllers[i].last_poll = millis();
-    Serial.printf("  ✓ %s online (%d bytes)\n", controllers[i].name, (int)n);
-    http.end();
+    Serial.printf("  ✓ %s online (%d bytes)\n", controllers[i].name, (int)body.length());
     delay(500);
     logControllerToSheets(i);
   } else {
@@ -440,15 +442,13 @@ void pollPhotonController(int i) {
   http.setConnectTimeout(4000);
   int code = http.GET();
   if (code == 200) {
-    WiFiClient* stream = http.getStreamPtr();
-    size_t n = stream->readBytes(controllers[i].last_json,
-                                 sizeof(controllers[i].last_json) - 1);
-    controllers[i].last_json[n] = '\0';
+    String body = http.getString();
     http.end();
+    strlcpy(controllers[i].last_json, body.c_str(), sizeof(controllers[i].last_json));
     if (strstr(controllers[i].last_json, "\"online\":1") != nullptr) {
       controllers[i].status    = STATUS_ONLINE;
       controllers[i].last_poll = millis();
-      Serial.printf("  ✓ %s online (%d bytes)\n", controllers[i].name, (int)n);
+      Serial.printf("  ✓ %s online (%d bytes)\n", controllers[i].name, (int)body.length());
     } else {
       controllers[i].status = STATUS_OFFLINE;
       controllers[i].last_json[0] = '\0';
@@ -1746,7 +1746,7 @@ void setup() {
   Serial.begin(115200);
   delay(3000);
   Serial.println("\n\n╔══════════════════════════════════════╗");
-  Serial.println("║  Zarlar Dashboard v5.2               ║");
+  Serial.println("║  Zarlar Dashboard v5.3               ║");
   Serial.println("║  192.168.0.60 — Statusmatrix 16×16  ║");
   Serial.println("╚══════════════════════════════════════╝\n");
 
@@ -1865,7 +1865,7 @@ void loop() {
       ESP.restart();
     }
     if (cmd.equalsIgnoreCase("status")) {
-      Serial.printf("\n=== Zarlar Dashboard v5.2 | Uptime: %lu s ===\n", millis()/1000);
+      Serial.printf("\n=== Zarlar Dashboard v5.3 | Uptime: %lu s ===\n", millis()/1000);
       Serial.printf("IP: %s  RSSI: %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
       Serial.printf("Heap free: %u  Largest: %u\n",
                     ESP.getFreeHeap(),
