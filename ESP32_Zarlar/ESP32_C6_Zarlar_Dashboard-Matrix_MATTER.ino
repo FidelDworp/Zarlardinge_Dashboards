@@ -1,5 +1,5 @@
 /* ============================================================
-   Zarlar Dashboard v5.1
+   Zarlar Dashboard v5.2
    ESP32-C6 (32-pin 16MB) @ 192.168.0.60
    Filip Delannoy
 
@@ -45,6 +45,15 @@
        /matrix_test of Serial commando 'matrix-test'. Pas MATRIX_FLIP_H
        aan als kolommen gespiegeld zijn.
 
+   14apr26        v5.2  ROOT CAUSE FIX heap-fragmentatie:
+                        struct Controller: String last_json → char last_json[700] (BSS).
+                        Poll functies: HTTPClient stream → direct lezen in char buffer.
+                        logControllerToSheets(): snprintf POST-body, geen String-allocatie.
+                        getStatusJson(): strstr/atoi in plaats van String.indexOf/substring.
+                        jF()/jI(): const char* i.p.v. const String& → geen String-kopie.
+                        Render-functies: const char* j i.p.v. const String& j.
+                        Reboot-knop toegevoegd aan /settings.
+                        Auto-herstart bij largest_block < 25KB voor > 60s.
    02apr26        v5.1  5 Controllers vervangen door "static damage!": ZITPL EETPL, OUTSIDE, ACCESS en INKOM (Nieuwe IDs)
    01apr26        v5.0  Automatische ESP32/Photon fallback per matrix-rij.
                         MatrixRowDef struct: esp_idx + photon_idx + sys_idx.
@@ -111,7 +120,7 @@
 #include <nvs_flash.h>
 #include <Matter.h>
 #include <MatterEndPoints/MatterOnOffPlugin.h>
-#include <Adafruit_NeoPixel.h>      // ← v4.0 statusmatrix
+#include <Adafruit_NeoPixel.h>
 
 // ============================================================
 // CONTROLLER TYPES & STATUS
@@ -127,6 +136,10 @@
 
 // ============================================================
 // CONTROLLER STRUCT
+// v5.2: last_json is char[700] in BSS — geen heap-allocatie meer.
+// Eliminineert de graduele heap-fragmentatie die elke poll-cyclus
+// optrad door String realloc van ~10 actieve controllers.
+// BSS-kost: 22 × 700 = 15.4 KB (vast, geen fragmentatie).
 // ============================================================
 struct Controller {
   const char* name;
@@ -136,7 +149,7 @@ struct Controller {
   bool        active;
   int         status;
   String      sheets_url;
-  String      last_json;
+  char        last_json[700];   // ← v5.2: was String last_json
   unsigned long last_poll;
 };
 
@@ -146,28 +159,28 @@ struct Controller {
 #define NUM_CONTROLLERS 22
 
 Controller controllers[NUM_CONTROLLERS] = {
-  {"S-HVAC",    "192.168.0.70", "", TYPE_SYSTEM, true,  STATUS_PENDING,  "", "", 0},
-  {"S-ECO",     "192.168.0.71", "", TYPE_SYSTEM, true,  STATUS_PENDING,  "", "", 0},
-  {"S-OUTSIDE", "192.168.0.72", "", TYPE_SYSTEM, false, STATUS_INACTIVE, "", "", 0},
-  {"S-ACCESS",  "192.168.0.82", "", TYPE_SYSTEM, false, STATUS_INACTIVE, "", "", 0},
-  {"FUT1",      "192.168.0.73", "", TYPE_SYSTEM, false, STATUS_INACTIVE, "", "", 0},
-  {"FUT2",      "192.168.0.74", "", TYPE_SYSTEM, false, STATUS_INACTIVE, "", "", 0},
-  {"R-BandB",   "192.168.0.75", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", "", 0},
-  {"R-BADK",    "192.168.0.76", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", "", 0},
-  {"R-INKOM",   "192.168.0.77", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", "", 0},
-  {"R-KEUKEN",  "192.168.0.78", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", "", 0},
-  {"R-WASPL",   "192.168.0.79", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", "", 0},
-  {"R-EETPL",   "192.168.0.80", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", "", 0},
-  {"R-ZITPL",   "192.168.0.81", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", "", 0},
-  {"R-TESTROOM","192.168.0.80", "", TYPE_ROOM,   true,  STATUS_PENDING,  "", "", 0},
-  {"P-BandB",   "", "30002c000547343233323032", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
-  {"P-Badkamer","", "5600420005504b464d323520", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
-  {"P-Inkom",   "", "2c0026000747343232363230", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
-  {"P-Keuken",  "", "310017001647373335333438", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
-  {"P-Waspl",   "", "33004f000e504b464d323520", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
-  {"P-Eetpl",   "", "3c0030000a47353138383138", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
-  {"P-Zitpl",   "", "200033000547373336323230", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
-  {"P-TESTROOM","", "200033000547373336323230", TYPE_PHOTON, true,  STATUS_PENDING,  "", "", 0},
+  {"S-HVAC",    "192.168.0.70", "", TYPE_SYSTEM, true,  STATUS_PENDING,  "", {}, 0},
+  {"S-ECO",     "192.168.0.71", "", TYPE_SYSTEM, true,  STATUS_PENDING,  "", {}, 0},
+  {"S-OUTSIDE", "192.168.0.72", "", TYPE_SYSTEM, false, STATUS_INACTIVE, "", {}, 0},
+  {"S-ACCESS",  "192.168.0.82", "", TYPE_SYSTEM, false, STATUS_INACTIVE, "", {}, 0},
+  {"FUT1",      "192.168.0.73", "", TYPE_SYSTEM, false, STATUS_INACTIVE, "", {}, 0},
+  {"FUT2",      "192.168.0.74", "", TYPE_SYSTEM, false, STATUS_INACTIVE, "", {}, 0},
+  {"R-BandB",   "192.168.0.75", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", {}, 0},
+  {"R-BADK",    "192.168.0.76", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", {}, 0},
+  {"R-INKOM",   "192.168.0.77", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", {}, 0},
+  {"R-KEUKEN",  "192.168.0.78", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", {}, 0},
+  {"R-WASPL",   "192.168.0.79", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", {}, 0},
+  {"R-EETPL",   "192.168.0.80", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", {}, 0},
+  {"R-ZITPL",   "192.168.0.81", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", {}, 0},
+  {"R-TESTROOM","192.168.0.80", "", TYPE_ROOM,   true,  STATUS_PENDING,  "", {}, 0},
+  {"P-BandB",   "", "30002c000547343233323032", TYPE_PHOTON, true,  STATUS_PENDING,  "", {}, 0},
+  {"P-Badkamer","", "5600420005504b464d323520", TYPE_PHOTON, true,  STATUS_PENDING,  "", {}, 0},
+  {"P-Inkom",   "", "2c0026000747343232363230", TYPE_PHOTON, true,  STATUS_PENDING,  "", {}, 0},
+  {"P-Keuken",  "", "310017001647373335333438", TYPE_PHOTON, true,  STATUS_PENDING,  "", {}, 0},
+  {"P-Waspl",   "", "33004f000e504b464d323520", TYPE_PHOTON, true,  STATUS_PENDING,  "", {}, 0},
+  {"P-Eetpl",   "", "3c0030000a47353138383138", TYPE_PHOTON, true,  STATUS_PENDING,  "", {}, 0},
+  {"P-Zitpl",   "", "200033000547373336323230", TYPE_PHOTON, true,  STATUS_PENDING,  "", {}, 0},
+  {"P-TESTROOM","", "200033000547373336323230", TYPE_PHOTON, true,  STATUS_PENDING,  "", {}, 0},
 };
 
 // ============================================================
@@ -180,7 +193,7 @@ const char* NVS_WIFI_PASS     = "wifi_pass";
 const char* NVS_POLL_MIN      = "poll_min";
 const char* NVS_ROOM_SCRIPT   = "room_script";
 const char* NVS_HOME_GLOBAL   = "home_global";
-const char* NVS_MATRIX_BRIGHT = "matrix_br";  // v4.0
+const char* NVS_MATRIX_BRIGHT = "matrix_br";
 
 // ============================================================
 // GLOBALS
@@ -228,7 +241,7 @@ unsigned long     last_matter_update             = 0;
 #define MATRIX_WIDTH  16
 #define MATRIX_HEIGHT 16
 #define MATRIX_LEDS   256
-#define MATRIX_FLIP_H false  // true = spiegel horizontaal (pas aan na /matrix_test)
+#define MATRIX_FLIP_H false
 
 Adafruit_NeoPixel matrix(MATRIX_LEDS, MATRIX_PIN, NEO_GRB + NEO_KHZ800);
 uint8_t           matrix_brightness  = 60;
@@ -236,40 +249,25 @@ unsigned long     last_matrix_update = 0;
 
 // ============================================================
 // MATRIX RIJ-MAPPING — automatische ESP32/Photon fallback
-//
-// Elke room-rij heeft twee controller-indices:
-//   esp_idx    = ESP32 R-controller (TYPE_ROOM)
-//   photon_idx = Photon P-controller (TYPE_PHOTON), -1 = geen
-//
-// updateMatrix() kiest automatisch:
-//   1. ESP32-controller actief en online  → renderRoomRow()
-//   2. ESP32 niet actief/offline          → renderPhotonRow() als beschikbaar
-//   3. Geen enkele actief                 → zwart
-//
-// Transitie: zodra een ESP32-controller actief wordt gezet in
-// /settings, neemt die automatisch over van de Photon — zonder reflash.
 // ============================================================
 struct MatrixRowDef {
-  int  esp_idx;     // ESP32 R-controller idx (-1 = geen)
-  int  photon_idx;  // Photon P-controller idx (-1 = geen)
-  int  sys_idx;     // Systeem-controller idx (-1 = geen, -2 = separator)
+  int  esp_idx;
+  int  photon_idx;
+  int  sys_idx;
 };
 
-// Rij-definities — volgorde stemt exact overeen met SVG labelsheet
-// { esp_idx, photon_idx, sys_idx }
 const MatrixRowDef MROW[MATRIX_HEIGHT] = {
-  // esp  pho  sys   Omschrijving
   {  -1,  -1,   0 }, // rij  0: S-HVAC
   {  -1,  -1,   1 }, // rij  1: S-ECO
   {  -1,  -1,  -1 }, // rij  2: S-OUTSIDE — gereserveerd
   {  -1,  -1,  -1 }, // rij  3: S-ACCESS  — gereserveerd
   {  -1,  -1,  -2 }, // rij  4: separator
-  {   6,  14,  -1 }, // rij  5: R-BandB  / P-BandB    (Photon offline)
+  {   6,  14,  -1 }, // rij  5: R-BandB  / P-BandB
   {   7,  15,  -1 }, // rij  6: R-BADK   / P-Badkamer
   {   8,  16,  -1 }, // rij  7: R-INKOM  / P-Inkom
   {   9,  17,  -1 }, // rij  8: R-KEUKEN / P-Keuken
   {  10,  18,  -1 }, // rij  9: R-WASPL  / P-Waspl
-  {  11,  19,  -1 }, // rij 10: R-EETPL  / P-Eetpl    (ESP32 idx 11 actief)
+  {  11,  19,  -1 }, // rij 10: R-EETPL  / P-Eetpl
   {  12,  20,  -1 }, // rij 11: R-ZITPL  / P-Zitpl
   {  -1,  -1,  -1 }, // rij 12–15: leeg
   {  -1,  -1,  -1 },
@@ -279,21 +277,20 @@ const MatrixRowDef MROW[MATRIX_HEIGHT] = {
 
 // ============================================================
 // HVAC JSON KEYS — geverifieerd 26 maart 2026 via v1.19 sketch
-// Zie Overnamedocument §3.6 voor volledige key-tabel
 // ============================================================
-#define HVAC_KEY_RSSI     "ac"  // RSSI dBm
-#define HVAC_KEY_CIRCUIT1 "p"   // heating_on C1 BB (0/1)
-#define HVAC_KEY_CIRCUIT2 "q"   // heating_on C2 WP
-#define HVAC_KEY_CIRCUIT3 "r"   // heating_on C3 BK
-#define HVAC_KEY_CIRCUIT4 "s"   // heating_on C4 ZP
-#define HVAC_KEY_CIRCUIT5 "t"   // heating_on C5 EP
-#define HVAC_KEY_CIRCUIT6 "u"   // heating_on C6 KK
-#define HVAC_KEY_CIRCUIT7 "v"   // heating_on C7 IK
-#define HVAC_KEY_PUMP_SCH "y"   // sch_on distributiepomp (0/1)
-#define HVAC_KEY_PUMP_WON "aa"  // won_on distributiepomp (0/1)
-#define HVAC_KEY_VENT     "x"   // vent_percent incl. override (%)
-#define HVAC_KEY_TEMP1    "h"   // KSAv gemiddelde boilertemp (°C)
-#define HVAC_KEY_HEAP     "ae"  // LargestBlock KB
+#define HVAC_KEY_RSSI     "ac"
+#define HVAC_KEY_CIRCUIT1 "p"
+#define HVAC_KEY_CIRCUIT2 "q"
+#define HVAC_KEY_CIRCUIT3 "r"
+#define HVAC_KEY_CIRCUIT4 "s"
+#define HVAC_KEY_CIRCUIT5 "t"
+#define HVAC_KEY_CIRCUIT6 "u"
+#define HVAC_KEY_CIRCUIT7 "v"
+#define HVAC_KEY_PUMP_SCH "y"
+#define HVAC_KEY_PUMP_WON "aa"
+#define HVAC_KEY_VENT     "x"
+#define HVAC_KEY_TEMP1    "h"
+#define HVAC_KEY_HEAP     "ae"
 
 // ============================================================
 // NVS LADEN / OPSLAAN
@@ -305,7 +302,7 @@ void loadNVS() {
   poll_minutes      = preferences.getInt(NVS_POLL_MIN, 10);
   room_script_url   = preferences.getString(NVS_ROOM_SCRIPT, "");
   home_mode_global  = preferences.getBool(NVS_HOME_GLOBAL, false);
-  matrix_brightness = preferences.getUChar(NVS_MATRIX_BRIGHT, 60);  // v4.0
+  matrix_brightness = preferences.getUChar(NVS_MATRIX_BRIGHT, 60);
   for (int i = 0; i < NUM_CONTROLLERS; i++) {
     char ka[12], ku[12];
     snprintf(ka, sizeof(ka), "c%d_act", i);
@@ -323,7 +320,7 @@ void saveNVS() {
   preferences.putString(NVS_WIFI_PASS,      wifi_pass);
   preferences.putInt   (NVS_POLL_MIN,       poll_minutes);
   preferences.putString(NVS_ROOM_SCRIPT,    room_script_url);
-  preferences.putUChar (NVS_MATRIX_BRIGHT,  matrix_brightness);  // v4.0
+  preferences.putUChar (NVS_MATRIX_BRIGHT,  matrix_brightness);
   for (int i = 0; i < NUM_CONTROLLERS; i++) {
     char ka[12], ku[12];
     snprintf(ka, sizeof(ka), "c%d_act", i);
@@ -384,7 +381,9 @@ void startAP() {
 }
 
 // ============================================================
-// POLL ÉÉN CONTROLLER
+// POLL ÉÉN ESP32 CONTROLLER
+// v5.2: HTTPClient stream → direct lezen in char last_json[700].
+//       Geen String-allocatie meer — elimineert heap-fragmentatie.
 // ============================================================
 void pollESP32Controller(int i) {
   if (!controllers[i].active) return;
@@ -397,15 +396,19 @@ void pollESP32Controller(int i) {
   http.setConnectTimeout(2000);
   int code = http.GET();
   if (code == 200) {
-    controllers[i].last_json = http.getString();
+    WiFiClient* stream = http.getStreamPtr();
+    size_t n = stream->readBytes(controllers[i].last_json,
+                                 sizeof(controllers[i].last_json) - 1);
+    controllers[i].last_json[n] = '\0';
     controllers[i].status    = STATUS_ONLINE;
     controllers[i].last_poll = millis();
-    Serial.printf("  ✓ %s online (%d bytes)\n", controllers[i].name, controllers[i].last_json.length());
+    Serial.printf("  ✓ %s online (%d bytes)\n", controllers[i].name, (int)n);
     http.end();
     delay(500);
     logControllerToSheets(i);
   } else {
     controllers[i].status = STATUS_OFFLINE;
+    controllers[i].last_json[0] = '\0';
     Serial.printf("  ✗ %s offline (HTTP %d)\n", controllers[i].name, code);
     http.end();
   }
@@ -413,9 +416,7 @@ void pollESP32Controller(int i) {
 
 // ============================================================
 // POLL PHOTON CONTROLLER via Cloudflare Worker
-// GET https://controllers-diagnose.filip-delannoy.workers.dev/sensor?id={photon_id}
-// Resultaat wordt opgeslagen in last_json — zelfde formaat als ESP32 poll.
-// ⚠️ WiFiClientSecure (HTTPS) — verbinding direct sluiten na ontvangst.
+// v5.2: HTTPClient stream → direct lezen in char last_json[700].
 // ============================================================
 #define PHOTON_WORKER_HOST "controllers-diagnose.filip-delannoy.workers.dev"
 #define PHOTON_WORKER_PATH "/sensor?id="
@@ -424,7 +425,6 @@ void pollPhotonController(int i) {
   if (!controllers[i].active) return;
   if (strlen(controllers[i].photon_id) == 0) return;
 
-  // Heap-guard: minimum 30KB nodig voor TLS
   if (heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) < 30000) {
     Serial.printf("  [Photon] %s overgeslagen — heap te laag\n", controllers[i].name);
     return;
@@ -440,24 +440,28 @@ void pollPhotonController(int i) {
   http.setConnectTimeout(4000);
   int code = http.GET();
   if (code == 200) {
-    String body = http.getString();
+    WiFiClient* stream = http.getStreamPtr();
+    size_t n = stream->readBytes(controllers[i].last_json,
+                                 sizeof(controllers[i].last_json) - 1);
+    controllers[i].last_json[n] = '\0';
     http.end();
-    // Check online vlag
-    if (body.indexOf("\"online\":1") >= 0) {
-      controllers[i].last_json = body;
+    if (strstr(controllers[i].last_json, "\"online\":1") != nullptr) {
       controllers[i].status    = STATUS_ONLINE;
       controllers[i].last_poll = millis();
-      Serial.printf("  ✓ %s online (%d bytes)\n", controllers[i].name, body.length());
+      Serial.printf("  ✓ %s online (%d bytes)\n", controllers[i].name, (int)n);
     } else {
       controllers[i].status = STATUS_OFFLINE;
+      controllers[i].last_json[0] = '\0';
       Serial.printf("  ✗ %s offline (Photon niet verbonden)\n", controllers[i].name);
     }
   } else {
     http.end();
     controllers[i].status = STATUS_OFFLINE;
+    controllers[i].last_json[0] = '\0';
     Serial.printf("  ✗ %s worker fout (HTTP %d)\n", controllers[i].name, code);
   }
 }
+
 void setAllRoomsHomeMode(int mode) {
   for (int i = 0; i < NUM_CONTROLLERS; i++) {
     if (!controllers[i].active) continue;
@@ -477,20 +481,30 @@ void setAllRoomsHomeMode(int mode) {
 
 // ============================================================
 // LOG NAAR GOOGLE SHEETS
+// v5.2: snprintf POST-body naar char buf op stack — geen String-allocatie.
 // ============================================================
 void logControllerToSheets(int i) {
-  String url = (controllers[i].type == TYPE_ROOM) ? room_script_url : controllers[i].sheets_url;
-  if (url.length() == 0) return;
-  if (controllers[i].last_json.length() == 0) return;
+  const char* url = (controllers[i].type == TYPE_ROOM)
+                    ? room_script_url.c_str()
+                    : controllers[i].sheets_url.c_str();
+  if (url[0] == '\0') return;
+  if (controllers[i].last_json[0] == '\0') return;
+
+  // Bouw POST-body: {"room":"naam", rest van json zonder openende {
+  // last_json begint met '{' — skip die en vervang door onze header
+  char postbuf[750];
+  snprintf(postbuf, sizeof(postbuf), "{\"room\":\"%s\",%s",
+           controllers[i].name,
+           controllers[i].last_json + 1);  // +1: sla '{' over
+
   Serial.printf("  [Sheets] POST %s...\n", controllers[i].name);
   HTTPClient http;
-  http.begin(url.c_str());
+  http.begin(url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(10000);
-  String j = controllers[i].last_json;
-  j = "{\"room\":\"" + String(controllers[i].name) + "\"," + j.substring(1);
-  int code = http.POST(j);
-  Serial.printf("  [Sheets] %s %s\n", controllers[i].name, (code==200||code==302) ? "OK ✓" : "fout");
+  int code = http.POST((uint8_t*)postbuf, strlen(postbuf));
+  Serial.printf("  [Sheets] %s %s\n", controllers[i].name,
+                (code == 200 || code == 302) ? "OK ✓" : "fout");
   http.end();
 }
 
@@ -630,9 +644,6 @@ void handleWifiSnap() {
 // ============================================================
 // STATUSMATRIX — helper functies (v4.0)
 // ============================================================
-
-// Fysiek pixel-adres uit logische (rij, kolom)
-// Logisch rij 0 = bovenaan scherm = fysieke onderste rij (kabel-ingang)
 int matPxIdx(int row, int col) {
   if (MATRIX_FLIP_H) col = (MATRIX_WIDTH - 1) - col;
   int phys_row = (MATRIX_HEIGHT - 1) - row;
@@ -649,7 +660,6 @@ void matRow(int row, uint8_t r, uint8_t g, uint8_t b) {
   for (int c = 0; c < MATRIX_WIDTH; c++) matPx(row, c, r, g, b);
 }
 
-// Kleur op basis van controllerstatus
 void statusPx(int row, int col, int status) {
   switch (status) {
     case STATUS_ONLINE:   matPx(row, col, 0,   200, 0);   break;
@@ -659,10 +669,8 @@ void statusPx(int row, int col, int status) {
   }
 }
 
-// Temperatuurkleur: koud blauw → groen → geel → rood heet
-// range: cold=koud drempel, hot=heet drempel (°C)
 void tempPx(int row, int col, float t, float cold=18.0, float warm=22.0, float hot=26.0) {
-  if (t < 1.0 || t > 80.0) { matPx(row, col, 20, 0, 20); return; } // ongeldig
+  if (t < 1.0 || t > 80.0) { matPx(row, col, 20, 0, 20); return; }
   if (t < cold) { matPx(row, col, 0, 0, 200); return; }
   if (t < warm) {
     float f = (t - cold) / (warm - cold);
@@ -677,12 +685,10 @@ void tempPx(int row, int col, float t, float cold=18.0, float warm=22.0, float h
   matPx(row, col, 200, 0, 0);
 }
 
-// Boilertemp kleur: andere range (40-80°C)
 void boilerTempPx(int row, int col, float t) {
   tempPx(row, col, t, 40.0, 60.0, 75.0);
 }
 
-// WiFi RSSI kleur
 void rssiPx(int row, int col, int rssi) {
   if      (rssi >= -60) matPx(row, col, 0,   200, 0);
   else if (rssi >= -70) matPx(row, col, 150, 200, 0);
@@ -690,14 +696,12 @@ void rssiPx(int row, int col, int rssi) {
   else                  matPx(row, col, 200, 0,   0);
 }
 
-// Heap kleur (largest block KB)
 void heapPx(int row, int col, float kb) {
   if      (kb > 35) matPx(row, col, 0,   200, 0);
   else if (kb > 25) matPx(row, col, 180, 150, 0);
   else              matPx(row, col, 200, 0,   0);
 }
 
-// Ventilatie/PWM kleur: cyaan gradient
 void cyanLevel(int row, int col, int pct_0_100) {
   if (pct_0_100 <= 0) { matPx(row, col, 8, 8, 8); return; }
   uint8_t v = (uint8_t)map(pct_0_100, 1, 100, 40, 200);
@@ -705,57 +709,36 @@ void cyanLevel(int row, int col, int pct_0_100) {
 }
 
 // ============================================================
-// JSON key extractor — stack only, geen heap-allocatie object
-// Werkt direct op String last_json via indexOf
+// JSON key extractor — v5.2: const char* i.p.v. const String&
+// Werkt direct op char last_json[] via strstr/atof/atoi.
+// Geen String-kopie, geen heap-allocatie.
 // ============================================================
-static float jF(const String& j, const char* key, float def = 0.0f) {
+static float jF(const char* j, const char* key, float def = 0.0f) {
   char buf[28];
   snprintf(buf, sizeof(buf), "\"%s\":", key);
-  int idx = j.indexOf(buf);
-  if (idx < 0) return def;
-  idx += strlen(buf);
-  return j.substring(idx, idx + 12).toFloat();
+  const char* pos = strstr(j, buf);
+  if (!pos) return def;
+  return (float)atof(pos + strlen(buf));
 }
-static int jI(const String& j, const char* key, int def = 0) {
+static int jI(const char* j, const char* key, int def = 0) {
   char buf[28];
   snprintf(buf, sizeof(buf), "\"%s\":", key);
-  int idx = j.indexOf(buf);
-  if (idx < 0) return def;
-  idx += strlen(buf);
-  return j.substring(idx, idx + 8).toInt();
+  const char* pos = strstr(j, buf);
+  if (!pos) return def;
+  return atoi(pos + strlen(buf));
 }
 
 // ============================================================
 // MATRIX — ROOM rij renderer (v4.0)
-// Documentatie JSON keys: Overnamedocument §5.9
-//
-// Col  Key  Betekenis
-//  0   —    Status (online/offline/pending/inactive)
-//  1   v    Home switch (1=thuis)
-//  2   b    Heating on (0/1)
-//  3   e    Temp DHT22 (°C)
-//  4   h    Vochtigheid % (DHT22)
-//  5   k    CO2 ppm
-//  6   y    MOV1 beweging (0/1)
-//  7   z    MOV2 beweging (0/1)
-//  8   d    TSTAT aan (0/1)
-//  9   j    Dauw alert (0/1)
-// 10  q+r+s NeoPixel kamerkleur — werkelijke RGB
-// 11   o    Dag/Nacht: dag=geel, nacht=donker purper
-// 12   m    LDR1 licht (0-100, 100=donker) — geel omgekeerd evenredig
-// 13   t    pixel_on_str — wit, evenredig met aantal actieve pixels
-// 14   ae   LargestBlock KB
-// 15   ac   RSSI dBm
+// v5.2: const char* j i.p.v. const String& j
 // ============================================================
 void renderRoomRow(int row, int ci) {
-  const String& j = controllers[ci].last_json;
-  bool online     = (controllers[ci].status == STATUS_ONLINE);
+  const char* j = controllers[ci].last_json;
+  bool online    = (controllers[ci].status == STATUS_ONLINE);
 
-  // Col 0: online status
   statusPx(row, 0, controllers[ci].status);
 
   if (!online) {
-    // Offline: dim resterende pixels rood
     for (int c = 1; c < MATRIX_WIDTH; c++) matPx(row, c, 25, 0, 0);
     return;
   }
@@ -769,20 +752,19 @@ void renderRoomRow(int row, int ci) {
   matPx(row, 2, heat ? 200 : 10, heat ? 30 : 10, 10);
 
   // Col 3: Temperatuur DHT22
-  float temp = jF(j, "e", 0.0f);
-  tempPx(row, 3, temp);
+  tempPx(row, 3, jF(j, "e", 0.0f));
 
   // Col 4: Vochtigheid
   int humi = jI(j, "h");
-  if      (humi < 10)  matPx(row, 4, 20, 0, 20);   // ongeldig
-  else if (humi < 50)  matPx(row, 4, 0,  200, 0);  // normaal
-  else if (humi < 70)  matPx(row, 4, 180, 180, 0); // verhoogd
-  else if (humi < 85)  matPx(row, 4, 200, 60,  0); // hoog
-  else                 matPx(row, 4, 200, 0,   0);  // kritiek
+  if      (humi < 10)  matPx(row, 4, 20, 0, 20);
+  else if (humi < 50)  matPx(row, 4, 0,  200, 0);
+  else if (humi < 70)  matPx(row, 4, 180, 180, 0);
+  else if (humi < 85)  matPx(row, 4, 200, 60,  0);
+  else                 matPx(row, 4, 200, 0,   0);
 
   // Col 5: CO2
   int co2 = jI(j, "k");
-  if      (co2 == 0)    matPx(row, 5, 15, 15, 15);  // geen sensor
+  if      (co2 == 0)    matPx(row, 5, 15, 15, 15);
   else if (co2 < 800)   matPx(row, 5, 0,  200, 0);
   else if (co2 < 1200)  matPx(row, 5, 180, 180, 0);
   else if (co2 < 1500)  matPx(row, 5, 200, 80,  0);
@@ -804,7 +786,7 @@ void renderRoomRow(int row, int ci) {
   int dew = jI(j, "j");
   matPx(row, 9, dew ? 200 : 0, 0, dew ? 0 : 20);
 
-  // Col 10: NeoPixel kamerkleur — werkelijke gekozen RGB (geschaald voor matrix helderheid)
+  // Col 10: NeoPixel kamerkleur
   {
     int pr = jI(j, "q"), pg = jI(j, "r"), pb = jI(j, "s");
     if (pr + pg + pb > 0) matPx(row, 10, (uint8_t)(pr/2), (uint8_t)(pg/2), (uint8_t)(pb/2));
@@ -812,48 +794,42 @@ void renderRoomRow(int row, int ci) {
   }
 
   // Col 11: Dag / Nacht
-  //   dag  (o=0): helder geel (zon)
-  //   nacht(o=1): donker purper
   {
     int night = jI(j, "o");
-    if (night) matPx(row, 11, 40, 0, 60);    // nacht: donker purper
-    else       matPx(row, 11, 180, 150, 0);  // dag: geel
+    if (night) matPx(row, 11, 40, 0, 60);
+    else       matPx(row, 11, 180, 150, 0);
   }
 
-  // Col 12: LDR1 omgevingslicht (key "m", 0-100, 100=donkert)
-  //   Geel, omgekeerd evenredig: ldr=0 (helder) → fel geel, ldr=100 (donker) → bijna zwart
+  // Col 12: LDR1 omgevingslicht
   {
     int ldr = jI(j, "m");
-    int br = (100 - constrain(ldr, 0, 100)) * 2;  // 0-200
+    int br = (100 - constrain(ldr, 0, 100)) * 2;
     matPx(row, 12, (uint8_t)(br), (uint8_t)(br * 0.75f), 0);
   }
 
   // Col 13: Aantal actieve pixels (key "t" = pixel_on_str, bv. "P=00111")
-  //   Tel het aantal '1's → wit, evenredig met fractie aan/totaal tekens na '='
+  // v5.2: strstr/strchr i.p.v. String.indexOf/substring — geen heap-allocatie
   {
-    String pstr = j;
-    int eq = pstr.indexOf("\"t\":\"");
     uint8_t br = 0;
-    if (eq >= 0) {
-      int start = eq + 5;             // na "t":"
-      int end   = pstr.indexOf('"', start);
-      if (end > start) {
-        String val = pstr.substring(start, end);
-        // Zoek de '=' en tel chars erna
-        int sep = val.indexOf('=');
-        if (sep >= 0) {
-          String bits = val.substring(sep + 1);
-          int total = bits.length();
+    const char* eq = strstr(j, "\"t\":\"");
+    if (eq) {
+      const char* start = eq + 5;           // na "t":"
+      const char* end   = strchr(start, '"');
+      if (end && end > start) {
+        const char* sep = strchr(start, '=');
+        if (sep && sep < end) {
+          sep++;
+          int total = (int)(end - sep);
           int ones  = 0;
-          for (int k = 0; k < total; k++) if (bits[k] == '1') ones++;
+          for (const char* p = sep; p < end; p++) if (*p == '1') ones++;
           if (total > 0) br = (uint8_t)((ones * 220) / total);
         }
       }
     }
-    matPx(row, 13, br, br, br);  // wit, evenredig met aantal pixels aan
+    matPx(row, 13, br, br, br);
   }
 
-  // Col 14: Heap (largest block KB)
+  // Col 14: Heap largest block KB
   heapPx(row, 14, jF(j, "ae", 0.0f));
 
   // Col 15: WiFi RSSI
@@ -862,30 +838,11 @@ void renderRoomRow(int row, int ci) {
 
 // ============================================================
 // MATRIX — PHOTON rij renderer (v4.7)
-// Data via Cloudflare Worker /sensor?id=... (Particle Cloud)
-// Geverifieerd op basis van echte P-Badkamer response 1apr26
-//
-// Col  Key   Betekenis              Zelfde logica als ROOM
-//  0   —     Status (online/offline)
-//  1   —     zwart (HOME niet beschikbaar op Photon)
-//  2   l     TSTATon (0/1)          verwarming aan/uit
-//  3   g     Temp1 DHT22 (°C)       tempPx()
-//  4   d     Humi % (DHT22)         vochtlogica
-//  5   a     CO2 ppm                CO2 kleurschaal
-//  6   i     MOV1 (0/1)             warm wit / dim
-//  7   j     MOV2 (0/1)             warm wit / dim
-//  8   —     zwart (TSTAT apart n.v.t.)
-//  9   k     DewAlert (0/1)         rood / dim blauw
-// 10   s/t/u RGB pixels             werkelijke kleur (geschaald)
-// 11   q     Night (0/1)            geel=dag, purper=nacht
-// 12   e     Light LDR (0-100)      geel omgekeerd
-// 13   —     zwart (pixel_on_str n.v.t.)
-// 14   x     FreeMem (0-100%)       groen/geel/rood
-// 15   —     zwart (RSSI niet in worker response)
+// v5.2: const char* j i.p.v. const String& j
 // ============================================================
 void renderPhotonRow(int row, int ci) {
-  const String& j = controllers[ci].last_json;
-  bool online     = (controllers[ci].status == STATUS_ONLINE);
+  const char* j = controllers[ci].last_json;
+  bool online    = (controllers[ci].status == STATUS_ONLINE);
 
   statusPx(row, 0, controllers[ci].status);
 
@@ -894,7 +851,7 @@ void renderPhotonRow(int row, int ci) {
     return;
   }
 
-  // Col 1: niet beschikbaar — zwart
+  // Col 1: niet beschikbaar
   matPx(row, 1, 0, 0, 0);
 
   // Col 2: TSTATon (key "l")
@@ -928,7 +885,7 @@ void renderPhotonRow(int row, int ci) {
   int m2 = jI(j, "j");
   matPx(row, 7, m2 ? 200 : 12, m2 ? 180 : 12, m2 ? 120 : 12);
 
-  // Col 8: niet beschikbaar — zwart
+  // Col 8: niet beschikbaar
   matPx(row, 8, 0, 0, 0);
 
   // Col 9: DewAlert (key "k")
@@ -949,17 +906,17 @@ void renderPhotonRow(int row, int ci) {
     else       matPx(row, 11, 180, 150, 0);
   }
 
-  // Col 12: LDR licht (key "e", 0-100, 100=donker) — geel omgekeerd
+  // Col 12: LDR licht (key "e")
   {
     int ldr = jI(j, "e");
     int br = (100 - constrain(ldr, 0, 100)) * 2;
     matPx(row, 12, (uint8_t)(br), (uint8_t)(br * 0.75f), 0);
   }
 
-  // Col 13: niet beschikbaar — zwart
+  // Col 13: niet beschikbaar
   matPx(row, 13, 0, 0, 0);
 
-  // Col 14: FreeMem% (key "x", 0-100)
+  // Col 14: FreeMem% (key "x")
   {
     int fm = jI(j, "x");
     if      (fm > 35) matPx(row, 14,  0, 180,  0);
@@ -967,35 +924,17 @@ void renderPhotonRow(int row, int ci) {
     else              matPx(row, 14, 200,   0,  0);
   }
 
-  // Col 15: RSSI niet beschikbaar in worker response — zwart
+  // Col 15: RSSI niet beschikbaar
   matPx(row, 15, 0, 0, 0);
 }
 
 // ============================================================
 // MATRIX — ECO rij renderer (v4.5)
-// Documentatie JSON keys: Overnamedocument §4.2
-//
-// Col  Key  Betekenis
-//  0   —    Status
-//  1   l    Tsun collector temp (°C)
-//  2   m    dT = Tsun − Tboiler (°C) — rendement
-//  3   b    ETopH  boiler laag 1 top hoog (°C)
-//  4   c    ETopL  boiler laag 2 top laag (°C)
-//  5   d    EMidH  boiler laag 3 midden hoog (°C)
-//  6   e    EMidL  boiler laag 4 midden laag (°C)
-//  7   f    EBotH  boiler laag 5 bodem hoog (°C)
-//  8   g    EBotL  boiler laag 6 bodem laag (°C)
-//  9   h    EAv    boiler gemiddeld (°C)
-// 10   n    PWM pomp (0-255) — cyaan gradient
-// 11   k    yield_today kWh vandaag
-// 12   i    EQtot kWh energie-inhoud boiler
-// 13   j    dEQ delta kWh (positief = collector laadt)
-// 14   q    FreeHeap% — groen/geel/rood
-// 15   p    RSSI dBm  ⚠️ key "p" voor ECO — afwijkend!
+// v5.2: const char* j i.p.v. const String& j
 // ============================================================
 void renderEcoRow(int row, int ci) {
-  const String& j = controllers[ci].last_json;
-  bool online     = (controllers[ci].status == STATUS_ONLINE);
+  const char* j = controllers[ci].last_json;
+  bool online    = (controllers[ci].status == STATUS_ONLINE);
 
   statusPx(row, 0, controllers[ci].status);
 
@@ -1006,54 +945,54 @@ void renderEcoRow(int row, int ci) {
 
   // Col 1: Tsun collector temp
   float tsun = jF(j, "l", 0.0f);
-  if      (tsun < 1.0f)  matPx(row, 1, 15, 15, 15);   // geen zon
-  else if (tsun < 20.0f) matPx(row, 1,  0,  0, 200);  // koud
-  else if (tsun < 50.0f) matPx(row, 1,  0, 200, 100); // warm
-  else if (tsun < 80.0f) matPx(row, 1, 200, 120,  0); // heet
-  else                   matPx(row, 1, 200,   0,  0);  // zeer heet
+  if      (tsun < 1.0f)  matPx(row, 1, 15, 15, 15);
+  else if (tsun < 20.0f) matPx(row, 1,  0,  0, 200);
+  else if (tsun < 50.0f) matPx(row, 1,  0, 200, 100);
+  else if (tsun < 80.0f) matPx(row, 1, 200, 120,  0);
+  else                   matPx(row, 1, 200,   0,  0);
 
-  // Col 2: dT (Tsun − Tboiler) — rendement
+  // Col 2: dT rendement
   float dt = jF(j, "m", 0.0f);
-  if      (dt > 10) matPx(row, 2,   0, 200,   0);  // goed rendement
-  else if (dt >  5) matPx(row, 2, 150, 180,   0);  // matig
-  else if (dt >  2) matPx(row, 2, 100,  60,   0);  // laag
-  else              matPx(row, 2,  10,  10,  10);  // geen/onvoldoende
+  if      (dt > 10) matPx(row, 2,   0, 200,   0);
+  else if (dt >  5) matPx(row, 2, 150, 180,   0);
+  else if (dt >  2) matPx(row, 2, 100,  60,   0);
+  else              matPx(row, 2,  10,  10,  10);
 
-  // Col 3-8: zes boilertemperaturen top→bodem
-  boilerTempPx(row, 3, jF(j, "b", 0.0f));  // ETopH
-  boilerTempPx(row, 4, jF(j, "c", 0.0f));  // ETopL
-  boilerTempPx(row, 5, jF(j, "d", 0.0f));  // EMidH
-  boilerTempPx(row, 6, jF(j, "e", 0.0f));  // EMidL
-  boilerTempPx(row, 7, jF(j, "f", 0.0f));  // EBotH
-  boilerTempPx(row, 8, jF(j, "g", 0.0f));  // EBotL
+  // Col 3-8: zes boilertemperaturen
+  boilerTempPx(row, 3, jF(j, "b", 0.0f));
+  boilerTempPx(row, 4, jF(j, "c", 0.0f));
+  boilerTempPx(row, 5, jF(j, "d", 0.0f));
+  boilerTempPx(row, 6, jF(j, "e", 0.0f));
+  boilerTempPx(row, 7, jF(j, "f", 0.0f));
+  boilerTempPx(row, 8, jF(j, "g", 0.0f));
 
   // Col 9: EAv gemiddelde boilertemp
   boilerTempPx(row, 9, jF(j, "h", 0.0f));
 
-  // Col 10: PWM pomp (0-255) — cyaan gradient
+  // Col 10: PWM pomp
   cyanLevel(row, 10, jI(j, "n") * 100 / 255);
 
-  // Col 11: yield_today kWh vandaag (0-10 kWh typisch)
+  // Col 11: yield_today kWh
   float yt = jF(j, "k", 0.0f);
   if (yt <= 0)  matPx(row, 11, 10, 10, 10);
   else {
     uint8_t v = (uint8_t)constrain((int)(yt * 20), 20, 200);
-    matPx(row, 11, v*2/3, v, 0);  // groen
+    matPx(row, 11, v*2/3, v, 0);
   }
 
-  // Col 12: EQtot energie-inhoud boiler (0-20 kWh typisch)
+  // Col 12: EQtot energie-inhoud
   float qtot = jF(j, "i", 0.0f);
   if (qtot <= 0)  matPx(row, 12, 10, 10, 10);
   else {
     uint8_t v = (uint8_t)constrain((int)(qtot * 10), 20, 200);
-    matPx(row, 12, v, v*3/4, 0);  // amber
+    matPx(row, 12, v, v*3/4, 0);
   }
 
-  // Col 13: dEQ delta kWh (positief = collector laadt)
+  // Col 13: dEQ delta kWh
   float deq = jF(j, "j", 0.0f);
-  if      (deq > 0.5f) matPx(row, 13,  0, 200,  0);  // actief laden
-  else if (deq > 0)    matPx(row, 13,  0,  80,  0);  // beetje
-  else                 matPx(row, 13, 10,  10, 10);  // stilstand
+  if      (deq > 0.5f) matPx(row, 13,  0, 200,  0);
+  else if (deq > 0)    matPx(row, 13,  0,  80,  0);
+  else                 matPx(row, 13, 10,  10, 10);
 
   // Col 14: FreeHeap%
   int heapp = jI(j, "q");
@@ -1067,28 +1006,11 @@ void renderEcoRow(int row, int ci) {
 
 // ============================================================
 // MATRIX — HVAC rij renderer (v4.1)
-// JSON keys geverifieerd 26 maart 2026 — zie §3.6 overnamedocument
-//
-// Col  Key                JSON  Betekenis
-//  0   —                  —     Status
-//  1   HVAC_KEY_CIRCUIT1  "p"   heating_on C1 BB (0/1)
-//  2   HVAC_KEY_CIRCUIT2  "q"   heating_on C2 WP
-//  3   HVAC_KEY_CIRCUIT3  "r"   heating_on C3 BK
-//  4   HVAC_KEY_CIRCUIT4  "s"   heating_on C4 ZP
-//  5   HVAC_KEY_CIRCUIT5  "t"   heating_on C5 EP
-//  6   HVAC_KEY_CIRCUIT6  "u"   heating_on C6 KK
-//  7   HVAC_KEY_CIRCUIT7  "v"   heating_on C7 IK
-//  8   HVAC_KEY_PUMP_SCH  "y"   sch_on distributiepomp
-//  9   HVAC_KEY_PUMP_WON  "aa"  won_on distributiepomp
-// 10   HVAC_KEY_VENT      "x"   vent_percent (%)
-// 11   HVAC_KEY_TEMP1     "h"   KSAv gemiddelde boiler (°C)
-// 12-13 —                 —     gereserveerd
-// 14   HVAC_KEY_HEAP      "ae"  LargestBlock KB
-// 15   HVAC_KEY_RSSI      "ac"  RSSI dBm
+// v5.2: const char* j i.p.v. const String& j
 // ============================================================
 void renderHvacRow(int row, int ci) {
-  const String& j = controllers[ci].last_json;
-  bool online     = (controllers[ci].status == STATUS_ONLINE);
+  const char* j = controllers[ci].last_json;
+  bool online    = (controllers[ci].status == STATUS_ONLINE);
 
   statusPx(row, 0, controllers[ci].status);
 
@@ -1097,7 +1019,7 @@ void renderHvacRow(int row, int ci) {
     return;
   }
 
-  // Circuits 1-7: groen=AAN, dim=UIT
+  // Circuits 1-7
   const char* ckeys[7] = {
     HVAC_KEY_CIRCUIT1, HVAC_KEY_CIRCUIT2, HVAC_KEY_CIRCUIT3,
     HVAC_KEY_CIRCUIT4, HVAC_KEY_CIRCUIT5, HVAC_KEY_CIRCUIT6,
@@ -1108,11 +1030,11 @@ void renderHvacRow(int row, int ci) {
     matPx(row, 1+k, on ? 20 : 8, on ? 200 : 8, on ? 20 : 8);
   }
 
-  // Col 8: Pomp SCH (cyaan = aan)
+  // Col 8: Pomp SCH
   int psch = jI(j, HVAC_KEY_PUMP_SCH);
   matPx(row, 8, 0, psch ? 40 : 10, psch ? 200 : 10);
 
-  // Col 9: Pomp WON (cyaan = aan)
+  // Col 9: Pomp WON
   int pwon = jI(j, HVAC_KEY_PUMP_WON);
   matPx(row, 9, 0, pwon ? 40 : 10, pwon ? 200 : 10);
 
@@ -1135,10 +1057,7 @@ void renderHvacRow(int row, int ci) {
 
 // ============================================================
 // MATRIX — updateMatrix() (v5.0)
-// Automatische ESP32/Photon fallback per rij:
-//   1. ESP32 actief + online  → renderRoomRow()
-//   2. ESP32 inactief/offline → renderPhotonRow() (als beschikbaar)
-//   3. Geen enkele actief     → zwart
+// v5.2: strlen() i.p.v. last_json.length()
 // ============================================================
 void updateMatrix() {
   matrix.clear();
@@ -1146,9 +1065,8 @@ void updateMatrix() {
   for (int row = 0; row < MATRIX_HEIGHT; row++) {
     const MatrixRowDef& rd = MROW[row];
 
-    // ── Systeem-controller (HVAC, ECO, separator, leeg) ─────────────────
-    if (rd.sys_idx == -2) continue;  // separator — zwart
-    if (rd.sys_idx == -1 && rd.esp_idx == -1 && rd.photon_idx == -1) continue; // leeg
+    if (rd.sys_idx == -2) continue;
+    if (rd.sys_idx == -1 && rd.esp_idx == -1 && rd.photon_idx == -1) continue;
     if (rd.sys_idx >= 0) {
       if (!controllers[rd.sys_idx].active) continue;
       if      (strcmp(controllers[rd.sys_idx].name, "S-ECO")  == 0) renderEcoRow(row,  rd.sys_idx);
@@ -1157,34 +1075,28 @@ void updateMatrix() {
       continue;
     }
 
-    // ── Room-rij: automatische fallback ─────────────────────────────────
-    // Stap 1: ESP32-controller actief en heeft data?
     bool esp_ok = (rd.esp_idx >= 0)
                && controllers[rd.esp_idx].active
-               && controllers[rd.esp_idx].last_json.length() > 5;
+               && strlen(controllers[rd.esp_idx].last_json) > 5;
 
     if (esp_ok) {
       renderRoomRow(row, rd.esp_idx);
       continue;
     }
 
-    // Stap 2: Photon-controller beschikbaar als fallback?
     bool pho_ok = (rd.photon_idx >= 0)
                && controllers[rd.photon_idx].active
-               && controllers[rd.photon_idx].last_json.length() > 5;
+               && strlen(controllers[rd.photon_idx].last_json) > 5;
 
     if (pho_ok) {
       renderPhotonRow(row, rd.photon_idx);
       continue;
     }
 
-    // Stap 3: ESP32 geconfigureerd maar nog geen data (pending) → status tonen
     if (rd.esp_idx >= 0 && controllers[rd.esp_idx].active) {
       statusPx(row, 0, controllers[rd.esp_idx].status);
       continue;
     }
-
-    // Niets beschikbaar → zwart (matrix.clear() deed al het werk)
   }
 
   matrix.show();
@@ -1194,26 +1106,19 @@ void updateMatrix() {
 }
 
 // ============================================================
-// MATRIX — boot-animatie (v4.0)
-// Sweep per rij groen, daarna fade-out
+// MATRIX — boot-animatie (v4.2)
 // ============================================================
-// Boot-animatie (v4.1):
-//   Fase 1 — rode pixel loopt door SYSTEEM-rijen (HVAC rij 0, ECO rij 1)
-//   Fase 2 — blauwe pixel loopt door alle ROOM-rijen (rijen 5-11)
-//   Tussenpauze tussen fases, fade-out aan het einde.
 void matrixBootAnimation() {
   matrix.clear();
   matrix.show();
   delay(150);
 
-  // ── Fase 1: rood door HVAC (rij 0) en ECO (rij 1) ───────────────────────
   const int sys_rows[] = {0, 1};
   for (int ri = 0; ri < 2; ri++) {
     int row = sys_rows[ri];
     for (int c = 0; c < MATRIX_WIDTH; c++) {
       matrix.clear();
-      matPx(row, c, 220, 0, 0);          // rode pixel
-      // Staartje: vorige 2 pixels dim
+      matPx(row, c, 220, 0, 0);
       if (c >= 1) matPx(row, c-1, 60, 0, 0);
       if (c >= 2) matPx(row, c-2, 20, 0, 0);
       matrix.show();
@@ -1226,13 +1131,12 @@ void matrixBootAnimation() {
 
   delay(200);
 
-  // ── Fase 2: blauw door ROOM-rijen (5 t/m 11) ────────────────────────────
   const int room_rows[] = {5, 6, 7, 8, 9, 10, 11};
   for (int ri = 0; ri < 7; ri++) {
     int row = room_rows[ri];
     for (int c = 0; c < MATRIX_WIDTH; c++) {
       matrix.clear();
-      matPx(row, c, 0, 0, 220);          // blauwe pixel
+      matPx(row, c, 0, 0, 220);
       if (c >= 1) matPx(row, c-1, 0, 0, 60);
       if (c >= 2) matPx(row, c-2, 0, 0, 20);
       matrix.show();
@@ -1243,7 +1147,6 @@ void matrixBootAnimation() {
     delay(60);
   }
 
-  // ── Korte flash wit: klaar ───────────────────────────────────────────────
   for (int c = 0; c < MATRIX_WIDTH; c++) {
     matPx(0, c, 30, 30, 30);
     matPx(1, c, 30, 30, 30);
@@ -1258,13 +1161,10 @@ void matrixBootAnimation() {
 
 // ============================================================
 // MATRIX — testpatroon (v4.0)
-// Verlicht hoekpixels wit + elke rij in eigen kleur
-// Gebruik dit om serpentine richting te verifiëren
 // ============================================================
 void matrixTestPattern() {
   matrix.clear();
 
-  // Rij-kleuren (regenboog per functie)
   const uint8_t rowcols[12][3] = {
     {200, 0,   0  }, // rij 0: HVAC → rood
     {200, 80,  0  }, // rij 1: ECO  → oranje
@@ -1283,16 +1183,14 @@ void matrixTestPattern() {
   for (int row = 0; row < 12; row++) {
     for (int c = 0; c < MATRIX_WIDTH; c++) {
       uint8_t r = rowcols[row][0], g = rowcols[row][1], b = rowcols[row][2];
-      // Eerste en laatste pixel helderder voor uitlijning
       if (c == 0 || c == MATRIX_WIDTH-1) matPx(row, c, 200, 200, 200);
       else                               matPx(row, c, r/3, g/3, b/3);
     }
   }
-  // Hoekpixels matrix (logisch): extra helder wit
-  matPx(0, 0,  255, 255, 255); // links-boven
-  matPx(0, 15, 255, 255, 255); // rechts-boven
-  matPx(11,0,  255, 255, 255); // links-onder rooms
-  matPx(11,15, 255, 255, 255); // rechts-onder rooms
+  matPx(0, 0,  255, 255, 255);
+  matPx(0, 15, 255, 255, 255);
+  matPx(11,0,  255, 255, 255);
+  matPx(11,15, 255, 255, 255);
 
   matrix.show();
   Serial.println("[Matrix] Testpatroon actief — controleer orientatie!");
@@ -1392,16 +1290,17 @@ String getWifiPage() {
 
 // ============================================================
 // STATUS JSON
+// v5.2: strstr/atoi i.p.v. String.indexOf/substring
 // ============================================================
 String getStatusJson() {
   String j = "[";
   for (int i = 0; i < NUM_CONTROLLERS; i++) {
     if (i > 0) j += ",";
     int rssi = 0;
-    if (controllers[i].type != TYPE_PHOTON && controllers[i].last_json.length() > 0) {
+    if (controllers[i].type != TYPE_PHOTON && controllers[i].last_json[0] != '\0') {
       const char* key = (strcmp(controllers[i].name, "S-ECO") == 0) ? "\"p\":" : "\"ac\":";
-      int idx = controllers[i].last_json.indexOf(key);
-      if (idx >= 0) rssi = controllers[i].last_json.substring(idx + strlen(key), idx + strlen(key) + 5).toInt();
+      const char* pos = strstr(controllers[i].last_json, key);
+      if (pos) rssi = atoi(pos + strlen(key));
     }
     j += "{\"n\":\"" + String(controllers[i].name) + "\","
          "\"t\":" + String(controllers[i].type) + ","
@@ -1563,7 +1462,7 @@ String getMainPage() {
 }
 
 // ============================================================
-// SETTINGS PAGINA (met matrix-sectie v4.0)
+// SETTINGS PAGINA (v5.2: reboot-knop toegevoegd)
 // ============================================================
 String getSettingsPage() {
   String h = "<!DOCTYPE html><html lang='nl'><head>"
@@ -1596,6 +1495,9 @@ String getSettingsPage() {
     ".save{background:#f0a500;color:#000;border:none;padding:10px 28px;"
           "border-radius:5px;font-size:13px;font-weight:bold;cursor:pointer;margin:14px 14px}"
     ".save:hover{background:#ffd000}"
+    ".rbtn{background:#1c2128;color:#e05a00;border:1px solid #e05a00;padding:10px 28px;"
+          "border-radius:5px;font-size:13px;font-weight:bold;cursor:pointer;margin:14px 0 14px 0}"
+    ".rbtn:hover{background:#e05a00;color:#000}"
     ".mbtn{background:#1c2128;color:#f0a500;border:1px solid #f0a500;padding:6px 14px;"
            "border-radius:4px;font-size:12px;cursor:pointer;font-family:monospace}"
     ".mbtn:hover{background:#f0a500;color:#000}"
@@ -1650,7 +1552,7 @@ String getSettingsPage() {
        "<button type='submit' class='save'>💾 Opslaan</button>"
        "</form>";
 
-  // ── Statusmatrix — v4.0 ──────────────────────────────────────────────────
+  // ── Statusmatrix ─────────────────────────────────────────────────────────
   h += "<div class='sec'><div class='sec-t'>▸ Statusmatrix 16×16</div><table>"
        "<tr><td>Helderheid</td><td>"
        "<input type='range' id='mbr' min='5' max='200' step='5' value='";
@@ -1673,8 +1575,8 @@ String getSettingsPage() {
   h += MATRIX_FLIP_H ? "true" : "false";
   h += " — pas define aan in sketch als pixels gespiegeld zijn</td></tr>"
        "</table></div>";
-  // ─────────────────────────────────────────────────────────────────────────
 
+  // ── Matter ───────────────────────────────────────────────────────────────
   h += "<div class='sec'><div class='sec-t'>▸ Matter</div><table>"
        "<tr><td>Status</td><td id='ms'>—</td></tr>"
        "<tr><td>Pairing code</td><td id='mp' style='color:#f0a500;letter-spacing:2px'>—</td></tr>"
@@ -1689,8 +1591,10 @@ String getSettingsPage() {
        "  var pc=document.getElementById('mp');"
        "  if(!d.commissioned&&d.code){pc.textContent=d.code;}else{pc.textContent='—';pc.style.color='#555';}"
        "});"
-       "</script>"
-       "<div class='sec'><div class='sec-t'>▸ Systeem info</div><table>"
+       "</script>";
+
+  // ── Systeem info ─────────────────────────────────────────────────────────
+  h += "<div class='sec'><div class='sec-t'>▸ Systeem info</div><table>"
        "<tr><td>IP adres</td><td>";
   h += ap_mode ? "AP " + WiFi.softAPIP().toString() : WiFi.localIP().toString();
   h += "</td></tr><tr><td>Mode</td><td>";
@@ -1705,7 +1609,13 @@ String getSettingsPage() {
   h += String(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)) + " bytes";
   h += "</td></tr><tr><td>Poll interval</td><td>";
   h += String(poll_minutes) + " min";
-  h += "</td></tr></table></div>"
+  h += "</td></tr></table>"
+       // ── Reboot knop (v5.2) ────────────────────────────────────────────
+       "<div style='padding:10px 14px'>"
+       "<button class='rbtn' onclick='if(confirm(\"Dashboard herstarten?\")){"
+       "this.textContent=\"⟳ Herstart...\";this.disabled=true;"
+       "fetch(\"/reboot\");}'>⟳ Herstart dashboard</button>"
+       "</div></div>"
        "</div></body></html>";
   return h;
 }
@@ -1745,6 +1655,18 @@ void setupWebServer() {
     ESP.restart();
   });
 
+  // v5.2: reboot endpoint
+  server.on("/reboot", HTTP_GET, []() {
+    server.send(200, "text/html",
+      "<html><body style='background:#111;color:#f0a500;font-family:monospace;"
+      "padding:40px;text-align:center'>"
+      "<h2>⟳ Herstart...</h2><p>Dashboard herstart. Even wachten...</p>"
+      "<script>setTimeout(()=>location.href='/settings',9000);</script>"
+      "</body></html>");
+    delay(500);
+    ESP.restart();
+  });
+
   server.on("/set_home_global", HTTP_GET, []() {
     int v = server.hasArg("v") ? constrain(server.arg("v").toInt(), 0, 1) : 0;
     home_mode_global = (v == 1);
@@ -1771,7 +1693,6 @@ void setupWebServer() {
     matter_nuclear_reset_requested = true;
   });
 
-  // v4.0: Matrix helderheid — live aanpassen + opslaan in NVS
   server.on("/matrix_bright", HTTP_GET, []() {
     if (server.hasArg("v")) {
       int v = constrain(server.arg("v").toInt(), 5, 200);
@@ -1787,13 +1708,11 @@ void setupWebServer() {
     server.send(200, "application/json", buf);
   });
 
-  // v4.0: Matrix testpatroon
   server.on("/matrix_test", HTTP_GET, []() {
     matrixTestPattern();
     server.send(200, "text/plain", "Testpatroon actief");
   });
 
-  // v4.0: Matrix forceer update met live data
   server.on("/matrix_update", HTTP_GET, []() {
     updateMatrix();
     server.send(200, "text/plain", "Matrix bijgewerkt");
@@ -1827,13 +1746,12 @@ void setup() {
   Serial.begin(115200);
   delay(3000);
   Serial.println("\n\n╔══════════════════════════════════════╗");
-  Serial.println("║  Zarlar Dashboard v5.0               ║");
+  Serial.println("║  Zarlar Dashboard v5.2               ║");
   Serial.println("║  192.168.0.60 — Statusmatrix 16×16  ║");
   Serial.println("╚══════════════════════════════════════╝\n");
 
   loadNVS();
 
-  // ── Matrix initialiseren (vóór WiFi — geeft visuele feedback) ────────────
   matrix.begin();
   matrix.setBrightness(matrix_brightness);
   matrix.clear();
@@ -1845,11 +1763,8 @@ void setup() {
                 heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
 
   connectWiFi();
-
-  // ── Boot-animatie (na WiFi connect — matrix geeft visuele voortgang) ─────
   matrixBootAnimation();
 
-  // ── Matter initialisatie (alleen in STA mode) ─────────────────────────────
   if (!ap_mode) {
     Serial.println(F("\n── Matter initialisatie ──────────────────"));
     matter_home.begin();
@@ -1883,12 +1798,8 @@ void setup() {
     Serial.println(F("──────────────────────────────────────────\n"));
   }
 
-  // Eerste poll na 30s
   last_poll_cycle = millis() - (unsigned long)(poll_minutes * 60000UL) + 30000UL;
-
   setupWebServer();
-
-
   Serial.println("READY — http://192.168.0.60/\n");
 }
 
@@ -1913,9 +1824,27 @@ void loop() {
     matter_home.setOnOff(home_mode_global);
   }
 
-  // ── Matrix periodieke refresh elke 60s (ook zonder nieuw poll) ───────────
+  // ── Matrix periodieke refresh elke 60s ───────────────────────────────────
   if (millis() - last_matrix_update > 60000UL) {
     updateMatrix();
+  }
+
+  // ── Automatische herstart bij persistente heap-uitputting (v5.2) ─────────
+  // Als largest_block > 60s aaneensluitend onder 25KB daalt → herstart.
+  // Vangt de root cause op als failsafe, mocht fragmentatie toch optreden.
+  {
+    static unsigned long low_heap_since = 0;
+    uint32_t lb = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    if (lb < 25000) {
+      if (low_heap_since == 0) low_heap_since = millis();
+      else if (millis() - low_heap_since > 60000UL) {
+        Serial.printf("[HEAP] Largest block %u bytes < 25KB voor >60s — herstart\n", lb);
+        delay(200);
+        ESP.restart();
+      }
+    } else {
+      low_heap_since = 0;
+    }
   }
 
   // ── Serial commando's ─────────────────────────────────────────────────────
@@ -1936,7 +1865,7 @@ void loop() {
       ESP.restart();
     }
     if (cmd.equalsIgnoreCase("status")) {
-      Serial.printf("\n=== Zarlar Dashboard v5.0 | Uptime: %lu s ===\n", millis()/1000);
+      Serial.printf("\n=== Zarlar Dashboard v5.2 | Uptime: %lu s ===\n", millis()/1000);
       Serial.printf("IP: %s  RSSI: %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
       Serial.printf("Heap free: %u  Largest: %u\n",
                     ESP.getFreeHeap(),
@@ -1944,7 +1873,6 @@ void loop() {
       Serial.printf("Matter: %s\n", Matter.isDeviceCommissioned() ? "gepaard" : "niet gepaard");
       Serial.printf("HOME: %s  Matrix brightness: %d\n",
                     home_mode_global ? "THUIS" : "WEG", matrix_brightness);
-      // ── Matrix controller-index debug ─────────────────────────────────────
       Serial.println(F("\n--- Actieve controllers (idx | naam | status | json?) ---"));
       for (int i = 0; i < 22; i++) {
         if (controllers[i].active) {
@@ -1954,7 +1882,7 @@ void loop() {
             controllers[i].status == STATUS_ONLINE  ? "ONLINE " :
             controllers[i].status == STATUS_OFFLINE ? "OFFLINE" :
             controllers[i].status == STATUS_PENDING ? "PENDING" : "INACTF ",
-            controllers[i].last_json.length() > 5 ? "ja" : "nee");
+            strlen(controllers[i].last_json) > 5 ? "ja" : "nee");
         }
       }
       Serial.println(F("--- MROW matrix-rij mapping (ESP32 heeft voorrang op Photon) ---"));
@@ -1970,11 +1898,10 @@ void loop() {
           continue;
         }
 
-        // Room-rij: toon welke controller actief is
         bool esp_ok = (rd.esp_idx >= 0) && controllers[rd.esp_idx].active
-                   && controllers[rd.esp_idx].last_json.length() > 5;
+                   && strlen(controllers[rd.esp_idx].last_json) > 5;
         bool pho_ok = (rd.photon_idx >= 0) && controllers[rd.photon_idx].active
-                   && controllers[rd.photon_idx].last_json.length() > 5;
+                   && strlen(controllers[rd.photon_idx].last_json) > 5;
 
         const char* esp_name = (rd.esp_idx >= 0) ? controllers[rd.esp_idx].name : "—";
         const char* pho_name = (rd.photon_idx >= 0) ? controllers[rd.photon_idx].name : "—";
