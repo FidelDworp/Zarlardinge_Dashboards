@@ -283,6 +283,19 @@ input[type=range].sim-slider::-webkit-slider-thumb {
   <canvas id="batChart" height="100"></canvas>
 </div>
 
+<!-- NET IMPORT/EXPORT GRAFIEK -->
+<div class="chart-wrap" style="margin-top:-10px;border-top:none;border-radius:0 0 8px 8px;padding-top:8px">
+  <div class="chart-header">
+    <span class="chart-title">⚡ Net — afname & injectie (gesimuleerd)</span>
+    <div class="legend">
+      <span><span class="leg-dot" style="background:#f85149"></span>Afname (kost)</span>
+      <span><span class="leg-dot" style="background:#2a8a3e"></span>Injectie (opbrengst)</span>
+      <span><span style="border-bottom:2px solid rgba(210,153,34,0.8);display:inline-block;width:14px;margin-bottom:3px"></span>Kostlijn ct/kWh</span>
+    </div>
+  </div>
+  <canvas id="netChart" height="110"></canvas>
+</div>
+
 <!-- PLANNINGSMATRIX -->
 <div class="matrix-wrap">
   <div class="matrix-header-row">
@@ -529,6 +542,7 @@ const CB_DEFAULTS = {
 let chart         = null;
 let chartSolar    = null;
 let chartBat      = null;
+let chartNet      = null;
 let allTimes      = [];
 let allPrices     = [];
 let pastTijden    = []; // vandaag 00:00 → nu (solar + batterij grafieken)
@@ -1323,6 +1337,7 @@ function updateSimulatie() {
 
   tekenSimulatieSlot(nuIdx + simSlot);
   if (allTimes.length) renderBatChart();
+  if (allTimes.length) renderNetChart();
 }
 
 function tekenSimulatieSlot(absSlot) {
@@ -1566,6 +1581,7 @@ function renderSolarChart() {
         y: {
           min: 0,
           max: maxSolar * 1.05,
+          border: { color:'rgba(88,166,255,0.5)', width:1.5 },
           ticks: {
             color:'#8b949e', font:{family:'Space Mono',size:10},
             callback: v => v === 0 ? '' : v.toFixed(1)+' kW',
@@ -1737,6 +1753,7 @@ function renderBatChart() {
         },
         yKw: {
           position: 'left',
+          border: { color:'rgba(88,166,255,0.5)', width:1.5 },
           ticks: {
             color:'#8b949e', font:{family:'Space Mono',size:10},
             callback: v => v === 0 ? '0' : v.toFixed(1)+' kW',
@@ -1753,6 +1770,133 @@ function renderBatChart() {
             maxTicksLimit: 5
           },
           grid: { display:false }
+        }
+      }
+    }
+  });
+}
+
+
+function renderNetChart() {
+  const tijden = allTimes;
+  if (!tijden.length || !_simSlots.length) return;
+  const nuMs  = Date.now();
+  const ctx   = document.getElementById('netChart').getContext('2d');
+  const ivl   = detecteerInterval(tijden);
+
+  // Netto per slot: solar - load - bat_ontladen + bat_laden
+  // Positief = injectie naar net (groen), negatief = afname van net (rood)
+  const nettoData  = tijden.map((t, i) => {
+    const s = _simSlots[i];
+    if (!s) return null;
+    return +s.netto.toFixed(2);
+  });
+
+  // Splits in injectie (>=0) en afname (<0) voor kleur
+  const injectieData = nettoData.map(v => v !== null && v >= 0 ? v    : null);
+  const afnameData   = nettoData.map(v => v !== null && v <  0 ? v    : null);
+
+  // Kostlijn: reële prijs per slot (ct/kWh), alleen verleden
+  const kostData = tijden.map((t, i) => {
+    if (new Date(t).getTime() > nuMs) return null;
+    const p = allPrices[i];
+    return p !== undefined ? +reelePrijs(p/10).toFixed(1) : null;
+  });
+
+  const labels = tijden.map(t => {
+    const d = new Date(t);
+    if (d.getMinutes() !== 0) return '';
+    return d.getHours() % 2 === 0 ? String(d.getHours()) : '';
+  });
+
+  const dummyNet = tijden.map((t,i) => i === tijden.length-1 ? 0 : null);
+
+  // Verticale lijnen
+  const nu4 = new Date(), morgen4 = new Date(nu4);
+  morgen4.setDate(nu4.getDate()+1); morgen4.setHours(0,0,0,0);
+  const midIdxN = tijden.findIndex(t => new Date(t).getTime() >= morgen4.getTime());
+  const nuIdxN  = huidigSlot(tijden);
+  const nuFracN = (Date.now() - new Date(tijden[nuIdxN]).getTime()) / ivl;
+
+  const lijnenPluginNet = {
+    id: 'lijnenNet',
+    afterDraw(ch) {
+      const { ctx, scales } = ch;
+      const x = scales.x, yy = scales.yKw;
+      if (!x || !yy) return;
+      ctx.save();
+      if (midIdxN >= 0) {
+        const xPos = x.getPixelForValue(midIdxN - 0.5);
+        ctx.beginPath(); ctx.moveTo(xPos,yy.top); ctx.lineTo(xPos,yy.bottom);
+        ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
+        ctx.setLineDash([4,4]); ctx.stroke();
+      }
+      const nuXPos = x.getPixelForValue(nuIdxN + nuFracN);
+      ctx.beginPath(); ctx.moveTo(nuXPos,yy.top); ctx.lineTo(nuXPos,yy.bottom);
+      ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
+      ctx.setLineDash([3,3]); ctx.stroke();
+      ctx.restore();
+    }
+  };
+
+  if (chartNet) chartNet.destroy();
+  chartNet = new Chart(ctx, {
+    plugins: [lijnenPluginNet],
+    data: {
+      labels,
+      datasets: [
+        { type:'bar',  label:'_dummy',    data:dummyNet,    backgroundColor:'transparent', borderColor:'transparent', yAxisID:'yKw' },
+        { type:'bar',  label:'Injectie',  data:injectieData, backgroundColor:'rgba(42,138,62,0.8)',  borderColor:'transparent', borderRadius:2, yAxisID:'yKw' },
+        { type:'bar',  label:'Afname',    data:afnameData,   backgroundColor:'rgba(248,81,73,0.8)',  borderColor:'transparent', borderRadius:2, yAxisID:'yKw' },
+        { type:'line', label:'Prijs',     data:kostData,     borderColor:'rgba(210,153,34,0.7)', borderWidth:1.5, pointRadius:0, fill:false, tension:0.2, yAxisID:'yCt', spanGaps:false },
+      ]
+    },
+    options: {
+      responsive:true, animation:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ display:false },
+        tooltip:{
+          backgroundColor:'#161b22', borderColor:'#21262d', borderWidth:1,
+          titleColor:'#8b949e', bodyColor:'#e6edf3',
+          titleFont:{family:'Space Mono',size:11}, bodyFont:{family:'DM Sans',size:12},
+          callbacks:{
+            title:(items)=>{
+              const i=items[0].dataIndex, d=new Date(tijden[i]);
+              return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}  (${fmtDag(tijden[i])})`;
+            },
+            label:(item)=>{
+              if (item.datasetIndex===0) return null;
+              if (item.datasetIndex===1 && item.raw>0)  return ` Injectie: +${item.raw.toFixed(2)} kW`;
+              if (item.datasetIndex===2 && item.raw<0)  return ` Afname:   ${item.raw.toFixed(2)} kW`;
+              if (item.datasetIndex===3 && item.raw!==null) return ` Prijs:    ${item.raw.toFixed(1)} ct/kWh`;
+              return null;
+            },
+            filter:(item)=>{
+              if (item.datasetIndex===0) return false;
+              if (item.raw===null) return false;
+              if (item.datasetIndex===1) return item.raw>0;
+              if (item.datasetIndex===2) return item.raw<0;
+              return true;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{ display:true, type:'category',
+            ticks:{ color:'#8b949e', font:{family:'Space Mono',size:9}, maxRotation:0, autoSkip:false, callback:(v,i)=>labels[i]||'' },
+            grid:{ color:'rgba(33,38,45,0.8)' }
+        },
+        yKw:{ position:'left',
+              border:{ color:'rgba(88,166,255,0.5)', width:1.5 },
+              ticks:{ color:'#8b949e', font:{family:'Space Mono',size:10},
+                      callback: v => v===0?'0':v.toFixed(1)+' kW', maxTicksLimit:5 },
+              grid:{ color:'rgba(33,38,45,0.8)' }
+        },
+        yCt:{ position:'right',
+              ticks:{ color:'rgba(210,153,34,0.8)', font:{family:'Space Mono',size:9},
+                      callback: v => v.toFixed(0)+' ct', maxTicksLimit:5 },
+              grid:{ display:false }
         }
       }
     }
