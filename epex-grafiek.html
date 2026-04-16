@@ -252,7 +252,10 @@ input[type=range].sim-slider::-webkit-slider-thumb {
       <span><span class="leg-dot" style="background:var(--green)"></span>Goedkoop</span>
       <span><span class="leg-dot" style="background:var(--yellow)"></span>Normaal</span>
       <span><span class="leg-dot" style="background:var(--red)"></span>Duur</span>
-      <span><span style="display:inline-block;width:14px;height:8px;background:rgba(139,148,158,0.35);border-radius:2px;vertical-align:middle"></span> Nettarief</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(91,155,213,0.8);border-radius:1px;vertical-align:middle"></span> Fluvius</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(77,182,172,0.8);border-radius:1px;vertical-align:middle"></span> GSC</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(149,117,205,0.8);border-radius:1px;vertical-align:middle"></span> WKK</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(160,120,90,0.8);border-radius:1px;vertical-align:middle"></span> Heffingen</span>
       <span><span style="border-bottom:2px dashed rgba(255,255,255,0.7);display:inline-block;width:14px;margin-bottom:3px"></span> Vast</span>
     </div>
   </div>
@@ -473,62 +476,103 @@ input[type=range].sim-slider::-webkit-slider-thumb {
 
 <!-- TARIEFCOMPONENTEN -->
 <div class="instellingen" style="margin-top:6px">
-  <span class="inst-title">💶 Tariefcomponenten</span>
+  <span class="inst-title">💶 Tariefcomponenten — Ecopower Dynamische burgerstroom</span>
   <label class="inst-item">
-    <span>Fluvius</span>
+    <span style="border-left:3px solid rgba(91,155,213,0.9);padding-left:6px">Afnametarief (Fluvius)</span>
     <span class="inst-input-wrap">
-      <input id="inp-fluvius" type="number" value="9.0" step="0.1" min="0" max="30">
+      <input id="inp-fluvius" type="number" value="5.23" step="0.01" min="0" max="30">
       <span class="inst-unit">ct/kWh</span>
     </span>
   </label>
   <label class="inst-item">
-    <span>Elia</span>
+    <span style="border-left:3px solid rgba(77,182,172,0.9);padding-left:6px">GSC (groenestroomcert.)</span>
     <span class="inst-input-wrap">
-      <input id="inp-elia" type="number" value="1.0" step="0.1" min="0" max="10">
+      <input id="inp-elia" type="number" value="1.10" step="0.01" min="0" max="10">
       <span class="inst-unit">ct/kWh</span>
     </span>
   </label>
   <label class="inst-item">
-    <span>Heffingen</span>
+    <span style="border-left:3px solid rgba(149,117,205,0.9);padding-left:6px">WKK (warmtekracht)</span>
     <span class="inst-input-wrap">
-      <input id="inp-heffingen" type="number" value="2.0" step="0.1" min="0" max="20">
+      <input id="inp-hernieuwbaar" type="number" value="0.39" step="0.01" min="0" max="10">
       <span class="inst-unit">ct/kWh</span>
     </span>
   </label>
   <label class="inst-item">
-    <span>Hernieuwbaar</span>
+    <span style="border-left:3px solid rgba(160,120,90,0.9);padding-left:6px">Heffingen & accijnzen</span>
     <span class="inst-input-wrap">
-      <input id="inp-hernieuwbaar" type="number" value="1.5" step="0.1" min="0" max="10">
+      <input id="inp-heffingen" type="number" value="4.94" step="0.01" min="0" max="20">
       <span class="inst-unit">ct/kWh</span>
     </span>
   </label>
   <label class="inst-item">
-    <span>BTW</span>
+    <span style="padding-left:9px">BTW (op volledige som)</span>
     <span class="inst-input-wrap">
       <input id="inp-btw" type="number" value="6" step="0.5" min="0" max="30">
       <span class="inst-unit">%</span>
     </span>
   </label>
   <span class="inst-item" style="color:var(--muted);font-size:.68rem">
-    Opslag: <span id="opslag-totaal" style="color:var(--yellow);font-weight:700">—</span> ct/kWh
+    Vaste opslag (excl. BTW): <span id="opslag-totaal" style="color:var(--yellow);font-weight:700">—</span> ct/kWh
   </span>
 </div>
 
 <!-- UITLEG VASTE OPSLAG -->
 <div class="opslag-uitleg">
-  <div class="opslag-titel">ℹ️ Prijsberekening — hoe werkt het?</div>
+  <div class="opslag-titel">ℹ️ Prijsberekening — Ecopower Dynamische burgerstroom (factuur feb. 2026)</div>
   <div class="opslag-tekst">
-    De EPEX-prijs is de <b>kale groothandelsprijs</b>. De reële prijs per kWh wordt als volgt berekend:
+    <b>Formule reële prijs:</b><br>
+    <code style="background:rgba(255,255,255,0.08);padding:4px 8px;border-radius:4px;font-size:.8rem">
+      Reële prijs = (EPEX + Afnametarief + GSC + WKK + Heffingen) × (1 + BTW%)
+    </code>
     <br><br>
-    <b>Reële prijs = (EPEX + vaste componenten) × (1 + BTW%)</b>
+
+    <b>In de grafiek — vaste opslag per kWh (gekleurde segmenten):</b><br>
+    <table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:.75rem">
+      <tr>
+        <td style="padding:3px 8px"><span style="display:inline-block;width:12px;height:12px;background:rgba(91,155,213,0.8);border-radius:2px;vertical-align:middle;margin-right:5px"></span><b>Afnametarief Fluvius</b></td>
+        <td style="padding:3px 8px;font-family:monospace">5,23 ct/kWh</td>
+        <td style="padding:3px 8px;color:#8b949e">Transport stroom via hoog- en laagspanningsnet</td>
+      </tr>
+      <tr>
+        <td style="padding:3px 8px"><span style="display:inline-block;width:12px;height:12px;background:rgba(77,182,172,0.8);border-radius:2px;vertical-align:middle;margin-right:5px"></span><b>GSC</b></td>
+        <td style="padding:3px 8px;font-family:monospace">1,10 ct/kWh</td>
+        <td style="padding:3px 8px;color:#8b949e">Groenestroomcertificaten (Vlaamse Nutsregulator)</td>
+      </tr>
+      <tr>
+        <td style="padding:3px 8px"><span style="display:inline-block;width:12px;height:12px;background:rgba(149,117,205,0.8);border-radius:2px;vertical-align:middle;margin-right:5px"></span><b>WKK</b></td>
+        <td style="padding:3px 8px;font-family:monospace">0,39 ct/kWh</td>
+        <td style="padding:3px 8px;color:#8b949e">Warmtekrachtcertificaten (Vlaamse Nutsregulator)</td>
+      </tr>
+      <tr>
+        <td style="padding:3px 8px"><span style="display:inline-block;width:12px;height:12px;background:rgba(160,120,90,0.8);border-radius:2px;vertical-align:middle;margin-right:5px"></span><b>Heffingen & accijnzen</b></td>
+        <td style="padding:3px 8px;font-family:monospace">4,94 ct/kWh</td>
+        <td style="padding:3px 8px;color:#8b949e">Bijdrage op energie (0,19) + Bijzondere accijns (4,75)</td>
+      </tr>
+      <tr style="border-top:1px solid rgba(255,255,255,0.1)">
+        <td style="padding:4px 8px"><b>BTW 6%</b></td>
+        <td style="padding:4px 8px;font-family:monospace">op totaal</td>
+        <td style="padding:4px 8px;color:#8b949e">Berekend op EPEX + alle vaste componenten samen</td>
+      </tr>
+      <tr style="border-top:1px solid rgba(255,255,255,0.15)">
+        <td style="padding:4px 8px"><b>Subtotaal vaste opslag</b></td>
+        <td style="padding:4px 8px;font-family:monospace;color:var(--yellow)">11,66 ct/kWh</td>
+        <td style="padding:4px 8px;color:#8b949e">excl. BTW · incl. BTW ≈ 12,36 ct/kWh</td>
+      </tr>
+    </table>
+
+    <b>Niet in de grafiek — vaste maandkosten per aansluiting:</b><br>
+    <span style="color:#8b949e">
+      Abonnementskost Ecopower: €5,00/maand &nbsp;·&nbsp;
+      Kost databeheer Fluvius: ~€1,49/maand (€0,0489/dag) &nbsp;·&nbsp;
+      Capaciteitstarief Fluvius: €4,52/kW/maand (op maandpiek, min. 2,5 kW)
+    </span>
     <br><br>
-    De BTW wordt berekend op de <b>volledige som</b> (EPEX + Fluvius + Elia + heffingen + hernieuwbaar).
-    De vaste componenten zijn onafhankelijk van de EPEX-prijs — ook bij negatieve prijzen worden ze aangerekend.
+    <b>Injectietarief:</b> Ecopower vergoedt injectie aan EPEX-prijs − onbalanstoeslag ≈ <b>5,25 ct/kWh</b> (feb. 2026 gemiddeld). Injectie aan 0% BTW.
     <br><br>
-    De <b>grijze balk</b> in de grafiek toont de vaste opslag (incl. BTW). De <b>gekleurde balk</b> is de kale EPEX (excl. BTW).
-    De <b>witte stippellijn</b> is je vaste contract. Wanneer de totale balk boven de stippellijn uitkomt = dynamisch contract is duurder.
-    <br>
-    De <b>arbitrage-spread</b> verandert nauwelijks: de vaste componenten vallen weg in het verschil. Alleen de BTW vergroot de spread lichtjes.
+    <span style="color:#8b949e;font-size:.7rem">
+      Bron: Ecopower erkende cv — Afrekeningsfactuur feb. 2026 — Product: Dynamische burgerstroom — Fluvius Imewo
+    </span>
   </div>
 </div>
 
@@ -583,15 +627,16 @@ let simSlot       = 0;   // huidig geselecteerd slot in de slider
 
 let BAT_KWH   = parseFloat(localStorage.getItem('bat_kwh'))    || 10;
 let vast       = parseFloat(localStorage.getItem('vast_prijs'))  || VAST_DEFAULT;
-// Tariefcomponenten (ct/kWh) — BTW als percentage over alles
-let T_FLUVIUS     = parseFloat(localStorage.getItem('t_fluvius'))     || 9.0;
-let T_ELIA        = parseFloat(localStorage.getItem('t_elia'))        || 1.0;
-let T_HEFFINGEN   = parseFloat(localStorage.getItem('t_heffingen'))   || 2.0;
-let T_HERNIEUWBAAR= parseFloat(localStorage.getItem('t_hernieuwbaar'))|| 1.5;
+// Tariefcomponenten (ct/kWh) — Ecopower Dynamische burgerstroom feb. 2026
+// Volgorde = zelfde als op de factuur
+let T_FLUVIUS     = parseFloat(localStorage.getItem('t_fluvius'))     || 5.23; // Afnametarief Fluvius
+let T_ELIA        = parseFloat(localStorage.getItem('t_elia'))        || 1.10; // GSC groenestroomcertificaten
+let T_HERNIEUWBAAR= parseFloat(localStorage.getItem('t_hernieuwbaar'))|| 0.39; // WKK warmtekrachtcertificaten
+let T_HEFFINGEN   = parseFloat(localStorage.getItem('t_heffingen'))   || 4.94; // Bijdrage energie + bijzondere accijns
 let T_BTW_PCT     = parseFloat(localStorage.getItem('t_btw_pct'))     || 6.0;
 
-// Bereken vaste opslag en reële prijs dynamisch
-function vastefComponents() { return T_FLUVIUS + T_ELIA + T_HEFFINGEN + T_HERNIEUWBAAR; }
+// Volgorde: Fluvius → GSC → WKK → Heffingen (= factuurvolgorde)
+function vastefComponents() { return T_FLUVIUS + T_ELIA + T_HERNIEUWBAAR + T_HEFFINGEN; }
 function opslagInclBtw(epexCt) {
   // BTW op (EPEX + vaste componenten)
   const vaste = vastefComponents();
@@ -620,8 +665,8 @@ function kleurReeel(ct) { return kleur(reelePrijs(ct)); }
 
 // Update de opslag-totaal indicator onderaan
 function updateOpslagTotaal() {
-  const gem = opslagInclBtw(10); // voorbeeld bij EPEX=10ct
-  document.getElementById('opslag-totaal').textContent = gem.toFixed(1);
+  const vaste = vastefComponents();
+  document.getElementById('opslag-totaal').textContent = vaste.toFixed(2);
 }
 
 function kleur(ct) {
@@ -687,7 +732,15 @@ function renderChart(tijden, prijzen) {
   const borderColors = prijzen.map((p,i) => i===nuIdx?'#ffffff':kleur(p/10));
   const vastLine     = prijzen.map(() => vast*10);
   // Vaste opslag: grijs balkje bovenop elke EPEX-balk
-  const opslagData   = prijzen.map(p => opslagInclBtw(p/10) * 10); // vaste opslag per slot incl. BTW op EPEX
+  // 4 gekleurde segmenten voor vaste opslag (factuurvolgorde: Fluvius, GSC, WKK, Heffingen)
+  // BTW wordt proportioneel verdeeld over elk segment + EPEX
+  const btwFactor  = T_BTW_PCT / 100;
+  const opslagFluvius    = prijzen.map(() => +(T_FLUVIUS    * (1 + btwFactor)).toFixed(3));
+  const opslagGSC        = prijzen.map(() => +(T_ELIA       * (1 + btwFactor)).toFixed(3));
+  const opslagWKK        = prijzen.map(() => +(T_HERNIEUWBAAR*(1 + btwFactor)).toFixed(3));
+  const opslagHeffingen  = prijzen.map(() => +(T_HEFFINGEN  * (1 + btwFactor)).toFixed(3));
+  // BTW op EPEX zelf als 5e segment (transparant maar telt mee in hoogte)
+  const opslagBtwEpex    = prijzen.map(p  => +(Math.max(0, p/10) * btwFactor).toFixed(3));
 
   if (chart) chart.destroy();
   document.getElementById('status-msg').style.display = 'none';
@@ -732,7 +785,11 @@ function renderChart(tijden, prijzen) {
       labels,
       datasets: [
         { type:'bar',  data:prijzen,    backgroundColor:barColors,                   borderColor:borderColors, borderWidth:1.5, borderRadius:0, order:3, stack:'prijs' },
-        { type:'bar',  data:opslagData,  backgroundColor:'rgba(139,148,158,0.25)',   borderColor:'transparent', borderWidth:0, borderRadius:3, order:2, stack:'prijs' },
+        { type:'bar', data:opslagFluvius,   backgroundColor:'rgba(91,155,213,0.65)',  borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagGSC,        backgroundColor:'rgba(77,182,172,0.65)',  borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagWKK,        backgroundColor:'rgba(149,117,205,0.65)', borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagHeffingen,  backgroundColor:'rgba(160,120,90,0.65)',  borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagBtwEpex,    backgroundColor:'rgba(139,148,158,0.20)', borderColor:'transparent', borderWidth:0, borderRadius:3, order:2, stack:'prijs' },
         { type:'line', data:vastLine,    borderColor:'rgba(255,255,255,0.7)',        borderWidth:2, borderDash:[5,3], pointRadius:0, fill:false, order:1 }
       ]
     },
@@ -750,19 +807,22 @@ function renderChart(tijden, prijzen) {
             label:(item)=>{
               if (item.datasetIndex===0) {
                 const epexCt = item.raw/10;
-                const opsl   = opslagInclBtw(epexCt).toFixed(1);
+                const bf     = T_BTW_PCT/100;
                 const tot    = reelePrijs(epexCt).toFixed(1);
-                const vaste  = vastefComponents().toFixed(1);
-                const btw    = ((epexCt + vastefComponents()) * T_BTW_PCT/100).toFixed(1);
+                const btwTot = ((epexCt + vastefComponents()) * bf).toFixed(1);
                 return [
-                  ` EPEX:         ${epexCt.toFixed(1)} ct/kWh`,
-                  ` + vaste comp: ${vaste} ct/kWh`,
-                  ` + BTW ${T_BTW_PCT}%:    ${btw} ct/kWh`,
-                  ` = totaal:     ${tot} ct/kWh`
+                  ` EPEX:              ${epexCt.toFixed(2)} ct/kWh`,
+                  ` + Fluvius:         ${(T_FLUVIUS*(1+bf)).toFixed(2)} ct/kWh`,
+                  ` + GSC:             ${(T_ELIA*(1+bf)).toFixed(2)} ct/kWh`,
+                  ` + WKK:             ${(T_HERNIEUWBAAR*(1+bf)).toFixed(2)} ct/kWh`,
+                  ` + Heffingen:       ${(T_HEFFINGEN*(1+bf)).toFixed(2)} ct/kWh`,
+                  ` + BTW op EPEX:     ${(epexCt*bf).toFixed(2)} ct/kWh`,
+                  ` = Totaal:          ${tot} ct/kWh`,
                 ];
               }
               if (item.datasetIndex===1) return null;
-              return ` Vast contract: ${vast} ct/kWh`;
+              if (item.datasetIndex === 6) return ` Vast contract: ${vast} ct/kWh`;
+              return null;
             },
             filter:(item)=>item.datasetIndex!==1
           }
@@ -2166,10 +2226,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('inp-soc').value    = SOC_START;
   document.getElementById('inp-solar-max').value = SOLAR_MAX_KW;
   document.getElementById('inp-piek').value        = MAX_PIEK;
-  document.getElementById('inp-fluvius').value     = T_FLUVIUS;
-  document.getElementById('inp-elia').value        = T_ELIA;
-  document.getElementById('inp-heffingen').value   = T_HEFFINGEN;
-  document.getElementById('inp-hernieuwbaar').value= T_HERNIEUWBAAR;
+  document.getElementById('inp-fluvius').value     = T_FLUVIUS;     // Afnametarief Fluvius
+  document.getElementById('inp-elia').value        = T_ELIA;        // GSC
+  document.getElementById('inp-hernieuwbaar').value= T_HERNIEUWBAAR;// WKK
+  document.getElementById('inp-heffingen').value   = T_HEFFINGEN;   // Heffingen
   document.getElementById('inp-btw').value         = T_BTW_PCT;
   updateOpslagTotaal();
   document.getElementById('inp-cap').value    = CAP_TAR;
