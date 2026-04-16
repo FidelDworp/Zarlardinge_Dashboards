@@ -734,13 +734,14 @@ function renderChart(tijden, prijzen) {
   // Vaste opslag: grijs balkje bovenop elke EPEX-balk
   // 4 gekleurde segmenten voor vaste opslag (factuurvolgorde: Fluvius, GSC, WKK, Heffingen)
   // BTW wordt proportioneel verdeeld over elk segment + EPEX
+  // Opslag in grafiekschaal: ct/kWh × 10 (zelfde schaal als prijzen array = €/MWh × 10)
   const btwFactor  = T_BTW_PCT / 100;
-  const opslagFluvius    = prijzen.map(() => +(T_FLUVIUS    * (1 + btwFactor)).toFixed(3));
-  const opslagGSC        = prijzen.map(() => +(T_ELIA       * (1 + btwFactor)).toFixed(3));
-  const opslagWKK        = prijzen.map(() => +(T_HERNIEUWBAAR*(1 + btwFactor)).toFixed(3));
-  const opslagHeffingen  = prijzen.map(() => +(T_HEFFINGEN  * (1 + btwFactor)).toFixed(3));
-  // BTW op EPEX zelf als 5e segment (transparant maar telt mee in hoogte)
-  const opslagBtwEpex    = prijzen.map(p  => +(Math.max(0, p/10) * btwFactor).toFixed(3));
+  const opslagFluvius    = prijzen.map(() => +(T_FLUVIUS     * (1 + btwFactor) * 10).toFixed(2));
+  const opslagGSC        = prijzen.map(() => +(T_ELIA        * (1 + btwFactor) * 10).toFixed(2));
+  const opslagWKK        = prijzen.map(() => +(T_HERNIEUWBAAR* (1 + btwFactor) * 10).toFixed(2));
+  const opslagHeffingen  = prijzen.map(() => +(T_HEFFINGEN   * (1 + btwFactor) * 10).toFixed(2));
+  // BTW op EPEX zelf (transparant segment bovenop)
+  const opslagBtwEpex    = prijzen.map(p  => +(Math.max(0, p/10) * btwFactor   * 10).toFixed(2));
 
   if (chart) chart.destroy();
   document.getElementById('status-msg').style.display = 'none';
