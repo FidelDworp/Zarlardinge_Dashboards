@@ -256,6 +256,8 @@ input[type=range].sim-slider::-webkit-slider-thumb {
       <span><span style="display:inline-block;width:10px;height:8px;background:rgba(77,182,172,0.8);border-radius:1px;vertical-align:middle"></span> GSC</span>
       <span><span style="display:inline-block;width:10px;height:8px;background:rgba(149,117,205,0.8);border-radius:1px;vertical-align:middle"></span> WKK</span>
       <span><span style="display:inline-block;width:10px;height:8px;background:rgba(160,120,90,0.8);border-radius:1px;vertical-align:middle"></span> Heffingen</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(200,200,200,0.45);border-radius:1px;vertical-align:middle"></span> BTW 6%</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(255,167,38,0.70);border-radius:1px;vertical-align:middle"></span> Abo+Cap.</span>
       <span><span style="border-bottom:2px dashed rgba(255,255,255,0.7);display:inline-block;width:14px;margin-bottom:3px"></span> Vast</span>
     </div>
   </div>
@@ -467,8 +469,36 @@ input[type=range].sim-slider::-webkit-slider-thumb {
   <label class="inst-item">
     <span>Cap. tarief</span>
     <span class="inst-input-wrap">
-      <input id="inp-cap" type="number" value="4.80" step="0.10" min="0" max="20">
+      <input id="inp-cap" type="number" value="4.517" step="0.001" min="0" max="20">
       <span class="inst-unit">€/kW/mnd</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Abonnement</span>
+    <span class="inst-input-wrap">
+      <input id="inp-abo" type="number" value="5.00" step="0.10" min="0" max="30">
+      <span class="inst-unit">€/mnd</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Databeheer</span>
+    <span class="inst-input-wrap">
+      <input id="inp-databeheer" type="number" value="1.49" step="0.01" min="0" max="10">
+      <span class="inst-unit">€/mnd</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Maandverbruik</span>
+    <span class="inst-input-wrap">
+      <input id="inp-maandkwh" type="number" value="1300" step="50" min="100" max="5000">
+      <span class="inst-unit">kWh/mnd</span>
+    </span>
+  </label>
+  <label class="inst-item" style="opacity:.7">
+    <span>Maandpiek (live)</span>
+    <span class="inst-input-wrap" style="pointer-events:none">
+      <span id="live-maandpiek" style="color:var(--yellow);font-family:var(--mono);font-size:.82rem;font-weight:700">—</span>
+      <span class="inst-unit">kW</span>
     </span>
   </label>
   <span class="inst-bron">Bron: <a href="https://energy-charts.info" target="_blank">energy-charts.info</a></span>
@@ -549,6 +579,11 @@ input[type=range].sim-slider::-webkit-slider-thumb {
         <td style="padding:3px 8px;font-family:monospace">4,94 ct/kWh</td>
         <td style="padding:3px 8px;color:#8b949e">Bijdrage op energie (0,19) + Bijzondere accijns (4,75)</td>
       </tr>
+      <tr>
+        <td style="padding:3px 8px"><span style="display:inline-block;width:12px;height:12px;background:rgba(255,167,38,0.75);border-radius:2px;vertical-align:middle;margin-right:5px"></span><b>Abo + Cap. tarief</b></td>
+        <td style="padding:3px 8px;font-family:monospace">~2,66 ct/kWh</td>
+        <td style="padding:3px 8px;color:#8b949e">Abo €5 + databeheer €1,49 + cap. €4,517/kW/mnd ÷ 1300 kWh (varieert)</td>
+      </tr>
       <tr style="border-top:1px solid rgba(255,255,255,0.1)">
         <td style="padding:4px 8px"><b>BTW 6%</b></td>
         <td style="padding:4px 8px;font-family:monospace">op totaal</td>
@@ -556,8 +591,8 @@ input[type=range].sim-slider::-webkit-slider-thumb {
       </tr>
       <tr style="border-top:1px solid rgba(255,255,255,0.15)">
         <td style="padding:4px 8px"><b>Subtotaal vaste opslag</b></td>
-        <td style="padding:4px 8px;font-family:monospace;color:var(--yellow)">11,66 ct/kWh</td>
-        <td style="padding:4px 8px;color:#8b949e">excl. BTW · incl. BTW ≈ 12,36 ct/kWh</td>
+        <td style="padding:4px 8px;font-family:monospace;color:var(--yellow)">~14,32 ct/kWh</td>
+        <td style="padding:4px 8px;color:#8b949e">excl. BTW · vaste opslag incl. abo/cap. excl. BTW</td>
       </tr>
     </table>
 
@@ -645,7 +680,18 @@ function opslagInclBtw(epexCt) {
 let SOC_START = parseFloat(localStorage.getItem('soc_start'))   || 50;
 let SOLAR_MAX_KW = parseFloat(localStorage.getItem('solar_max_kw')) || 8;
 let MAX_PIEK  = parseFloat(localStorage.getItem('max_piek'))    || 15;
-let CAP_TAR   = parseFloat(localStorage.getItem('cap_tar'))     || 4.80;
+let CAP_TAR     = parseFloat(localStorage.getItem('cap_tar'))      || 4.517; // €/kW/mnd
+let ABO_EUR     = parseFloat(localStorage.getItem('abo_eur'))      || 5.00;  // €/mnd abonnement
+let DATABEHEER  = parseFloat(localStorage.getItem('databeheer'))   || 1.49;  // €/mnd databeheer
+let MAAND_KWH   = parseFloat(localStorage.getItem('maand_kwh'))    || 1300;  // kWh/mnd schatting
+let liveMapndpiek = 2.5; // kW — bijgewerkt vanuit simulatie (min 2.5 kW)
+
+// Bereken vaste maandkosten omgerekend naar ct/kWh
+function vasteMaandCtKwh(maandpiekKw) {
+  const piek = Math.max(2.5, maandpiekKw);
+  const totaalEur = ABO_EUR + DATABEHEER + (CAP_TAR * piek);
+  return (totaalEur / MAAND_KWH) * 100; // → ct/kWh
+}
 
 // Override per apparaat: 'auto'|'aan'|'uit'
 let overrides = {};
@@ -734,14 +780,18 @@ function renderChart(tijden, prijzen) {
   // Vaste opslag: grijs balkje bovenop elke EPEX-balk
   // 4 gekleurde segmenten voor vaste opslag (factuurvolgorde: Fluvius, GSC, WKK, Heffingen)
   // BTW wordt proportioneel verdeeld over elk segment + EPEX
-  // Opslag in grafiekschaal: ct/kWh × 10 (zelfde schaal als prijzen array = €/MWh × 10)
-  const btwFactor  = T_BTW_PCT / 100;
-  const opslagFluvius    = prijzen.map(() => +(T_FLUVIUS     * (1 + btwFactor) * 10).toFixed(2));
-  const opslagGSC        = prijzen.map(() => +(T_ELIA        * (1 + btwFactor) * 10).toFixed(2));
-  const opslagWKK        = prijzen.map(() => +(T_HERNIEUWBAAR* (1 + btwFactor) * 10).toFixed(2));
-  const opslagHeffingen  = prijzen.map(() => +(T_HEFFINGEN   * (1 + btwFactor) * 10).toFixed(2));
-  // BTW op EPEX zelf (transparant segment bovenop)
-  const opslagBtwEpex    = prijzen.map(p  => +(Math.max(0, p/10) * btwFactor   * 10).toFixed(2));
+  // Opslag in grafiekschaal: ct/kWh × 10 (zelfde schaal als prijzen = €/MWh)
+  // Segmenten ZONDER BTW — BTW komt als apart zichtbaar segment bovenaan
+  const btwFactor     = T_BTW_PCT / 100;
+  const opslagFluvius   = prijzen.map(() => +(T_FLUVIUS      * 10).toFixed(2));
+  const opslagGSC       = prijzen.map(() => +(T_ELIA         * 10).toFixed(2));
+  const opslagWKK       = prijzen.map(() => +(T_HERNIEUWBAAR * 10).toFixed(2));
+  const opslagHeffingen = prijzen.map(() => +(T_HEFFINGEN    * 10).toFixed(2));
+  // BTW = 6% op (EPEX + alle vaste componenten) — apart zichtbaar segment
+  const opslagBtw = prijzen.map(p => {
+    const epexCt = Math.max(0, p / 10); // BTW enkel op positieve EPEX
+    return +((epexCt + vastefComponents()) * btwFactor * 10).toFixed(2);
+  });
 
   if (chart) chart.destroy();
   document.getElementById('status-msg').style.display = 'none';
@@ -786,11 +836,13 @@ function renderChart(tijden, prijzen) {
       labels,
       datasets: [
         { type:'bar',  data:prijzen,    backgroundColor:barColors,                   borderColor:borderColors, borderWidth:1.5, borderRadius:0, order:3, stack:'prijs' },
-        { type:'bar', data:opslagFluvius,   backgroundColor:'rgba(91,155,213,0.65)',  borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
-        { type:'bar', data:opslagGSC,        backgroundColor:'rgba(77,182,172,0.65)',  borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
-        { type:'bar', data:opslagWKK,        backgroundColor:'rgba(149,117,205,0.65)', borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
-        { type:'bar', data:opslagHeffingen,  backgroundColor:'rgba(160,120,90,0.65)',  borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
-        { type:'bar', data:opslagBtwEpex,    backgroundColor:'rgba(139,148,158,0.20)', borderColor:'transparent', borderWidth:0, borderRadius:3, order:2, stack:'prijs' },
+        { type:'bar', data:opslagFluvius,   backgroundColor:'rgba(91,155,213,0.70)',  borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagGSC,        backgroundColor:'rgba(77,182,172,0.70)',  borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagWKK,        backgroundColor:'rgba(149,117,205,0.70)', borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagHeffingen,  backgroundColor:'rgba(160,120,90,0.70)',  borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagBtw,        backgroundColor:'rgba(200,200,200,0.35)', borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:prijzen.map(()=>+(vasteMaandCtKwh(liveMapndpiek)*10).toFixed(2)),
+          backgroundColor:'rgba(255,167,38,0.60)', borderColor:'transparent', borderWidth:0, borderRadius:3, order:2, stack:'prijs' },
         { type:'line', data:vastLine,    borderColor:'rgba(255,255,255,0.7)',        borderWidth:2, borderDash:[5,3], pointRadius:0, fill:false, order:1 }
       ]
     },
@@ -817,8 +869,9 @@ function renderChart(tijden, prijzen) {
                   ` + GSC:             ${(T_ELIA*(1+bf)).toFixed(2)} ct/kWh`,
                   ` + WKK:             ${(T_HERNIEUWBAAR*(1+bf)).toFixed(2)} ct/kWh`,
                   ` + Heffingen:       ${(T_HEFFINGEN*(1+bf)).toFixed(2)} ct/kWh`,
-                  ` + BTW op EPEX:     ${(epexCt*bf).toFixed(2)} ct/kWh`,
-                  ` = Totaal:          ${tot} ct/kWh`,
+                  ` + BTW ${T_BTW_PCT}% op alles:   ${((epexCt + vastefComponents()) * bf).toFixed(2)} ct/kWh`,
+                  ` + Abo+Cap.:        ${(vasteMaandCtKwh(liveMapndpiek)*(1+btwFactor)).toFixed(2)} ct/kWh`,
+                  ` = Totaal:          ${(reelePrijs(epexCt)+vasteMaandCtKwh(liveMapndpiek)*(1+btwFactor)).toFixed(2)} ct/kWh`,
                 ];
               }
               if (item.datasetIndex===1) return null;
@@ -1418,6 +1471,19 @@ function updateSimulatie() {
 
   tekenSimulatieSlot(nuIdx + simSlot);
   if (allTimes.length) renderBatChart();
+  // Update live maandpiek = max piek vandaag tot nu
+  if (_simSlots.length) {
+    const nu = Date.now();
+    const vandaag = new Date(); vandaag.setHours(0,0,0,0);
+    let maxPiek = 2.5;
+    allTimes.forEach((t,i) => {
+      if (new Date(t) >= vandaag && new Date(t) <= nu && _simSlots[i])
+        maxPiek = Math.max(maxPiek, _simSlots[i].piekKw || 0);
+    });
+    liveMapndpiek = maxPiek;
+    const el = document.getElementById('live-maandpiek');
+    if (el) el.textContent = maxPiek.toFixed(2);
+  }
   if (allTimes.length) renderNetChart();
   updateDagkost();
 }
@@ -2026,27 +2092,38 @@ function updateDagkost() {
 
   if (!heeftData) return;
 
-  const besparing = kostVast - kostDyn;
-  const klr = besparing >= 0 ? 'var(--green)' : 'var(--red)';
-  const dynKlr = kostDyn < kostVast ? 'var(--green)' : 'var(--red)';
+  // Vaste dagkost (pro-rata van maand naar dag)
+  const dagenInMaand = new Date(nu.getFullYear(), nu.getMonth()+1, 0).getDate();
+  const capMaand     = CAP_TAR * Math.max(2.5, liveMapndpiek);
+  const vasteDagEur  = (ABO_EUR + DATABEHEER + capMaand) / dagenInMaand;
+  // Pro-rata tot huidig uur
+  const dagFractie   = (nu.getHours() * 60 + nu.getMinutes()) / (24 * 60);
+  const vasteDeelEur = vasteDagEur * dagFractie;
+
+  // Totale kost incl. vaste deel
+  const kostDynTotaal  = kostDyn  + vasteDeelEur;
+  const kostVastTotaal = kostVast + vasteDeelEur;
+  const besparing      = kostVast - kostDyn; // verschil blijft zelfde
 
   const dagkostEl = document.getElementById('info-dagkost');
-  dagkostEl.textContent = `€ ${kostDyn.toFixed(2)}`;
-  dagkostEl.style.color = kostDyn >= 0 ? 'var(--yellow)' : 'var(--green)';
+  dagkostEl.textContent = `€ ${kostDynTotaal.toFixed(2)}`;
+  dagkostEl.style.color = kostDynTotaal >= 0 ? 'var(--yellow)' : 'var(--green)';
 
+  const capStr = `cap. €${(capMaand/dagenInMaand*dagFractie).toFixed(2)} · abo €${(vasteDeelEur-(capMaand/dagenInMaand*dagFractie)).toFixed(2)}`;
   document.getElementById('info-dagkost-sub').textContent =
-    `Kost t/m ${String(nu.getHours()).padStart(2,'0')}:${String(nu.getMinutes()).padStart(2,'0')} · vast contract zou € ${kostVast.toFixed(2)} zijn`;
+    `t/m ${String(nu.getHours()).padStart(2,'0')}:${String(nu.getMinutes()).padStart(2,'0')} · energie €${kostDyn.toFixed(2)} + vaste €${vasteDeelEur.toFixed(2)}`;
 
   const vergelijkEl = document.getElementById('info-vergelijk');
+  const klr = besparing >= 0 ? 'var(--green)' : 'var(--red)';
   vergelijkEl.style.color = klr;
   if (besparing >= 0) {
     vergelijkEl.textContent = `€ ${besparing.toFixed(2)} goedkoper`;
     document.getElementById('info-vergelijk-sub').textContent =
-      `Dynamisch (€ ${kostDyn.toFixed(2)}) vs vast (€ ${kostVast.toFixed(2)}) · besparing vandaag`;
+      `Dyn energie € ${kostDyn.toFixed(2)} vs vast € ${kostVast.toFixed(2)} · vaste kosten gelijk voor beide`;
   } else {
     vergelijkEl.textContent = `€ ${Math.abs(besparing).toFixed(2)} duurder`;
     document.getElementById('info-vergelijk-sub').textContent =
-      `Dynamisch (€ ${kostDyn.toFixed(2)}) vs vast (€ ${kostVast.toFixed(2)}) · geen besparing vandaag`;
+      `Dyn energie € ${kostDyn.toFixed(2)} vs vast € ${kostVast.toFixed(2)} · vaste kosten gelijk voor beide`;
   }
 }
 
@@ -2233,7 +2310,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('inp-heffingen').value   = T_HEFFINGEN;   // Heffingen
   document.getElementById('inp-btw').value         = T_BTW_PCT;
   updateOpslagTotaal();
-  document.getElementById('inp-cap').value    = CAP_TAR;
+  document.getElementById('inp-cap').value        = CAP_TAR;
+  document.getElementById('inp-abo').value        = ABO_EUR;
+  document.getElementById('inp-databeheer').value = DATABEHEER;
+  document.getElementById('inp-maandkwh').value   = MAAND_KWH;
   try {
     const opgeslagen = localStorage.getItem('periode_keuzes');
     if (opgeslagen) {
