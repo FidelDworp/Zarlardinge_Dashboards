@@ -1,0 +1,32 @@
+#!/bin/bash
+echo "========================================"
+echo " Zarlar RPi check"
+echo "========================================"
+echo ""
+echo "--- Node.js ---"
+node --version 2>/dev/null && echo "npm: $(npm --version)" || echo "NIET GEVONDEN"
+echo ""
+echo "--- Homebridge ---"
+systemctl is-active homebridge 2>/dev/null && echo "ACTIEF — verwijder met ./2-remove-homebridge.sh" || echo "niet actief / niet gevonden — OK"
+echo ""
+echo "--- OS ---"
+cat /etc/os-release | grep PRETTY_NAME
+echo ""
+echo "--- Schijfruimte ---"
+df -h / | tail -1
+echo ""
+echo "--- Geheugen ---"
+free -h | head -2
+echo ""
+echo "--- Gebruiker ---"
+echo "$(whoami) — home: $HOME"
+echo ""
+echo "--- IP adressen ---"
+hostname -I
+echo ""
+echo "--- SSH ---"
+systemctl is-active ssh 2>/dev/null && echo "SSH: actief" || echo "SSH: NIET ACTIEF — start met: sudo systemctl enable ssh && sudo systemctl start ssh"
+echo ""
+echo "--- Poort 3000 al in gebruik? ---"
+ss -tlnp | grep 3000 && echo "JA — al iets actief" || echo "nee — vrij"
+echo "========================================"

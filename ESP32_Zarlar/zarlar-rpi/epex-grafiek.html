@@ -1,0 +1,2513 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zarlardinge Smart Energy</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #0d1117;
+  --panel:  #161b22;
+  --border: #21262d;
+  --green:  #2a8a3e;
+  --lime:   #a8ff3e;
+  --yellow: #d29922;
+  --red:    #f85149;
+  --blue:   #58a6ff;
+  --muted:  #8b949e;
+  --text:   #e6edf3;
+  --mono:   'Space Mono', monospace;
+  --sans:   'DM Sans', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; padding:20px 16px 48px; max-width:960px; margin:0 auto; }
+
+/* HEADER */
+header { display:flex; align-items:baseline; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+header h1 { font-family:var(--mono); font-size:1rem; font-weight:700; letter-spacing:.05em; }
+.dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--lime); animation:pulse 2s ease-in-out infinite; margin-right:6px; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* KLEUREN */
+.green  { color:var(--green); } .lime { color:var(--lime); } .yellow { color:var(--yellow); } .red { color:var(--red); } .blue { color:var(--blue); }
+.badge { display:inline-block; font-size:.66rem; font-family:var(--mono); padding:2px 7px; border-radius:4px; margin-top:7px; }
+.badge.green  { background:rgba(63,185,80,.15);  color:var(--green); }
+.badge.yellow { background:rgba(210,153,34,.15); color:var(--yellow); }
+.badge.red    { background:rgba(248,81,73,.15);  color:var(--red); }
+.badge.lime   { background:rgba(168,255,62,.15); color:var(--lime); }
+
+/* GRAFIEK */
+.chart-wrap { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:18px 18px 14px; margin-bottom:16px; }
+.chart-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
+.chart-title { font-family:var(--mono); font-size:.73rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.legend { display:flex; gap:12px; font-size:.7rem; color:var(--muted); flex-wrap:wrap; }
+.legend span { display:flex; align-items:center; gap:5px; }
+.leg-dot { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+canvas { width:100% !important; }
+.dag-labels { display:flex; font-family:var(--mono); font-size:.68rem; color:var(--muted); margin-bottom:4px; }
+.dag-labels span { flex:1; text-align:center; }
+
+/* PLANNINGSMATRIX */
+.matrix-wrap { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:16px; overflow-x:auto; }
+.matrix-header-row { font-family:var(--mono); font-size:.73rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; }
+.matrix-winst { font-size:.78rem; color:var(--muted); }
+.matrix-winst-val { font-family:var(--mono); font-weight:700; color:var(--green); }
+
+table.matrix { border-collapse:collapse; width:100%; min-width:700px; }
+table.matrix th {
+  font-family:var(--mono); font-size:.6rem; color:var(--muted);
+  text-align:center; padding:4px 3px 6px; border-bottom:2px solid var(--border);
+  white-space:nowrap; position:sticky; top:0; background:var(--panel); z-index:1;
+}
+table.matrix th .th-sym  { font-size:1rem; display:block; line-height:1; margin-bottom:2px; }
+table.matrix th .th-kw   { font-size:.52rem; color:var(--muted); display:block; }
+table.matrix th.th-left  { text-align:left; min-width:110px; padding-left:8px; }
+table.matrix th.th-sep   { border-left:3px dashed rgba(88,166,255,0.5); }
+
+table.matrix td {
+  text-align:center; padding:5px 3px; border-bottom:1px solid rgba(33,38,45,0.6);
+  vertical-align:middle;
+}
+table.matrix td.td-periode {
+  text-align:left; padding-left:0; white-space:nowrap;
+}
+table.matrix td.td-sep { border-left:3px dashed rgba(88,166,255,0.5); }
+
+/* Kleurband links van periode */
+.periode-band {
+  display:flex; align-items:center; gap:0;
+}
+.periode-kleurband {
+  width:4px; border-radius:2px; align-self:stretch; min-height:28px; flex-shrink:0; margin-right:6px;
+}
+.periode-info { display:flex; flex-direction:column; gap:1px; }
+.periode-tijd { font-family:var(--mono); font-size:.72rem; color:var(--text); white-space:nowrap; }
+.periode-dag  { font-size:.6rem; color:var(--muted); font-family:var(--mono); }
+.periode-duur { font-size:.58rem; color:var(--muted); font-family:var(--mono); }
+
+.td-prijs { font-family:var(--mono); font-size:.82rem; font-weight:700; white-space:nowrap; }
+
+/* Checkboxes in tabel */
+.mx-cb { width:15px; height:15px; cursor:pointer; accent-color:var(--lime); }
+.mx-cb.cb-duur { accent-color:var(--red); }
+
+/* Piek kolom */
+.td-piek         { font-family:var(--mono); font-size:.82rem; font-weight:700; white-space:nowrap; transition:color .3s; }
+.td-piek.ok      { color:#8b949e; }           /* <50%: grijs, geen zorg */
+.td-piek.notice  { color:#3fb950; }           /* 50-75%: groen */
+.td-piek.warn    { color:#d29922; }           /* 75-90%: geel */
+.td-piek.warn-hi { color:#f0883e; }           /* 90-100%: oranje */
+.td-piek.over    { color:#f85149; font-size:.9rem; } /* >100%: rood + groter */
+
+/* Type rijen */
+tr.row-neg  { background:rgba(168,255,62,.04); }
+tr.row-goen { background:rgba(42,138,62,.04); }
+tr.row-duur { background:rgba(248,81,73,.04); }
+tr.row-neg:hover, tr.row-goen:hover, tr.row-duur:hover, tr.row-norm:hover { background:rgba(255,255,255,.04); }
+tr.row-norm { background:rgba(210,153,34,.03); }
+tr.row-current td { border-top:1px solid rgba(255,255,255,.15) !important; border-bottom:1px solid rgba(255,255,255,.15) !important; }
+
+/* Separator rij */
+tr.row-sep td { padding:2px; background:transparent; border-bottom:1px solid var(--border); }
+
+/* SIMULATIE */
+.sim-wrap { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:18px; margin-bottom:16px; }
+.sim-header { font-family:var(--mono); font-size:.73rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+.sim-tijdstip { font-family:var(--mono); font-size:.85rem; color:var(--text); }
+
+/* TIJDSCHUIF */
+.sim-slider-wrap { margin-bottom:18px; }
+.sim-slider-labels { display:flex; justify-content:space-between; font-family:var(--mono); font-size:.62rem; color:var(--muted); margin-bottom:4px; }
+input[type=range].sim-slider {
+  width:100%; accent-color:var(--blue); height:4px;
+  background:var(--border); border-radius:2px; outline:none; cursor:pointer;
+  -webkit-appearance:none; appearance:none;
+}
+input[type=range].sim-slider::-webkit-slider-thumb {
+  -webkit-appearance:none; width:14px; height:14px;
+  border-radius:50%; background:var(--blue); cursor:pointer;
+}
+
+/* LED STRIP */
+.sim-strip-wrap { margin-bottom:16px; }
+.sim-strip-title { font-family:var(--mono); font-size:.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px; }
+.led-strip-scroll { overflow-x:auto; padding-bottom:4px; }
+.led-strip { display:flex; gap:10px; justify-content:flex-start; margin-bottom:4px; min-width:max-content; padding:4px 2px; }
+.led-pixel-wrap { display:flex; flex-direction:column; align-items:center; gap:4px; min-width:52px; }
+.led-sym { font-size:1.1rem; line-height:1; margin-bottom:1px; }
+.led-pixel {
+  width:44px; height:44px; border-radius:50%;
+  background:#111; border:2px solid #2a2a2a;
+  transition:background .3s, box-shadow .3s;
+  display:flex; align-items:center; justify-content:center;
+}
+.led-pixel.aan { box-shadow:0 0 16px 5px var(--glow-clr, #3fb950); }
+.led-label { font-family:var(--mono); font-size:.54rem; color:var(--muted); text-align:center; line-height:1.3; max-width:52px; }
+.led-groep-sep { width:1px; background:var(--border); align-self:stretch; margin:0 2px; flex-shrink:0; }
+
+/* SOC BALK */
+.soc-wrap { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px 14px; margin-bottom:12px; }
+.soc-header { display:flex; justify-content:space-between; font-family:var(--mono); font-size:.68rem; color:var(--muted); margin-bottom:6px; }
+.soc-pct { font-size:.9rem; font-weight:700; }
+.soc-bar-bg { background:#21262d; border-radius:4px; height:10px; overflow:hidden; }
+.soc-bar-fill { height:100%; border-radius:4px; transition:width .4s, background .4s; }
+.soc-actie { font-size:.65rem; color:var(--muted); font-family:var(--mono); margin-top:5px; }
+
+/* SOLAR + NETTO */
+.sim-metrics { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px; }
+.sim-metric { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px 12px; }
+.sim-metric-label { font-family:var(--mono); font-size:.62rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+.sim-metric-val { font-family:var(--mono); font-size:1rem; font-weight:700; }
+
+/* VERBRUIKERSLIJST */
+.sim-devices { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.sim-dev-row { background:var(--bg); border:1px solid var(--border); border-radius:5px; padding:7px 10px; display:flex; justify-content:space-between; align-items:center; font-size:.72rem; }
+.sim-dev-naam { font-family:var(--mono); color:var(--muted); }
+.sim-dev-status { font-family:var(--mono); font-size:.72rem; font-weight:700; }
+
+/* INSTELLINGEN */
+.instellingen { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px 18px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-top:4px; }
+.inst-title { font-family:var(--mono); font-size:.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.inst-item { display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:.72rem; color:var(--text); }
+.inst-input-wrap { display:flex; align-items:center; gap:4px; background:var(--bg); border:1px solid var(--border); border-radius:5px; padding:4px 8px; }
+.inst-input-wrap input[type=number] { background:transparent; border:none; outline:none; color:var(--yellow); font-family:var(--mono); font-size:.82rem; font-weight:700; width:44px; text-align:right; }
+.inst-input-wrap select { background:var(--bg); border:none; outline:none; color:var(--yellow); font-family:var(--mono); font-size:.75rem; cursor:pointer; }
+.inst-unit { font-size:.65rem; color:var(--muted); }
+.inst-bron { font-size:.65rem; color:var(--muted); font-family:var(--mono); margin-left:auto; }
+.inst-bron a { color:var(--muted); }
+
+#status-msg { font-size:.75rem; color:var(--muted); font-family:var(--mono); text-align:center; padding:40px; display:none; }
+.info-kaarten { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+.info-card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px 18px; }
+.info-label { font-family:var(--mono); font-size:.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
+.info-waarde { font-family:var(--mono); font-size:1.6rem; font-weight:700; line-height:1; margin-bottom:6px; }
+.info-sub { font-size:.7rem; color:var(--muted); font-family:var(--mono); }
+@media (max-width:500px) { .info-kaarten { grid-template-columns:1fr; } }
+.opslag-uitleg { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px 18px; margin-top:8px; }
+.opslag-titel  { font-family:var(--mono); font-size:.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; }
+.opslag-tekst  { font-size:.75rem; color:var(--muted); line-height:1.6; }
+.opslag-tekst b { color:var(--text); }
+
+
+/* PIEK METER */
+.piek-wrap { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px 14px; margin-bottom:12px; }
+.piek-header { display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:.68rem; color:var(--muted); margin-bottom:6px; }
+.piek-kw { font-size:.9rem; font-weight:700; }
+.piek-bar-bg { background:#21262d; border-radius:4px; height:14px; position:relative; overflow:visible; }
+.piek-bar-fill { height:100%; border-radius:4px; transition:width .3s, background .3s; }
+.piek-bar-limiet {
+  position:absolute; top:-3px; bottom:-3px; width:3px;
+  background:white; border-radius:2px; transition:left .3s;
+}
+.piek-status { font-size:.68rem; font-family:var(--mono); margin-top:5px; display:flex; justify-content:space-between; }
+.piek-afgesch { font-size:.65rem; color:var(--yellow); font-family:var(--mono); margin-top:4px; min-height:1em; }
+
+/* APPARATEN MET OVERRIDE */
+.sim-dev-row { background:var(--bg); border:1px solid var(--border); border-radius:5px; padding:7px 10px; display:flex; justify-content:space-between; align-items:center; gap:6px; }
+.sim-dev-info { display:flex; flex-direction:column; gap:1px; flex:1; }
+.sim-dev-naam { font-family:var(--mono); font-size:.7rem; color:var(--muted); }
+.sim-dev-kw   { font-family:var(--mono); font-size:.75rem; font-weight:700; }
+.sim-dev-piek { font-size:.6rem; color:var(--yellow); font-family:var(--mono); }
+.override-btn-group { display:flex; gap:2px; }
+.override-btn {
+  font-family:var(--mono); font-size:.58rem; padding:2px 5px;
+  border-radius:3px; border:1px solid var(--border);
+  background:var(--bg); color:var(--muted); cursor:pointer;
+  transition:all .15s;
+}
+.override-btn.active-auto  { background:rgba(88,166,255,.2);  color:var(--blue);   border-color:var(--blue); }
+.override-btn.active-aan   { background:rgba(210,153,34,.2);  color:var(--yellow); border-color:var(--yellow); }
+.override-btn.active-uit   { background:rgba(139,148,158,.15);color:var(--muted);  border-color:var(--muted); }
+
+/* PIEK KOSTEN */
+.piek-kost { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px 14px; margin-top:12px; }
+.piek-kost-title { font-family:var(--mono); font-size:.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; }
+.piek-kost-row { display:flex; justify-content:space-between; font-size:.75rem; margin-bottom:4px; }
+.piek-kost-row span:first-child { color:var(--muted); font-family:var(--mono); font-size:.7rem; }
+.piek-kost-row span:last-child  { font-family:var(--mono); font-weight:700; }
+.piek-besparing { color:var(--green); }
+
+@media (max-width:560px) {
+  .arb-grid  { grid-template-columns:1fr; }
+  .sim-metrics { grid-template-columns:1fr 1fr; }
+  .sim-devices { grid-template-columns:1fr; }
+}
+
+/* ─── TABS ─────────────────────────────────────────────────────────────────── */
+.tab-nav { display:flex; gap:6px; margin-bottom:18px; }
+.tab-btn { flex:1; padding:10px 4px; border:1px solid var(--border); border-radius:8px;
+           background:var(--panel); color:var(--muted); cursor:pointer;
+           font-size:.72rem; font-family:var(--mono); text-align:center;
+           transition:all .15s; user-select:none; }
+.tab-btn:hover { border-color:rgba(88,166,255,0.4); color:var(--text); }
+.tab-btn.active { background:rgba(88,166,255,0.15); border-color:rgba(88,166,255,0.7);
+                  color:#58a6ff; font-weight:700; }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+
+/* ─── MINI TABEL (dashboard) ─────────────────────────────────────────────────*/
+.mini-tabel { width:100%; border-collapse:collapse; margin-top:12px; font-size:.8rem; }
+.mini-tabel td { padding:7px 10px; border-bottom:1px solid var(--border); }
+.mini-tabel tr.mini-nu td { background:rgba(88,166,255,0.08); border-left:3px solid rgba(88,166,255,0.7); }
+.mini-tabel tr.mini-nu td:first-child { padding-left:7px; }
+.mini-tabel .mini-prijs { font-family:var(--mono); font-weight:700; white-space:nowrap; }
+.mini-tabel .mini-devices { letter-spacing:.1em; font-size:.9rem; }
+.mini-tabel .mini-piek { font-family:var(--mono); font-size:.75rem; text-align:right; }
+.mini-tabel .mini-tijd { font-family:var(--mono); font-size:.75rem; color:var(--muted); white-space:nowrap; }
+
+</style>
+<script>
+// Tab navigatie — beschikbaar vóór body geladen is
+function activeerTab(id) {
+  var tabs = ['t-dash','t-graf','t-plan','t-inst'];
+  tabs.forEach(function(t) {
+    var el = document.getElementById(t);
+    var btn = document.getElementById('tbtn-' + t.replace('t-',''));
+    if (el)  { el.style.display = 'none'; el.classList.remove('active'); }
+    if (btn) { btn.classList.remove('active'); }
+  });
+  var sel = document.getElementById(id);
+  var selBtn = document.getElementById('tbtn-' + id.replace('t-',''));
+  if (sel)    { sel.style.display = 'block'; sel.classList.add('active'); }
+  if (selBtn) { selBtn.classList.add('active'); }
+  localStorage.setItem('actieve_tab', id);
+  if (id === 't-graf') {
+    setTimeout(function() {
+      [chart, chartSolar, chartBat, chartNet].forEach(function(ch) { if(ch) ch.resize(); });
+    }, 50);
+  }
+}
+// Herstel actieve tab na laden
+window.addEventListener('load', function() {
+  var saved = localStorage.getItem('actieve_tab') || 't-dash';
+  activeerTab(saved);
+});
+</script>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot"></span>ZARLARDINGE SMART ENERGY</h1>
+  <span id="datum" style="font-size:.75rem;color:var(--muted);font-family:var(--mono)"></span>
+</header>
+
+
+
+<nav class="tab-nav">
+  <button class="tab-btn" id="tbtn-dash"    onclick="activeerTab('t-dash')">📊<br>Dashboard</button>
+  <button class="tab-btn" id="tbtn-graf"    onclick="activeerTab('t-graf')">📈<br>Grafieken</button>
+  <button class="tab-btn" id="tbtn-plan"    onclick="activeerTab('t-plan')">🗓️<br>Planning</button>
+  <button class="tab-btn" id="tbtn-inst"    onclick="activeerTab('t-inst')">⚙️<br>Instellingen</button>
+</nav>
+<div class="tab-content active" id="t-dash">
+
+<!-- INFO KAARTEN -->
+<div class="info-kaarten">
+  <div class="info-card">
+    <div class="info-label">💶 Dagkost vandaag</div>
+    <div class="info-waarde" id="info-dagkost">—</div>
+    <div class="info-sub" id="info-dagkost-sub">WON + SCH gesimuleerd</div>
+  </div>
+  <div class="info-card">
+    <div class="info-label">📊 Dynamisch vs vast contract</div>
+    <div class="info-waarde" id="info-vergelijk">—</div>
+    <div class="info-sub" id="info-vergelijk-sub">besparing vandaag met dynamisch</div>
+  </div>
+</div>
+
+
+<!-- Mini planningstabel -->
+<div class="chart-wrap" style="padding:14px 16px">
+  <div class="chart-header" style="margin-bottom:4px">
+    <span class="chart-title">📋 Planning — komende periodes</span>
+    <span id="mini-status" style="font-size:.7rem;color:var(--muted);font-family:var(--mono)"></span>
+  </div>
+  <table class="mini-tabel" id="mini-tabel"><tbody></tbody></table>
+</div>
+
+<!-- LED SIMULATIE -->
+<div class="sim-wrap">
+  <div class="sim-header">
+    <span id="sim-titel">💡 Simulatie slider: Verbruik &amp; Batterij</span>
+    <span class="sim-tijdstip" id="sim-tijdstip">—</span>
+  </div>
+
+  <!-- Tijdschuif -->
+  <div class="sim-slider-wrap">
+    <div class="sim-slider-labels">
+      <span>Nu</span>
+      <span id="sim-slider-mid">+24u</span>
+      <span id="sim-slider-end">+48u</span>
+    </div>
+    <input type="range" class="sim-slider" id="sim-slider" min="0" max="47" value="0" step="1">
+  </div>
+
+  <!-- LED Strip -->
+  <div class="sim-strip-wrap">
+    <div class="sim-strip-title">LED-strip kastje (12 pixels)</div>
+    <div class="led-strip-scroll">
+      <div class="led-strip" id="led-strip"><!-- Gevuld door JS --></div>
+    </div>
+  </div>
+
+  <!-- SOC Batterij -->
+  <div class="soc-wrap">
+    <div class="soc-header">
+      <span>🔋 Batterij SOC</span>
+      <span class="soc-pct" id="soc-pct">50%</span>
+    </div>
+    <div class="soc-bar-bg">
+      <div class="soc-bar-fill" id="soc-bar" style="width:50%;background:var(--blue)"></div>
+    </div>
+    <div class="soc-actie" id="soc-actie">—</div>
+  </div>
+
+  <!-- PIEK METER -->
+  <div class="piek-wrap">
+    <div class="piek-header">
+      <span>⚡ Vermogen</span>
+      <span class="piek-kw"><span id="piek-kw">—</span> / <span id="piek-max-kw">—</span> kW</span>
+    </div>
+    <div class="piek-bar-bg">
+      <div class="piek-bar-fill" id="piek-bar"></div>
+      <div class="piek-bar-limiet" id="piek-limiet"></div>
+    </div>
+    <div class="piek-status">
+      <span id="piek-status-lbl">—</span>
+      <span id="piek-status-reden" style="color:var(--muted);font-size:.62rem;font-family:var(--mono)"></span>
+    </div>
+    <div class="piek-afgesch" id="piek-afgesch"></div>
+  </div>
+
+  <!-- Metrics -->
+  <div class="sim-metrics">
+    <div class="sim-metric">
+      <div class="sim-metric-label">Solar</div>
+      <div class="sim-metric-val green" id="sim-solar">— kW</div>
+    </div>
+    <div class="sim-metric">
+      <div class="sim-metric-label">Verbruik</div>
+      <div class="sim-metric-val yellow" id="sim-load">— kW</div>
+    </div>
+    <div class="sim-metric">
+      <div class="sim-metric-label">Netto</div>
+      <div class="sim-metric-val" id="sim-netto">—</div>
+    </div>
+  </div>
+
+  <!-- Apparaten met override -->
+  <div class="sim-devices" id="sim-devices"></div>
+
+  <!-- Piek kosten -->
+  <div class="piek-kost">
+    <div class="piek-kost-title">📊 Capaciteitstarief (2028)</div>
+    <div class="piek-kost-row">
+      <span>Hoogste piek in simulatie</span>
+      <span id="piek-hoogste">— kW</span>
+    </div>
+    <div class="piek-kost-row">
+      <span>Zonder piekbeheer</span>
+      <span id="piek-kost-zonder" style="color:var(--red)">—</span>
+    </div>
+    <div class="piek-kost-row">
+      <span>Met piekbeheer</span>
+      <span id="piek-kost-met" style="color:var(--green)">—</span>
+    </div>
+    <div class="piek-kost-row" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--border)">
+      <span>Besparing</span>
+      <span class="piek-besparing" id="piek-besparing">—</span>
+    </div>
+  </div>
+</div>
+
+
+</div><!-- /t-dash -->
+
+<div class="tab-content" id="t-graf" style="display:none">
+
+<!-- GRAFIEK -->
+<div class="chart-wrap">
+  <div class="chart-header">
+    <span class="chart-title">Dag-ahead prijzen 48u — EPEX SPOT BE</span>
+    <div class="legend">
+      <span><span class="leg-dot" style="background:var(--lime)"></span>Negatief</span>
+      <span><span class="leg-dot" style="background:var(--green)"></span>Goedkoop</span>
+      <span><span class="leg-dot" style="background:var(--yellow)"></span>Normaal</span>
+      <span><span class="leg-dot" style="background:var(--red)"></span>Duur</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(91,155,213,0.8);border-radius:1px;vertical-align:middle"></span> Fluvius</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(77,182,172,0.8);border-radius:1px;vertical-align:middle"></span> GSC</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(149,117,205,0.8);border-radius:1px;vertical-align:middle"></span> WKK</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(160,120,90,0.8);border-radius:1px;vertical-align:middle"></span> Heffingen</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(200,200,200,0.45);border-radius:1px;vertical-align:middle"></span> BTW 6%</span>
+      <span><span style="display:inline-block;width:10px;height:8px;background:rgba(255,167,38,0.70);border-radius:1px;vertical-align:middle"></span> Abo+Cap.</span>
+      <span><span style="border-bottom:2px dashed rgba(255,255,255,0.7);display:inline-block;width:14px;margin-bottom:3px"></span> Vast</span>
+    </div>
+  </div>
+  <div class="dag-labels">
+    <span id="dag-label-1">Vandaag</span>
+    <span id="dag-label-2">Morgen</span>
+  </div>
+  <div id="status-msg">Prijzen laden…</div>
+  <canvas id="epexChart" height="200"></canvas>
+</div>
+
+<!-- SOLAR GRAFIEK -->
+<div class="chart-wrap" style="margin-top:-10px;border-top:none;border-radius:0 0 8px 8px;padding-top:8px">
+  <div class="chart-header">
+    <span class="chart-title">☀️ Solar productie — gesimuleerd (later: S0 meting)</span>
+    <div class="legend">
+      <span><span class="leg-dot" style="background:#f5c518"></span>Solar kW</span>
+      <span id="solar-max-lbl" style="font-size:.7rem;color:var(--muted)">max — kW</span>
+    </div>
+  </div>
+  <canvas id="solarChart" height="100"></canvas>
+</div>
+
+<!-- BATTERIJ GRAFIEK -->
+<div class="chart-wrap" style="margin-top:-10px;border-top:none;border-radius:0 0 8px 8px;padding-top:8px">
+  <div class="chart-header">
+    <span class="chart-title">🔋 Batterij — laden & ontladen (gesimuleerd)</span>
+    <div class="legend">
+      <span><span class="leg-dot" style="background:#2a8a3e"></span>Laden kW</span>
+      <span><span class="leg-dot" style="background:#d29922"></span>Ontladen kW</span>
+      <span><span style="border-bottom:2px solid rgba(88,166,255,0.85);display:inline-block;width:14px;margin-bottom:3px"></span>SOC kWh</span>
+    </div>
+  </div>
+  <canvas id="batChart" height="100"></canvas>
+</div>
+
+<!-- NET IMPORT/EXPORT GRAFIEK -->
+<div class="chart-wrap" style="margin-top:-10px;border-top:none;border-radius:0 0 8px 8px;padding-top:8px">
+  <div class="chart-header">
+    <span class="chart-title">⚡ Net — afname & injectie (gesimuleerd)</span>
+    <div class="legend">
+      <span><span class="leg-dot" style="background:#f85149"></span>Afname (kost)</span>
+      <span><span class="leg-dot" style="background:#2a8a3e"></span>Injectie (opbrengst)</span>
+      <span><span style="border-bottom:2px solid rgba(210,153,34,0.8);display:inline-block;width:14px;margin-bottom:3px"></span>Kostlijn ct/kWh</span>
+    </div>
+  </div>
+  <canvas id="netChart" height="110"></canvas>
+</div>
+
+
+</div><!-- /t-graf -->
+
+<div class="tab-content" id="t-plan" style="display:none">
+
+<!-- PLANNINGSMATRIX -->
+<div class="matrix-wrap">
+  <div class="matrix-header-row">
+    <span>⚡ Planningstabel — komende 48u</span>
+    <span class="matrix-winst">Bat. arbitrage: <span class="matrix-winst-val" id="arb-winst-val">—</span></span>
+  </div>
+  <table class="matrix" id="matrix-table">
+    <thead id="matrix-thead"></thead>
+    <tbody id="matrix-tbody"></tbody>
+  </table>
+</div>
+
+
+</div><!-- /t-plan -->
+
+<div class="tab-content" id="t-inst" style="display:none">
+
+<!-- INSTELLINGEN -->
+<div class="instellingen">
+  <span class="inst-title">⚙ Instellingen</span>
+  <label class="inst-item">
+    <span>Vaste prijs</span>
+    <span class="inst-input-wrap">
+      <input id="inp-vast" type="number" value="28.0" step="0.1" min="0" max="99">
+      <span class="inst-unit">ct/kWh</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Batterij</span>
+    <span class="inst-input-wrap">
+      <input id="inp-bat" type="number" value="10" step="1" min="1" max="100">
+      <span class="inst-unit">kWh</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Start SOC</span>
+    <span class="inst-input-wrap">
+      <input id="inp-soc" type="number" value="50" step="5" min="0" max="100">
+      <span class="inst-unit">%</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Solar max</span>
+    <span class="inst-input-wrap">
+      <input id="inp-solar-max" type="number" value="8" step="0.5" min="0.5" max="20">
+      <span class="inst-unit">kW</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Max piek</span>
+    <span class="inst-input-wrap">
+      <input id="inp-piek" type="number" value="15" step="0.5" min="1" max="30">
+      <span class="inst-unit">kW</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Cap. tarief</span>
+    <span class="inst-input-wrap">
+      <input id="inp-cap" type="number" value="4.517" step="0.001" min="0" max="20">
+      <span class="inst-unit">€/kW/mnd</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Abonnement</span>
+    <span class="inst-input-wrap">
+      <input id="inp-abo" type="number" value="5.00" step="0.10" min="0" max="30">
+      <span class="inst-unit">€/mnd</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Databeheer</span>
+    <span class="inst-input-wrap">
+      <input id="inp-databeheer" type="number" value="1.49" step="0.01" min="0" max="10">
+      <span class="inst-unit">€/mnd</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span>Maandverbruik</span>
+    <span class="inst-input-wrap">
+      <input id="inp-maandkwh" type="number" value="1300" step="50" min="100" max="5000">
+      <span class="inst-unit">kWh/mnd</span>
+    </span>
+  </label>
+  <label class="inst-item" style="opacity:.7">
+    <span>Maandpiek (live)</span>
+    <span class="inst-input-wrap" style="pointer-events:none">
+      <span id="live-maandpiek" style="color:var(--yellow);font-family:var(--mono);font-size:.82rem;font-weight:700">—</span>
+      <span class="inst-unit">kW</span>
+    </span>
+  </label>
+  <span class="inst-bron">Bron: <a href="https://energy-charts.info" target="_blank">energy-charts.info</a></span>
+</div>
+
+
+<!-- TARIEFCOMPONENTEN -->
+<div class="instellingen" style="margin-top:6px">
+  <span class="inst-title">💶 Tariefcomponenten — Ecopower Dynamische burgerstroom</span>
+  <label class="inst-item">
+    <span style="border-left:3px solid rgba(91,155,213,0.9);padding-left:6px">Afnametarief (Fluvius)</span>
+    <span class="inst-input-wrap">
+      <input id="inp-fluvius" type="number" value="5.23" step="0.01" min="0" max="30">
+      <span class="inst-unit">ct/kWh</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span style="border-left:3px solid rgba(77,182,172,0.9);padding-left:6px">GSC (groenestroomcert.)</span>
+    <span class="inst-input-wrap">
+      <input id="inp-elia" type="number" value="1.10" step="0.01" min="0" max="10">
+      <span class="inst-unit">ct/kWh</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span style="border-left:3px solid rgba(149,117,205,0.9);padding-left:6px">WKK (warmtekracht)</span>
+    <span class="inst-input-wrap">
+      <input id="inp-hernieuwbaar" type="number" value="0.39" step="0.01" min="0" max="10">
+      <span class="inst-unit">ct/kWh</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span style="border-left:3px solid rgba(160,120,90,0.9);padding-left:6px">Heffingen & accijnzen</span>
+    <span class="inst-input-wrap">
+      <input id="inp-heffingen" type="number" value="4.94" step="0.01" min="0" max="20">
+      <span class="inst-unit">ct/kWh</span>
+    </span>
+  </label>
+  <label class="inst-item">
+    <span style="padding-left:9px">BTW (op volledige som)</span>
+    <span class="inst-input-wrap">
+      <input id="inp-btw" type="number" value="6" step="0.5" min="0" max="30">
+      <span class="inst-unit">%</span>
+    </span>
+  </label>
+  <span class="inst-item" style="color:var(--muted);font-size:.68rem">
+    Vaste opslag (excl. BTW): <span id="opslag-totaal" style="color:var(--yellow);font-weight:700">—</span> ct/kWh
+  </span>
+</div>
+
+
+<!-- UITLEG VASTE OPSLAG -->
+<div class="opslag-uitleg">
+  <div class="opslag-titel">ℹ️ Prijsberekening — Ecopower Dynamische burgerstroom (factuur feb. 2026)</div>
+  <div class="opslag-tekst">
+    <b>Formule reële prijs:</b><br>
+    <code style="background:rgba(255,255,255,0.08);padding:4px 8px;border-radius:4px;font-size:.8rem">
+      Reële prijs = (EPEX + Afnametarief + GSC + WKK + Heffingen) × (1 + BTW%)
+    </code>
+    <br><br>
+
+    <b>In de grafiek — vaste opslag per kWh (gekleurde segmenten):</b><br>
+    <table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:.75rem">
+      <tr>
+        <td style="padding:3px 8px"><span style="display:inline-block;width:12px;height:12px;background:rgba(91,155,213,0.8);border-radius:2px;vertical-align:middle;margin-right:5px"></span><b>Afnametarief Fluvius</b></td>
+        <td style="padding:3px 8px;font-family:monospace">5,23 ct/kWh</td>
+        <td style="padding:3px 8px;color:#8b949e">Transport stroom via hoog- en laagspanningsnet</td>
+      </tr>
+      <tr>
+        <td style="padding:3px 8px"><span style="display:inline-block;width:12px;height:12px;background:rgba(77,182,172,0.8);border-radius:2px;vertical-align:middle;margin-right:5px"></span><b>GSC</b></td>
+        <td style="padding:3px 8px;font-family:monospace">1,10 ct/kWh</td>
+        <td style="padding:3px 8px;color:#8b949e">Groenestroomcertificaten (Vlaamse Nutsregulator)</td>
+      </tr>
+      <tr>
+        <td style="padding:3px 8px"><span style="display:inline-block;width:12px;height:12px;background:rgba(149,117,205,0.8);border-radius:2px;vertical-align:middle;margin-right:5px"></span><b>WKK</b></td>
+        <td style="padding:3px 8px;font-family:monospace">0,39 ct/kWh</td>
+        <td style="padding:3px 8px;color:#8b949e">Warmtekrachtcertificaten (Vlaamse Nutsregulator)</td>
+      </tr>
+      <tr>
+        <td style="padding:3px 8px"><span style="display:inline-block;width:12px;height:12px;background:rgba(160,120,90,0.8);border-radius:2px;vertical-align:middle;margin-right:5px"></span><b>Heffingen & accijnzen</b></td>
+        <td style="padding:3px 8px;font-family:monospace">4,94 ct/kWh</td>
+        <td style="padding:3px 8px;color:#8b949e">Bijdrage op energie (0,19) + Bijzondere accijns (4,75)</td>
+      </tr>
+      <tr>
+        <td style="padding:3px 8px"><span style="display:inline-block;width:12px;height:12px;background:rgba(255,167,38,0.75);border-radius:2px;vertical-align:middle;margin-right:5px"></span><b>Abo + Cap. tarief</b></td>
+        <td style="padding:3px 8px;font-family:monospace">~2,66 ct/kWh</td>
+        <td style="padding:3px 8px;color:#8b949e">Abo €5 + databeheer €1,49 + cap. €4,517/kW/mnd ÷ 1300 kWh (varieert)</td>
+      </tr>
+      <tr style="border-top:1px solid rgba(255,255,255,0.1)">
+        <td style="padding:4px 8px"><b>BTW 6%</b></td>
+        <td style="padding:4px 8px;font-family:monospace">op totaal</td>
+        <td style="padding:4px 8px;color:#8b949e">Berekend op EPEX + alle vaste componenten samen</td>
+      </tr>
+      <tr style="border-top:1px solid rgba(255,255,255,0.15)">
+        <td style="padding:4px 8px"><b>Subtotaal vaste opslag</b></td>
+        <td style="padding:4px 8px;font-family:monospace;color:var(--yellow)">~14,32 ct/kWh</td>
+        <td style="padding:4px 8px;color:#8b949e">excl. BTW · vaste opslag incl. abo/cap. excl. BTW</td>
+      </tr>
+    </table>
+
+    <b>Niet in de grafiek — vaste maandkosten per aansluiting:</b><br>
+    <span style="color:#8b949e">
+      Abonnementskost Ecopower: €5,00/maand &nbsp;·&nbsp;
+      Kost databeheer Fluvius: ~€1,49/maand (€0,0489/dag) &nbsp;·&nbsp;
+      Capaciteitstarief Fluvius: €4,52/kW/maand (op maandpiek, min. 2,5 kW)
+    </span>
+    <br><br>
+    <b>Injectietarief:</b> Ecopower vergoedt injectie aan EPEX-prijs − onbalanstoeslag ≈ <b>5,25 ct/kWh</b> (feb. 2026 gemiddeld). Injectie aan 0% BTW.
+    <br><br>
+    <span style="color:#8b949e;font-size:.7rem">
+      Bron: Ecopower erkende cv — Afrekeningsfactuur feb. 2026 — Product: Dynamische burgerstroom — Fluvius Imewo
+    </span>
+  </div>
+
+</div><!-- /t-inst -->
+
+<script>
+
+// ─── TAB NAVIGATIE → zie <head> script tag
+
+// ─── CONSTANTEN ───────────────────────────────────────────────────────────────
+const VAST_DEFAULT   = 28.0;
+const DREMPEL_GROEN  = 10;   // ct/kWh
+const DREMPEL_GEEL   = 20;   // ct/kWh
+
+// Verbruikers definitie
+const VERBRUIKERS = [
+  { id:'eco',    naam:'ECO-boiler', sub:'SCH', kw:2,  regelbaar:false, pixel:0 },
+  { id:'ev_won', naam:'EV',         sub:'WON', kw:9,  regelbaar:true,  pixel:1 },  // wit
+  { id:'ev_sch', naam:'EV-lader',   sub:'SCH', kw:9,  regelbaar:true,  pixel:2 },  // rood
+  { id:'wp_won', naam:'WP',         sub:'WON', kw:2.5, regelbaar:false, pixel:3 }, // elektrisch compressorvermogen
+  { id:'wp_sch', naam:'WP',         sub:'SCH', kw:2.5, regelbaar:false, pixel:4 }, // elektrisch compressorvermogen
+];
+
+// Standaard checkboxes per prijsklasse
+// CB_DEFAULTS: slimme startwaarden voor grootverbruikers per prijsklasse
+// Huishoudtoestellen starten altijd UIT (gebruiker kiest bewust)
+// Grootverbruikers: algoritme beslist, rekening houdend met override-knoppen
+const CB_DEFAULTS = {
+  neg:  { eco:true,  ev_won:true,  ev_sch:true,  wp_won:true,  wp_sch:true,  bat_laden:true,  bat_ontladen:false },
+  goen: { eco:true,  ev_won:true,  ev_sch:true,  wp_won:false, wp_sch:false, bat_laden:true,  bat_ontladen:false },
+  norm: { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:false },
+  duur: { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:true  },
+};
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let chart         = null;
+let chartSolar    = null;
+let chartBat      = null;
+let chartNet      = null;
+let allTimes      = [];
+let allPrices     = [];
+let pastTijden    = []; // vandaag 00:00 → nu (solar + batterij grafieken)
+
+function berekenPastTijden() {
+  if (!allTimes.length) return;
+  const ivl   = detecteerInterval(allTimes);
+  const nu    = Date.now();
+  const basis = new Date(); basis.setHours(0,0,0,0);
+  const arr   = [];
+  for (let t = basis.getTime(); t <= nu; t += ivl)
+    arr.push(new Date(t).toISOString());
+  pastTijden = arr;
+}
+
+let periodeKeuzes = {};  // key = periode-id → { eco, ev_won, ... }
+let simSlot       = 0;   // huidig geselecteerd slot in de slider
+
+let BAT_KWH   = parseFloat(localStorage.getItem('bat_kwh'))    || 10;
+let vast       = parseFloat(localStorage.getItem('vast_prijs'))  || VAST_DEFAULT;
+// Tariefcomponenten (ct/kWh) — Ecopower Dynamische burgerstroom feb. 2026
+// Volgorde = zelfde als op de factuur
+let T_FLUVIUS     = parseFloat(localStorage.getItem('t_fluvius'))     || 5.23; // Afnametarief Fluvius
+let T_ELIA        = parseFloat(localStorage.getItem('t_elia'))        || 1.10; // GSC groenestroomcertificaten
+let T_HERNIEUWBAAR= parseFloat(localStorage.getItem('t_hernieuwbaar'))|| 0.39; // WKK warmtekrachtcertificaten
+let T_HEFFINGEN   = parseFloat(localStorage.getItem('t_heffingen'))   || 4.94; // Bijdrage energie + bijzondere accijns
+let T_BTW_PCT     = parseFloat(localStorage.getItem('t_btw_pct'))     || 6.0;
+
+// Volgorde: Fluvius → GSC → WKK → Heffingen (= factuurvolgorde)
+function vastefComponents() { return T_FLUVIUS + T_ELIA + T_HERNIEUWBAAR + T_HEFFINGEN; }
+function opslagInclBtw(epexCt) {
+  // BTW op (EPEX + vaste componenten)
+  const vaste = vastefComponents();
+  return vaste + (epexCt + vaste) * (T_BTW_PCT / 100);
+}
+let SOC_START = parseFloat(localStorage.getItem('soc_start'))   || 50;
+let SOLAR_MAX_KW = parseFloat(localStorage.getItem('solar_max_kw')) || 8;
+let MAX_PIEK  = parseFloat(localStorage.getItem('max_piek'))    || 15;
+let CAP_TAR     = parseFloat(localStorage.getItem('cap_tar'))      || 4.517; // €/kW/mnd
+let ABO_EUR     = parseFloat(localStorage.getItem('abo_eur'))      || 5.00;  // €/mnd abonnement
+let DATABEHEER  = parseFloat(localStorage.getItem('databeheer'))   || 1.49;  // €/mnd databeheer
+let MAAND_KWH   = parseFloat(localStorage.getItem('maand_kwh'))    || 1300;  // kWh/mnd schatting
+let liveMapndpiek = 2.5; // kW — bijgewerkt vanuit simulatie (min 2.5 kW)
+
+// Bereken vaste maandkosten omgerekend naar ct/kWh
+function vasteMaandCtKwh(maandpiekKw) {
+  const piek = Math.max(2.5, maandpiekKw);
+  const totaalEur = ABO_EUR + DATABEHEER + (CAP_TAR * piek);
+  return (totaalEur / MAAND_KWH) * 100; // → ct/kWh
+}
+
+// Override per apparaat: 'auto'|'aan'|'uit'
+let overrides = {};
+try { overrides = JSON.parse(localStorage.getItem('overrides')||'{}'); } catch(e){}
+
+// Afschakelvolgorde bij piekbedreiging (eerste = eerst af)
+// Maarten's EV eerst, Filip's Tesla later
+const PIEK_PRIO = ['ev_sch','bat_laden','eco','wp_sch','ev_won','wp_won'];
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+// Reële prijs = (EPEX + vaste componenten) × (1 + BTW%)
+// BTW wordt berekend op de volledige som
+function reelePrijs(ct) { return ct + opslagInclBtw(ct); }
+
+// Kleurdrempel op basis van reële prijs
+function kleurReeel(ct) { return kleur(reelePrijs(ct)); }
+
+// Update de opslag-totaal indicator onderaan
+function updateOpslagTotaal() {
+  const vaste = vastefComponents();
+  document.getElementById('opslag-totaal').textContent = vaste.toFixed(2);
+}
+
+function kleur(ct) {
+  if (ct < 0)             return '#a8ff3e';
+  if (ct < DREMPEL_GROEN) return '#2a8a3e';
+  if (ct < DREMPEL_GEEL)  return '#d29922';
+  return '#f85149';
+}
+function klasLabel(ct) {
+  if (ct < 0)             return ['lime',   'Negatief ★'];
+  if (ct < DREMPEL_GROEN) return ['green',  'Goedkoop'];
+  if (ct < DREMPEL_GEEL)  return ['yellow', 'Normaal'];
+  return ['red', 'Duur'];
+}
+function fmtTime(iso) {
+  return new Date(iso).toLocaleTimeString('nl-BE', { hour:'2-digit', minute:'2-digit', timeZone:'Europe/Brussels' });
+}
+function fmtDag(iso) {
+  const d = new Date(iso), nu = new Date();
+  if (d.toDateString() === nu.toDateString()) return 'vandaag';
+  const m = new Date(nu); m.setDate(nu.getDate()+1);
+  if (d.toDateString() === m.toDateString()) return 'morgen';
+  return d.toLocaleDateString('nl-BE', { weekday:'short' });
+}
+function huidigSlot(tijden) {
+  const nu = Date.now();
+  for (let i = tijden.length-1; i >= 0; i--)
+    if (new Date(tijden[i]).getTime() <= nu) return i;
+  return 0;
+}
+function detecteerInterval(tijden) {
+  return tijden.length < 2 ? 3600000 : new Date(tijden[1]).getTime() - new Date(tijden[0]).getTime();
+}
+function fmtDuur(nSlots, intervalMs) {
+  const totMin = nSlots * intervalMs / 60000;
+  const u = Math.floor(totMin/60), m = totMin%60;
+  if (u===0) return `${m} min`;
+  if (m===0) return u===1?'1 uur':`${u} uur`;
+  return `${u}u${String(m).padStart(2,'0')}`;
+}
+
+// Solar vermogen op tijdstip (sinusoïde 07:00–20:00)
+function solarKw(iso) {
+  const d = new Date(iso);
+  const uur = d.getHours() + d.getMinutes()/60;
+  const rise = 7, set = 20;
+  if (uur < rise || uur >= set) return 0;
+  return SOLAR_MAX_KW * Math.sin(Math.PI * (uur - rise) / (set - rise));
+}
+
+// ─── GRAFIEK ──────────────────────────────────────────────────────────────────
+function renderChart(tijden, prijzen) {
+  const ctx    = document.getElementById('epexChart').getContext('2d');
+  const labels = tijden.map(t => fmtTime(t));
+  const nuIdx  = huidigSlot(tijden);
+
+  // Middernacht scheidingslijn
+  const nu = new Date(), morgen = new Date(nu);
+  morgen.setDate(nu.getDate()+1); morgen.setHours(0,0,0,0);
+  let midIdx = tijden.findIndex(t => new Date(t).getTime() >= morgen.getTime());
+
+  const barColors    = prijzen.map((p,i) => kleur(p/10) + (i===nuIdx?'':'99'));
+  const borderColors = prijzen.map((p,i) => i===nuIdx?'#ffffff':kleur(p/10));
+  const vastLine     = prijzen.map(() => vast*10);
+  // Vaste opslag: grijs balkje bovenop elke EPEX-balk
+  // 4 gekleurde segmenten voor vaste opslag (factuurvolgorde: Fluvius, GSC, WKK, Heffingen)
+  // BTW wordt proportioneel verdeeld over elk segment + EPEX
+  // Opslag in grafiekschaal: ct/kWh × 10 (zelfde schaal als prijzen = €/MWh)
+  // Segmenten ZONDER BTW — BTW komt als apart zichtbaar segment bovenaan
+  const btwFactor     = T_BTW_PCT / 100;
+  const opslagFluvius   = prijzen.map(() => +(T_FLUVIUS      * 10).toFixed(2));
+  const opslagGSC       = prijzen.map(() => +(T_ELIA         * 10).toFixed(2));
+  const opslagWKK       = prijzen.map(() => +(T_HERNIEUWBAAR * 10).toFixed(2));
+  const opslagHeffingen = prijzen.map(() => +(T_HEFFINGEN    * 10).toFixed(2));
+  // BTW = 6% op (EPEX + alle vaste componenten) — apart zichtbaar segment
+  const opslagBtw = prijzen.map(p => {
+    const epexCt = Math.max(0, p / 10); // BTW enkel op positieve EPEX
+    return +((epexCt + vastefComponents()) * btwFactor * 10).toFixed(2);
+  });
+
+  if (chart) chart.destroy();
+  document.getElementById('status-msg').style.display = 'none';
+  document.getElementById('epexChart').style.display  = 'block';
+
+  const lijnenPlugin = {
+    id: 'lijnen',
+    afterDraw(ch) {
+      const { ctx, scales:{x,y} } = ch;
+      ctx.save();
+
+      // Dag-scheidingslijn (blauw)
+      if (midIdx >= 0) {
+        const xPos = x.getPixelForValue(midIdx - 0.5);
+        ctx.beginPath(); ctx.moveTo(xPos,y.top); ctx.lineTo(xPos,y.bottom);
+        ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
+        ctx.setLineDash([4,4]); ctx.stroke();
+      }
+
+      // Tijdlijn NU (wit)
+      const nuFrac = (Date.now() - new Date(tijden[nuIdx]).getTime()) / detecteerInterval(tijden);
+      const nuXPos = x.getPixelForValue(nuIdx + nuFrac);
+      ctx.beginPath(); ctx.moveTo(nuXPos,y.top); ctx.lineTo(nuXPos,y.bottom);
+      ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
+      ctx.setLineDash([3,3]); ctx.stroke();
+
+      // Slider-positie (blauw helder) als niet op huidig slot
+      if (simSlot !== nuIdx) {
+        const sXPos = x.getPixelForValue(simSlot);
+        ctx.beginPath(); ctx.moveTo(sXPos,y.top); ctx.lineTo(sXPos,y.bottom);
+        ctx.strokeStyle='rgba(88,166,255,0.9)'; ctx.lineWidth=2;
+        ctx.setLineDash([]); ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+  };
+
+  chart = new Chart(ctx, {
+    plugins: [lijnenPlugin],
+    data: {
+      labels,
+      datasets: [
+        { type:'bar',  data:prijzen,    backgroundColor:barColors,                   borderColor:borderColors, borderWidth:1.5, borderRadius:0, order:3, stack:'prijs' },
+        { type:'bar', data:opslagFluvius,   backgroundColor:'rgba(91,155,213,0.70)',  borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagGSC,        backgroundColor:'rgba(77,182,172,0.70)',  borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagWKK,        backgroundColor:'rgba(149,117,205,0.70)', borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagHeffingen,  backgroundColor:'rgba(160,120,90,0.70)',  borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagBtw,        backgroundColor:'rgba(200,200,200,0.35)', borderColor:'transparent', borderWidth:0, borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:prijzen.map(()=>+(vasteMaandCtKwh(liveMapndpiek)*10).toFixed(2)),
+          backgroundColor:'rgba(255,167,38,0.60)', borderColor:'transparent', borderWidth:0, borderRadius:3, order:2, stack:'prijs' },
+        { type:'line', data:vastLine,    borderColor:'rgba(255,255,255,0.7)',        borderWidth:2, borderDash:[5,3], pointRadius:0, fill:false, order:1 }
+      ]
+    },
+    options: {
+      responsive:true,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#161b22', borderColor:'#21262d', borderWidth:1,
+          titleColor:'#8b949e', bodyColor:'#e6edf3',
+          titleFont:{family:'Space Mono',size:11}, bodyFont:{family:'DM Sans',size:12},
+          callbacks:{
+            title:(items)=>`${labels[items[0].dataIndex]}  (${fmtDag(tijden[items[0].dataIndex])})`,
+            label:(item)=>{
+              if (item.datasetIndex===0) {
+                const epexCt = item.raw/10;
+                const bf     = T_BTW_PCT/100;
+                const tot    = reelePrijs(epexCt).toFixed(1);
+                const btwTot = ((epexCt + vastefComponents()) * bf).toFixed(1);
+                return [
+                  ` EPEX:              ${epexCt.toFixed(2)} ct/kWh`,
+                  ` + Fluvius:         ${(T_FLUVIUS*(1+bf)).toFixed(2)} ct/kWh`,
+                  ` + GSC:             ${(T_ELIA*(1+bf)).toFixed(2)} ct/kWh`,
+                  ` + WKK:             ${(T_HERNIEUWBAAR*(1+bf)).toFixed(2)} ct/kWh`,
+                  ` + Heffingen:       ${(T_HEFFINGEN*(1+bf)).toFixed(2)} ct/kWh`,
+                  ` + BTW ${T_BTW_PCT}% op alles:   ${((epexCt + vastefComponents()) * bf).toFixed(2)} ct/kWh`,
+                  ` + Abo+Cap.:        ${(vasteMaandCtKwh(liveMapndpiek)*(1+btwFactor)).toFixed(2)} ct/kWh`,
+                  ` = Totaal:          ${(reelePrijs(epexCt)+vasteMaandCtKwh(liveMapndpiek)*(1+btwFactor)).toFixed(2)} ct/kWh`,
+                ];
+              }
+              if (item.datasetIndex===1) return null;
+              if (item.datasetIndex === 6) return ` Vast contract: ${vast} ct/kWh`;
+              return null;
+            },
+            filter:(item)=>item.datasetIndex!==1
+          }
+        }
+      },
+      scales:{
+        x:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:9},maxRotation:0,autoSkip:false,maxTicksLimit:96,
+          callback:(v,i)=>{
+            if (!allTimes[i]) return '';
+            const d = new Date(allTimes[i]);
+            return (d.getMinutes()===0 && d.getHours()%2===0) ? String(d.getHours()) : '';
+          }
+        }, grid:{color:'rgba(33,38,45,0.8)'} },
+        y:{ ticks:{color:'#8b949e',font:{family:'Space Mono',size:10},callback:v=>(v/10).toFixed(0)+' ct'}, grid:{color:'rgba(33,38,45,0.8)'} }
+      }
+    }
+  });
+}
+
+// ─── PERIODES ─────────────────────────────────────────────────────────────────
+
+// Bouw ALLE toekomstige periodes chronologisch (één doorlopende tijdlijn)
+function groepeerAlleChronologisch(tijden, prijzen) {
+  const nu  = Date.now();
+  const ivl = detecteerInterval(tijden);
+  const periodes = [];
+  let start=null, som=0, n=0, klasse=null;
+
+  function klasseVan(p_mwh) {
+    const ct = p_mwh/10;
+    if (ct < 0)              return 'neg';
+    if (ct < DREMPEL_GROEN)  return 'goen';
+    if (ct < DREMPEL_GEEL)   return 'norm';
+    return 'duur';
+  }
+
+  for (let i=0; i<=prijzen.length; i++) {
+    const huidKlasse = i < prijzen.length ? klasseVan(prijzen[i]) : null;
+    if (huidKlasse && huidKlasse === klasse) {
+      som += prijzen[i]; n++;
+    } else {
+      if (start !== null) {
+        const totTijd = new Date(new Date(tijden[i-1]).getTime()+ivl).toISOString();
+        if (new Date(totTijd).getTime() > nu)
+          periodes.push({vanTijd:tijden[start],totTijd,gem:som/n,duur:fmtDuur(n,ivl),nSlots:n,startIdx:start,klasse});
+      }
+      start  = i < prijzen.length ? i : null;
+      som    = i < prijzen.length ? prijzen[i] : 0;
+      n      = i < prijzen.length ? 1 : 0;
+      klasse = huidKlasse;
+    }
+  }
+  return periodes;
+}
+
+// Hou ook de drie afzonderlijke lijsten bij voor de winst-berekening
+function groepeerPeriodes(tijden, prijzen, drempelMin, drempelMax) {
+  const nu = Date.now(), ivl = detecteerInterval(tijden);
+  const periodes = [];
+  let start=null, som=0, n=0;
+  for (let i=0; i<=prijzen.length; i++) {
+    const p = prijzen[i];
+    const inGroep = i<prijzen.length
+      && (drempelMin===null || p>=drempelMin)
+      && (drempelMax===null || p<drempelMax);
+    if (inGroep) {
+      if (start===null){start=i;som=0;n=0;}
+      som+=p; n++;
+    } else if (start!==null) {
+      const totTijd = new Date(new Date(tijden[i-1]).getTime()+ivl).toISOString();
+      if (new Date(totTijd).getTime()>nu)
+        periodes.push({vanTijd:tijden[start],totTijd,gem:som/n,duur:fmtDuur(n,ivl),nSlots:n,startIdx:start});
+      start=null;
+    }
+  }
+  return periodes;
+}
+
+
+// ─── PLANNINGSMATRIX ──────────────────────────────────────────────────────────
+
+// Huishoudtoestellen
+const HUISHOUD = [
+  { id:'inductie', sym:'🍳', naam:'Inductie',  kw:3.5 },
+  { id:'oven',     sym:'🌡️', naam:'Oven',       kw:2.5 },
+  { id:'afwas',    sym:'🍽️', naam:'Afwas',      kw:2.2 },
+  { id:'wasmach',  sym:'👕', naam:'Wasmachine', kw:2.0 },
+  { id:'droogk',   sym:'🌀', naam:'Droogkast',  kw:2.5 },
+];
+
+// Geef keuzes voor een periode-id terug (met defaults)
+function getKeuze(periodeId, klasse) {
+  // Init: als periode nog niet gekend, vul in met CB_DEFAULTS
+  if (!periodeKeuzes[periodeId]) {
+    const base = CB_DEFAULTS[klasse] || CB_DEFAULTS.norm;
+    periodeKeuzes[periodeId] = { ...base };
+    for (const h of HUISHOUD) periodeKeuzes[periodeId][h.id] = false;
+  }
+  // Lees opgeslagen keuze (huishoud + groot per-periode-override)
+  const k = { ...periodeKeuzes[periodeId] };
+  // Huishoud: nooit vanuit groot-defaults, enkel opgeslagen
+  for (const h of HUISHOUD) k[h.id] = periodeKeuzes[periodeId][h.id] || false;
+
+  // Overrides toepassen op grootverbruikers
+  for (const v of VERBRUIKERS) {
+    const ov = overrides[v.id];
+    if (ov === 'aan') k[v.id] = true;
+    if (ov === 'uit') k[v.id] = false;
+  }
+  // Batterij override
+  const batOv = overrides['bat'];
+  if (batOv === 'aan') { k['bat_laden'] = true;  k['bat_ontladen'] = false; }
+  if (batOv === 'uit') { k['bat_laden'] = false; k['bat_ontladen'] = false; }
+  // Negatief: batterij laden altijd
+  if (klasse === 'neg') { k['bat_laden'] = true; k['bat_ontladen'] = false; }
+  // Duur: batterij ontladen altijd
+  if (klasse === 'duur') { k['bat_ontladen'] = true; k['bat_laden'] = false; }
+
+  // Piekbeheer op groot (nooit op huishoud — dat is manuele keuze)
+  let kwGroot = 0;
+  const evBeide = k['ev_won'] && k['ev_sch'];
+  kwGroot += k['eco']        ? 2 : 0;
+  kwGroot += k['ev_won']     ? (evBeide ? 6 : 9) : 0;
+  kwGroot += k['ev_sch']     ? (evBeide ? 6 : 9) : 0;
+  kwGroot += k['wp_won']     ? 2.5 : 0;
+  kwGroot += k['wp_sch']     ? 2.5 : 0;
+  kwGroot += k['bat_laden']  ? Math.min(5, BAT_KWH/2) : 0;
+
+  if (kwGroot > MAX_PIEK) {
+    for (const id of PIEK_PRIO) {
+      if (kwGroot <= MAX_PIEK) break;
+      if (overrides[id==='bat_laden'?'bat':id] === 'aan') continue;
+      if (id === 'bat_laden') {
+        if (klasse === 'neg') continue; // negatief: nooit bat afschakelen
+        if (k['bat_laden']) { kwGroot -= Math.min(5, BAT_KWH/2); k['bat_laden'] = false; }
+        continue;
+      }
+      const vkw = id==='ev_won'||id==='ev_sch' ? (k['ev_won']&&k['ev_sch']?6:9)
+                : id==='wp_won'||id==='wp_sch' ? 2.5 : 2;
+      if (k[id]) { kwGroot -= vkw; k[id] = false; }
+    }
+  }
+  return k;
+}
+
+function slaKeuzeOp() {
+  try { localStorage.setItem('periode_keuzes', JSON.stringify(periodeKeuzes)); } catch(e) {}
+}
+
+// Geeft de ruwe keuze terug (wat aangevinkt staat) zonder piekbeheer of overrides
+// Wordt gebruikt voor de tabel-weergave en de piek-kolom
+function getRawKeuze(periodeId, klasse) {
+  if (!periodeKeuzes[periodeId]) {
+    const base = CB_DEFAULTS[klasse] || CB_DEFAULTS.norm;
+    periodeKeuzes[periodeId] = { ...base };
+    for (const h of HUISHOUD) periodeKeuzes[periodeId][h.id] = false;
+    if (klasse === 'neg')  { periodeKeuzes[periodeId].bat_laden = true;  periodeKeuzes[periodeId].bat_ontladen = false; }
+    if (klasse === 'duur') { periodeKeuzes[periodeId].bat_ontladen = true; periodeKeuzes[periodeId].bat_laden = false; }
+  }
+  return periodeKeuzes[periodeId];
+}
+
+
+function berekenPiekVoorPeriode(periodeId, klasse) {
+  // Pure optelling van wat aangevinkt staat — geen piekbeheer, geen energy sharing
+  const k = getRawKeuze(periodeId, klasse);
+  let kw = 0;
+  for (const h of HUISHOUD)    { if (k[h.id]) kw += h.kw; }
+  for (const v of VERBRUIKERS) { if (k[v.id]) kw += v.kw; }
+  const batMax = Math.min(5, BAT_KWH / 2);
+  if (k.bat_laden) kw += batMax;
+  // bat_ontladen telt niet mee als piek (ontladen = levering aan net, geen afname)
+  return Math.max(0, kw);
+}
+
+function updateArbitrage(tijden, prijzen) {
+  _periodesNeg  = groepeerPeriodes(tijden, prijzen, null, 0);
+  _periodesGoen = groepeerPeriodes(tijden, prijzen, 0, DREMPEL_GROEN*10);
+  _periodesDuur = groepeerPeriodes(tijden, prijzen, DREMPEL_GEEL*10, null);
+  const alleChron = groepeerAlleChronologisch(tijden, prijzen);
+
+  // Koprij
+  const thead = document.getElementById('matrix-thead');
+  const cols = [
+    { sym:'⏰', sub:'Periode', kw:'',           cls:'th-left', title:'Periode' },
+    { sym:'💰', sub:'Prijs',   kw:'ct/kWh',     cls:'',        title:'Reële prijs (EPEX + opslag)'   },
+    ...HUISHOUD.map((h,i) => ({ sym:h.sym, sub:h.naam, kw:h.kw+'kW', cls:i===0?'th-sep':'', title:h.naam })),
+    { sym:'♨️',  sub:'ECO',    kw:'2kW',         cls:'th-sep',  title:'ECO-boiler SCH' },
+    { sym:'🚙',  sub:'EV WON',      kw:'9kW',    cls:'',        title:'EV WON (Filip, wit)'   },
+    { sym:'🚗',  sub:'EV SCH',     kw:'9kW',    cls:'',        title:'EV-lader SCH (Maarten, rood)' },
+    { sym:'🏠',  sub:'WP WON', kw:'2.5kW',       cls:'',        title:'WP WON (elektrisch)' },
+    { sym:'🏚️', sub:'WP SCH', kw:'2.5kW',       cls:'',        title:'WP SCH (elektrisch)' },
+    { sym:'🔋',  sub:'Bat.',   kw:BAT_KWH+'kWh', cls:'',        title:'Batterij'       },
+    { sym:'📊',  sub:'Totaal', kw:'kW',          cls:'th-sep',  title:'Totaal vermogen'},
+  ];
+  thead.innerHTML = `<tr>${cols.map(c=>`
+    <th class="${c.cls}" title="${c.title}">
+      <span class="th-sym">${c.sym}</span>
+      <span class="th-kw">${c.sub}</span>
+      <span class="th-kw" style="opacity:.6">${c.kw}</span>
+    </th>`).join('')}</tr>`;
+
+  const tbody = document.getElementById('matrix-tbody');
+  tbody.innerHTML = '';
+
+  const KLASSE_CFG = {
+    neg:  { kleur:'var(--lime)',   rowKls:'row-neg',  prCls:'lime',   isDuur:false },
+    goen: { kleur:'var(--green)',  rowKls:'row-goen', prCls:'green',  isDuur:false },
+    norm: { kleur:'var(--yellow)', rowKls:'row-norm', prCls:'yellow', isDuur:false },
+    duur: { kleur:'var(--red)',    rowKls:'row-duur', prCls:'red',    isDuur:true  },
+  };
+  // CB_DEFAULTS voor normaal: alles uit
+  const CB_NORM = { eco:false, ev_won:false, ev_sch:false, wp_won:false, wp_sch:false, bat_laden:false, bat_ontladen:false };
+
+  const nuMs = Date.now();
+
+  for (let ri=0; ri<alleChron.length; ri++) {
+    const p   = alleChron[ri];
+    const cfg = KLASSE_CFG[p.klasse] || KLASSE_CFG.norm;
+    const pid = `${p.klasse}_${p.vanTijd}`;
+
+    // Init keuze voor normaal-periodes (geen algoritme)
+    if (p.klasse === 'norm' && !periodeKeuzes[pid]) {
+      periodeKeuzes[pid] = { ...CB_NORM };
+      for (const h of HUISHOUD) periodeKeuzes[pid][h.id] = false;
+    }
+
+    const k      = getRawKeuze(pid, p.klasse); // tabel toont ruwe keuze
+    const epexCt = p.gem / 10;
+    const reeel  = reelePrijs(epexCt);          // reële prijs = EPEX + opslag
+    const gemCt  = reeel.toFixed(1);            // toon reële prijs in tabel
+    const piek   = berekenPiekVoorPeriode(pid, p.klasse);
+    const piekPct = MAX_PIEK > 0 ? piek / MAX_PIEK : 0;
+    const piekKls = piekPct > 1 ? 'over' : piekPct > 0.9 ? 'warn-hi' : piekPct > 0.75 ? 'warn' : piekPct > 0.5 ? 'notice' : 'ok';
+    const cbKls   = cfg.isDuur ? 'mx-cb cb-duur' : 'mx-cb';
+
+    // Is dit de huidige periode?
+    const isNu = new Date(p.vanTijd).getTime() <= nuMs && new Date(p.totTijd).getTime() > nuMs;
+
+    // Huishoud: altijd klikbaar (manuele keuze), altijd default off
+    const huishoudCbs = HUISHOUD.map(h =>
+      `<td><input type="checkbox" class="mx-cb" data-pid="${pid}" data-key="${h.id}"
+        ${k[h.id]?'checked':''}></td>`
+    ).join('');
+
+    const grootDefs = [
+      {id:'eco'},{id:'ev_won'},{id:'ev_sch'},
+      {id:'wp_won'},{id:'wp_sch'},{id:cfg.isDuur?'bat_ontladen':'bat_laden'}
+    ];
+    const grootCbs = grootDefs.map((v,vi) => {
+      const checked = k[v.id];
+      const ovKey   = v.id==='bat_laden'||v.id==='bat_ontladen'?'bat':v.id;
+      const ov      = overrides[ovKey];
+      // Enkel neg-bat en duur-bat zijn geforceerd (niet klikbaar)
+      const negBat  = !cfg.isDuur && v.id==='bat_laden'    && p.klasse==='neg';
+      const duurBat =  cfg.isDuur && v.id==='bat_ontladen' && p.klasse==='duur';
+      const forced  = negBat || duurBat;
+      const ovActief = !forced && (ov==='aan' || ov==='uit');
+      const style    = forced   ? 'opacity:.35;cursor:not-allowed'
+                     : ovActief ? 'accent-color:var(--yellow)' : '';
+      const tooltip  = negBat  ? '★ Negatief: batterij laden verplicht'
+                     : duurBat ? '★ Duur: batterij ontladen'
+                     : ovActief ? 'Globale override: '+ov : '';
+      return `<td${vi===0?' class="td-sep"':''}><input type="checkbox" class="${cbKls}"
+        data-pid="${pid}" data-key="${v.id}" ${checked?'checked':''}
+        ${forced?'disabled':''} style="${style}" title="${tooltip}"></td>`;
+    }).join('');
+
+    const tr = document.createElement('tr');
+    tr.className = cfg.rowKls + (isNu?' row-current':'');
+    tr.innerHTML = `
+      <td class="td-periode">
+        <div class="periode-band">
+          <div class="periode-kleurband" style="background:${cfg.kleur}${isNu?';width:6px':''}"></div>
+          <div class="periode-info">
+            <span class="periode-tijd">${isNu?'▶ ':''}<b>${fmtTime(p.vanTijd)}</b> – ${fmtTime(p.totTijd)}</span>
+            <span class="periode-dag">${fmtDag(p.vanTijd)}</span>
+            <span class="periode-duur">${p.duur}</span>
+          </div>
+        </div>
+      </td>
+      <td class="td-prijs" style="color:${kleur(reeel)}">${gemCt}</td>
+      ${huishoudCbs}
+      ${grootCbs}
+      <td class="td-sep td-piek ${piekKls}" id="piek-cel-${pid}">${piek.toFixed(1)}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  if (!alleChron.length) {
+    tbody.innerHTML = `<tr><td colspan="${cols.length}" style="text-align:center;color:var(--muted);font-size:.75rem;padding:20px">Geen data beschikbaar</td></tr>`;
+  }
+
+  // Checkbox listeners
+  tbody.querySelectorAll('input[data-pid]:not([disabled])').forEach(cb => { // ook groot
+    cb.addEventListener('change', () => {
+      const pid = cb.dataset.pid, key = cb.dataset.key;
+      if (!periodeKeuzes[pid]) periodeKeuzes[pid] = {};
+      periodeKeuzes[pid][key] = cb.checked;
+      slaKeuzeOp();
+      const klasse = pid.split('_')[0];
+      const piek   = berekenPiekVoorPeriode(pid, klasse);
+      const cel    = document.getElementById(`piek-cel-${pid}`);
+      if (cel) {
+        cel.textContent = piek.toFixed(1);
+        const pp = MAX_PIEK > 0 ? piek / MAX_PIEK : 0;
+        const pk = pp > 1 ? 'over' : pp > 0.9 ? 'warn-hi' : pp > 0.75 ? 'warn' : pp > 0.5 ? 'notice' : 'ok';
+        cel.className = `td-sep td-piek ${pk}`;
+      }
+      updateSimulatie();
+    });
+  });
+
+  // Winst
+  const allG = [..._periodesNeg,..._periodesGoen].sort((a,b)=>a.gem-b.gem);
+  const allD = [..._periodesDuur].sort((a,b)=>b.gem-a.gem);
+  // Spread op reële prijs: opslag valt weg in het verschil → zelfde als kale EPEX spread
+  // Maar we tonen het expliciet voor transparantie
+  const goedkCt = reelePrijs((allG[0]?.gem||0)/10);
+  const duurCt  = reelePrijs((allD[0]?.gem||0)/10);
+  const spread  = Math.max(0, duurCt - goedkCt);
+  document.getElementById('arb-winst-val').textContent = `€ ${(spread*BAT_KWH*0.92/100).toFixed(2)} /24u`;
+
+  updateSimulatie();
+}
+
+
+// ─── MINI TABEL (dashboard) ───────────────────────────────────────────────────
+function renderMiniTabel() {
+  const alleChron = groepeerAlleChronologisch(allTimes, allPrices);
+  if (!alleChron.length) return;
+  const nu = Date.now();
+  // Vind huidige + volgende 5 periodes
+  const nuIdx = alleChron.findIndex(p =>
+    new Date(p.vanTijd).getTime() <= nu && new Date(p.totTijd).getTime() > nu);
+  const start = Math.max(0, nuIdx);
+  const rijen = alleChron.slice(start, start + 6);
+
+  const tbody = document.querySelector('#mini-tabel tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  rijen.forEach((p, ri) => {
+    const isNu    = ri === 0 && nuIdx >= 0;
+    const epexCt  = p.gem / 10;
+    const reeel   = reelePrijs(epexCt);
+    const kleur   = kleur(epexCt);
+    const van     = new Date(p.vanTijd);
+    const tot     = new Date(p.totTijd);
+    const tijdStr = `${String(van.getHours()).padStart(2,'0')}:${String(van.getMinutes()).padStart(2,'0')}–${String(tot.getHours()).padStart(2,'0')}:${String(tot.getMinutes()).padStart(2,'0')}`;
+    const dagStr  = isNu ? '▶ Nu' : van.toLocaleDateString('nl-BE',{weekday:'short'});
+
+    // Apparaten als emoji (van algoritme)
+    const k = getKeuze(p.id, p.klasse);
+    const apparaten = [
+      k.eco        ? '♨️' : '',
+      k.ev_won     ? '🚙' : '',
+      k.ev_sch     ? '🚗' : '',
+      k.wp_won     ? '🏠' : '',
+      k.wp_sch     ? '🏚️' : '',
+      k.bat_laden  ? '🔋↑' : '',
+      k.bat_ontladen?'🔋↓' : '',
+    ].filter(Boolean).join(' ') || '—';
+
+    const piek    = berekenPiekVoorPeriode(p.id, p.klasse);
+    const piekPct = MAX_PIEK > 0 ? piek / MAX_PIEK : 0;
+    const piekKls = piekPct > 1 ? 'var(--red)' : piekPct > 0.9 ? 'var(--orange,#f0883e)' : piekPct > 0.5 ? 'var(--yellow)' : 'var(--green)';
+
+    const tr = document.createElement('tr');
+    if (isNu) tr.className = 'mini-nu';
+    tr.innerHTML = `
+      <td class="mini-tijd">${dagStr}<br>${tijdStr}</td>
+      <td class="mini-prijs" style="color:${kleur(epexCt)}">${reeel.toFixed(1)} ct</td>
+      <td class="mini-devices">${apparaten}</td>
+      <td class="mini-piek" style="color:${piekKls}">${piek.toFixed(1)} kW</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('mini-status').textContent =
+    `bijgewerkt ${new Date().toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'})}`;
+}
+
+// ─── SIMULATIE ─────────────────────────────────────────────────────────────────
+
+// Bereken voor elk slot welke apparaten actief zijn op basis van checkboxes + piekbeheer
+function berekenSimulatie(tijden, prijzen) {
+  const ivl = detecteerInterval(tijden);
+  const slots = [];
+  let soc = SOC_START;
+  let piekZonderBeheer = 0; // hoogste piek zonder ingreep
+
+  function isGeplandActief(isoTijd, apparaatId) {
+    // Override eerst
+    const ov = overrides[apparaatId];
+    if (ov === 'aan') return true;
+    if (ov === 'uit') return false;
+    // Anders: checkboxes
+    const allesPeriodes = [
+      ..._periodesNeg.map(p=>({...p,klasse:'neg'})),
+      ..._periodesGoen.map(p=>({...p,klasse:'goen'})),
+      ..._periodesDuur.map(p=>({...p,klasse:'duur'})),
+    ];
+    for (const p of allesPeriodes) {
+      const pid   = `${p.klasse}_${p.vanTijd}`;
+      const keuze = periodeKeuzes[pid] || CB_DEFAULTS[p.klasse];
+      if (isoTijd >= p.vanTijd && isoTijd < p.totTijd && keuze[apparaatId]) return true;
+    }
+    return false;
+  }
+
+  for (let i=0; i<tijden.length; i++) {
+    const iso   = tijden[i];
+    const ct    = prijzen[i]/10;
+    const solar = solarKw(iso);
+
+    // Stap 1: bereken gewenst vermogen per apparaat (voor piekberekening zonder beheer)
+    const gewenst = {};
+    for (const v of VERBRUIKERS) {
+      gewenst[v.id] = isGeplandActief(iso, v.id) ? v.kw : 0;
+    }
+    // Huishoudtoestellen: tel mee in load als aangevinkt voor deze periode
+    let huishoudKw = 0;
+    for (const h of HUISHOUD) {
+      if (isGeplandActief(iso, h.id)) huishoudKw += h.kw;
+    }
+    // Energy sharing
+    if (gewenst['ev_won'] > 0 && gewenst['ev_sch'] > 0) {
+      gewenst['ev_won'] = 6; gewenst['ev_sch'] = 6; // energy sharing
+    }
+
+    const batLaden = isGeplandActief(iso, 'bat_laden');
+    const batOntl  = isGeplandActief(iso, 'bat_ontladen');
+    const batMax   = Math.min(5, BAT_KWH / 2);
+    let batKwGewenst = 0;
+    // Bij negatieve prijs: laad zo snel mogelijk (max 0.5C of 7.4kW)
+    if (batLaden && soc < 99) {
+      batKwGewenst = ct < 0 ? Math.min(BAT_KWH * 0.5, 7.4) : batMax;
+    }
+    if (batOntl  && soc > 15)  batKwGewenst = -batMax;
+
+    const loadGewenst = Object.values(gewenst).reduce((a,b)=>a+b,0)
+                      + Math.max(0, batKwGewenst)
+                      + huishoudKw;
+    piekZonderBeheer = Math.max(piekZonderBeheer, loadGewenst);
+
+    // Stap 2: piekbeheer — snij af in volgorde van prioriteit
+    const actief    = {...gewenst};
+    let batKw       = batKwGewenst;
+    const afgesch   = []; // welke apparaten werden teruggedraaid
+
+    let totaal = Object.values(actief).reduce((a,b)=>a+b,0) + Math.max(0,batKw);
+
+    if (totaal > MAX_PIEK) {
+      for (const id of PIEK_PRIO) {
+        if (totaal <= MAX_PIEK) break;
+        // Batterij laden apart behandelen
+        if (id === 'bat_laden') {
+          if (batKw > 0) {
+            const red = Math.min(batKw, totaal - MAX_PIEK);
+            batKw    -= red;
+            totaal   -= red;
+            if (red > 0.1) afgesch.push('Bat.laden');
+          }
+          continue;
+        }
+        const v = VERBRUIKERS.find(v=>v.id===id);
+        if (!v || actief[id] === 0) continue;
+        // Override 'aan' = nooit afschakelen door piekbeheer
+        if (overrides[id] === 'aan') continue;
+
+        if (v.regelbaar) {
+          // Reduceer gradueel
+          const red = Math.min(actief[id], totaal - MAX_PIEK);
+          actief[id] -= red;
+          totaal     -= red;
+          if (red > 0.1) afgesch.push(`${v.naam}${v.sub} ↓${actief[id].toFixed(1)}kW`);
+          if (actief[id] < 0.5) { actief[id]=0; }
+        } else {
+          // Aan/uit: volledig uitschakelen
+          totaal    -= actief[id];
+          afgesch.push(`${v.naam}${v.sub}`);
+          actief[id] = 0;
+        }
+      }
+    }
+
+    // Stap 3: batterij actie na piekbeheer
+    let batActie = 'idle';
+    if (batKw > 0.05)  { batActie = 'laden';    totaal += batKw; }
+    if (batKw < -0.05) { batActie = 'ontladen'; }
+
+    // SOC update
+    const uren = ivl / 3600000;
+    if (batActie==='laden')    soc = Math.min(100, soc + (batKw*uren*0.95/BAT_KWH)*100);
+    if (batActie==='ontladen') soc = Math.max(0,   soc - (Math.abs(batKw)*uren/0.95/BAT_KWH)*100);
+
+    const load  = Object.values(actief).reduce((a,b)=>a+b,0) + Math.max(0,batKw) + huishoudKw;
+    const netto = solar - load;
+    slots.push({
+      iso, ct, solar, load, netto, soc,
+      actief, batKw, batActie,
+      piekKw: load, afgesch,
+      loadGewenst // voor kostenberekening zonder beheer
+    });
+  }
+
+  // Bewaar hoogste piek zonder beheer voor kostensectie
+  slots._piekZonder = piekZonderBeheer;
+  return slots;
+}
+
+// LED kleuren per pixel (12 pixels)
+function ledKleur(slot, d) {
+  if (!slot) return { bg:'#111', glow:false };
+  const id = d.id;
+
+  // Helper: groen gradient op basis van intensiteit 0-1
+  function groenGrad(intens) {
+    const r = Math.round(20  + intens*148);
+    const g = Math.round(80  + intens*175);
+    const b = Math.round(30  + intens*32);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  if (id === 'solar') {
+    if (slot.solar < 0.3) return { bg:'#111', glow:false };
+    const intens = Math.min(1, slot.solar / (SOLAR_MAX_KW||8));
+    const c = groenGrad(intens);
+    return { bg:c, glow:intens>0.5, color:c };
+  }
+
+  if (id === 'prijs') {
+    const c = kleur(slot.ct);
+    return { bg:c, glow:slot.ct<0, color:c };
+  }
+
+  if (id === 'netto') {
+    if (slot.netto >  0.5) return { bg:'#2a8a3e', glow:true,  color:'#2a8a3e' };
+    if (slot.netto < -0.5) return { bg:'#f85149', glow:false };
+    return { bg:'#333', glow:false };
+  }
+
+  if (id === 'bat') {
+    if (slot.batActie==='laden')    return { bg:'#2a8a3e', glow:true,  color:'#2a8a3e' };
+    if (slot.batActie==='ontladen') return { bg:'#d29922', glow:true,  color:'#d29922' };
+    if (slot.soc > 80) return { bg:'#1a4a2a', glow:false };
+    if (slot.soc > 30) return { bg:'#2a2a1a', glow:false };
+    return { bg:'#3a1a1a', glow:false };
+  }
+
+  // Verbruikers ECO, Tesla, EV, WP's
+  if (['eco','ev_won','ev_sch','wp_won','wp_sch'].includes(id)) {
+    const v = VERBRUIKERS.find(v=>v.id===id);
+    const kw = slot.actief[id] || 0;
+    if (kw === 0) return { bg:'#1a1a1a', glow:false };
+    const intens = kw / (v?.kw||1);
+    const c = groenGrad(intens);
+    return { bg:c, glow:true, color:c };
+  }
+
+  // Advies-pixels: Koken en Wassen
+  // Groen = goed moment (goedkoop + piek heeft ruimte)
+  // Geel = normaal (kan, maar niet ideaal)
+  // Rood = duur of piek vol
+  if (id === 'koken' || id === 'wassen') {
+    const kwNodig = id==='koken' ? 3.5 : 2.0;
+    const ruimte  = MAX_PIEK - slot.load;
+    if (slot.ct < 0)             return { bg:'#a8ff3e', glow:true,  color:'#a8ff3e' }; // negatief = DOEN!
+    if (slot.ct < DREMPEL_GROEN && ruimte >= kwNodig)
+                                 return { bg:'#2a8a3e', glow:true,  color:'#2a8a3e' }; // goedkoop + ruimte
+    if (slot.ct < DREMPEL_GEEL && ruimte >= kwNodig)
+                                 return { bg:'#d29922', glow:false };                   // normaal, ruimte
+    if (ruimte < kwNodig)        return { bg:'#7a2020', glow:false };                   // piek vol
+                                 return { bg:'#f85149', glow:false };                   // duur
+  }
+
+  if (id === 'piek') {
+    const pct = slot.load / MAX_PIEK;
+    if (pct > 1)    return { bg:'#f85149', glow:true,  color:'#f85149' };
+    if (pct > 0.85) return { bg:'#d29922', glow:false };
+    if (pct > 0.3)  return { bg:'#2a8a3e', glow:false };
+    return { bg:'#111', glow:false };
+  }
+
+  return { bg:'#111', glow:false };
+}
+
+
+// 12 LED pixels definitie
+const LED_DEFS = [
+  // Groep 1: Energie situatie
+  { id:'solar',  sym:'☀️',  titel:'Solar',   groep:1 },
+  { id:'prijs',  sym:'💰',  titel:'Prijs',   groep:1 },
+  { id:'netto',  sym:'⚖️',  titel:'Netto',   groep:1 },
+  // Groep 2: Batterij
+  { id:'bat',    sym:'🔋',  titel:'Batterij',groep:2 },
+  // Groep 3: Automatische verbruikers
+  { id:'eco',    sym:'♨️',  titel:'ECO',     groep:3 },
+  { id:'ev_won', sym:'🚙',  titel:'EV WON',   groep:3 },
+  { id:'ev_sch', sym:'🚗',  titel:'EV SCH',  groep:3 },
+  { id:'wp_won', sym:'🏠',  titel:'WP WON',  groep:3 },
+  { id:'wp_sch', sym:'🏚️', titel:'WP SCH',  groep:3 },
+  // Groep 4: Huishoud advies
+  { id:'koken',  sym:'🍳',  titel:'Koken?',  groep:4 },
+  { id:'wassen', sym:'👕',  titel:'Wassen?', groep:4 },
+  // Groep 5: Piek
+  { id:'piek',   sym:'📊',  titel:'Piek',    groep:5 },
+];
+
+function initLedStrip() {
+  const strip = document.getElementById('led-strip');
+  strip.innerHTML = '';
+  let prevGroep = 0;
+  for (let i=0; i<LED_DEFS.length; i++) {
+    const d = LED_DEFS[i];
+    if (d.groep !== prevGroep && prevGroep !== 0) {
+      strip.innerHTML += '<div class="led-groep-sep"></div>';
+    }
+    prevGroep = d.groep;
+    strip.innerHTML += `
+      <div class="led-pixel-wrap">
+        <div class="led-sym">${d.sym}</div>
+        <div class="led-pixel" id="led-${i}" style="background:#111"></div>
+        <div class="led-label">${d.titel}</div>
+      </div>`;
+  }
+}
+
+let _simSlots = [];
+
+function updateSimulatie() {
+  if (!allTimes.length) return;
+
+  _simSlots = berekenSimulatie(allTimes, allPrices);
+  if (!_simSlots.length) return;
+
+  // Slider range
+  const nuIdx = huidigSlot(allTimes);
+  const slider = document.getElementById('sim-slider');
+  slider.min   = 0;
+  slider.max   = _simSlots.length - 1 - nuIdx;
+  slider.value = simSlot;
+
+  // Slider labels
+  const ivl = detecteerInterval(allTimes);
+  const slotsPerUur = 3600000 / ivl;
+  document.getElementById('sim-slider-mid').textContent = `+${Math.round((_simSlots.length-nuIdx)/slotsPerUur/2)}u`;
+  document.getElementById('sim-slider-end').textContent = `+${Math.round((_simSlots.length-nuIdx)/slotsPerUur)}u`;
+
+  tekenSimulatieSlot(nuIdx + simSlot);
+  if (allTimes.length) renderBatChart();
+  // Update live maandpiek = max piek vandaag tot nu
+  if (_simSlots.length) {
+    const nu = Date.now();
+    const vandaag = new Date(); vandaag.setHours(0,0,0,0);
+    let maxPiek = 2.5;
+    allTimes.forEach((t,i) => {
+      if (new Date(t) >= vandaag && new Date(t) <= nu && _simSlots[i])
+        maxPiek = Math.max(maxPiek, _simSlots[i].piekKw || 0);
+    });
+    liveMapndpiek = maxPiek;
+    const el = document.getElementById('live-maandpiek');
+    if (el) el.textContent = maxPiek.toFixed(2);
+  }
+  if (allTimes.length) renderNetChart();
+  updateDagkost();
+  renderMiniTabel();
+}
+
+function tekenSimulatieSlot(absSlot) {
+  const s = _simSlots[absSlot];
+  if (!s) return;
+
+  // Tijdstip
+  const d = new Date(s.iso);
+  // Dynamische titel op basis van slot
+  const soc_r = Math.round(s.soc);
+  const bat_lbl = s.batActie==='laden'?` · 🔋↑${s.batKw.toFixed(1)}kW`:s.batActie==='ontladen'?` · 🔋↓${Math.abs(s.batKw).toFixed(1)}kW`:`· 🔋${soc_r}%`;
+  document.getElementById('sim-titel').textContent = `💡 Simulatie · ${s.load.toFixed(1)}kW verbruik${bat_lbl}`;
+  document.getElementById('sim-tijdstip').textContent =
+    `${fmtDag(s.iso)} ${fmtTime(s.iso)}  ·  ${reelePrijs(s.ct).toFixed(1)} ct/kWh (EPEX ${s.ct.toFixed(1)})`;
+
+  // LEDs (12 pixels)
+  for (let i=0; i<LED_DEFS.length; i++) {
+    const pixel = document.getElementById(`led-${i}`);
+    if (!pixel) continue;
+    const lk = ledKleur(s, LED_DEFS[i]);
+    pixel.style.background = lk.bg;
+    if (lk.glow && lk.color) {
+      pixel.style.setProperty('--glow-clr', lk.color);
+      pixel.style.boxShadow = `0 0 16px 5px ${lk.color}99`;
+      pixel.classList.add('aan');
+    } else {
+      pixel.style.boxShadow = 'none';
+      pixel.classList.remove('aan');
+    }
+  }
+
+  // SOC
+  const socPct = Math.round(s.soc);
+  document.getElementById('soc-pct').textContent = `${socPct}%`;
+  const bar = document.getElementById('soc-bar');
+  bar.style.width = `${socPct}%`;
+  bar.style.background = socPct>60?'#2a8a3e':socPct>25?'#d29922':'#f85149';
+
+  const actieStr = s.batActie==='laden'
+    ? `↑ Laden ${s.batKw.toFixed(1)} kW`
+    : s.batActie==='ontladen'
+      ? `↓ Ontladen ${Math.abs(s.batKw).toFixed(1)} kW`
+      : 'Idle';
+  document.getElementById('soc-actie').textContent = actieStr;
+
+  // Metrics
+  document.getElementById('sim-solar').textContent = `${s.solar.toFixed(1)} kW`;
+  document.getElementById('sim-load').textContent  = `${s.load.toFixed(1)} kW`;
+  const nettoEl = document.getElementById('sim-netto');
+  if (s.netto > 0.1) {
+    nettoEl.textContent = `+${s.netto.toFixed(1)} kW ▲`;
+    nettoEl.className   = 'sim-metric-val green';
+  } else if (s.netto < -0.1) {
+    nettoEl.textContent = `${s.netto.toFixed(1)} kW ▼`;
+    nettoEl.className   = 'sim-metric-val red';
+  } else {
+    nettoEl.textContent = '≈ 0 kW';
+    nettoEl.className   = 'sim-metric-val';
+  }
+
+  // PIEK METER
+  const piekPct = Math.min(100, (s.load / MAX_PIEK) * 100);
+  const overschreden = s.load > MAX_PIEK;
+  const piekKlr = overschreden ? '#f85149' : s.load > MAX_PIEK*0.85 ? '#d29922' : '#2a8a3e';
+  document.getElementById('piek-kw').textContent   = s.load.toFixed(1);
+  document.getElementById('piek-max-kw').textContent = MAX_PIEK.toFixed(1);
+  document.getElementById('piek-bar').style.width      = `${Math.min(100,piekPct)}%`;
+  document.getElementById('piek-bar').style.background = piekKlr;
+  // Limietlijn positie
+  document.getElementById('piek-limiet').style.left = `calc(${Math.min(99,(MAX_PIEK/Math.max(s.load,MAX_PIEK+1))*100)}% - 1px)`;
+  const statusEl = document.getElementById('piek-status-lbl');
+  if (overschreden) {
+    statusEl.innerHTML = `<span style="color:var(--red)">⚠ PIEK OVERSCHREDEN +${(s.load-MAX_PIEK).toFixed(1)} kW</span>`;
+  } else if (s.load > MAX_PIEK*0.85) {
+    statusEl.innerHTML = `<span style="color:var(--yellow)">↗ Bijna piek (${(MAX_PIEK-s.load).toFixed(1)} kW marge)</span>`;
+  } else {
+    statusEl.innerHTML = `<span style="color:var(--green)">✓ Binnen piek</span>`;
+  }
+  // Afgeschakelde apparaten
+  document.getElementById('piek-afgesch').textContent =
+    s.afgesch.length ? `↓ Piekbeheer: ${s.afgesch.join(' · ')} teruggedraaid` : '';
+
+  // APPARATEN MET OVERRIDE
+  const devEl = document.getElementById('sim-devices');
+  devEl.innerHTML = VERBRUIKERS.map(v => {
+    const kw     = s.actief[v.id] || 0;
+    const gewKw  = s.loadGewenst; // niet per verbruiker, toon actief kW
+    const klr    = kw > 0 ? 'var(--green)' : 'var(--muted)';
+    const lbl    = kw > 0 ? `${kw.toFixed(1)} kW` : 'uit';
+    const ov     = overrides[v.id] || 'auto';
+    const piked  = s.afgesch.some(a => a.includes(v.naam+v.sub));
+    return `<div class="sim-dev-row">
+      <div class="sim-dev-info">
+        <span class="sim-dev-naam">${v.naam} <span style="opacity:.5">${v.sub}</span></span>
+        <span class="sim-dev-kw" style="color:${klr}">${lbl}${piked?'<span class="sim-dev-piek"> ↓ piek</span>':''}</span>
+      </div>
+      <div class="override-btn-group">
+        <button class="override-btn ${ov==='auto'?'active-auto':''}" onclick="setOverride('${v.id}','auto')">AUTO</button>
+        <button class="override-btn ${ov==='aan'?'active-aan':''}"  onclick="setOverride('${v.id}','aan')">AAN</button>
+        <button class="override-btn ${ov==='uit'?'active-uit':''}"  onclick="setOverride('${v.id}','uit')">UIT</button>
+      </div>
+    </div>`;
+  }).join('') + (() => {
+    const ov = overrides['bat'] || 'auto';
+    const klr = s.batActie!=='idle'?'var(--yellow)':'var(--muted)';
+    const lbl = s.batActie==='laden'?`↑ ${s.batKw.toFixed(1)} kW`:s.batActie==='ontladen'?`↓ ${Math.abs(s.batKw).toFixed(1)} kW`:'idle';
+    return `<div class="sim-dev-row">
+      <div class="sim-dev-info">
+        <span class="sim-dev-naam">Batterij <span style="opacity:.5">SOC ${Math.round(s.soc)}%</span></span>
+        <span class="sim-dev-kw" style="color:${klr}">${lbl}</span>
+      </div>
+      <div class="override-btn-group">
+        <button class="override-btn ${ov==='auto'?'active-auto':''}" onclick="setOverride('bat','auto')">AUTO</button>
+        <button class="override-btn ${ov==='aan'?'active-aan':''}"  onclick="setOverride('bat','aan')">AAN</button>
+        <button class="override-btn ${ov==='uit'?'active-uit':''}"  onclick="setOverride('bat','uit')">UIT</button>
+      </div>
+    </div>`;
+  })();
+
+  // PIEK KOSTEN (herbereken over volledige sim)
+  const hoogsteMetBeheer  = Math.max(..._simSlots.map(sl=>sl.piekKw||0));
+  const hoogsteZonderBeheer = _simSlots._piekZonder || hoogsteMetBeheer;
+  const kostZonder = (hoogsteZonderBeheer * CAP_TAR).toFixed(2);
+  const kostMet    = (hoogsteMetBeheer    * CAP_TAR).toFixed(2);
+  const bespar     = Math.max(0, parseFloat(kostZonder) - parseFloat(kostMet)).toFixed(2);
+  document.getElementById('piek-hoogste').textContent   = `${hoogsteMetBeheer.toFixed(1)} kW`;
+  document.getElementById('piek-kost-zonder').textContent = `€ ${kostZonder} /mnd`;
+  document.getElementById('piek-kost-met').textContent    = `€ ${kostMet} /mnd`;
+  document.getElementById('piek-besparing').textContent   = parseFloat(bespar)>0 ? `€ ${bespar} /mnd` : '—';
+
+  if (chart) chart.update('none');
+}
+
+// ─── KAARTEN / DATUM ──────────────────────────────────────────────────────────
+function renderSolarChart() {
+  const tijden = allTimes;  // zelfde x-as als EPEX (00:00 → +48u)
+  if (!tijden.length) return;
+  const nu = Date.now();
+  const ctx = document.getElementById('solarChart').getContext('2d');
+
+  // Bereken solar per slot
+  const solarData = tijden.map(t => {
+    // Alleen verleden tonen — toekomst leeg laten
+    if (new Date(t).getTime() > nu) return null;
+    return parseFloat(solarKw(t).toFixed(2));
+  });
+  // Identieke labels als EPEX en solar grafiek
+  const labels = tijden.map(t => {
+    const d = new Date(t);
+    if (d.getMinutes() !== 0) return '';
+    const h = d.getHours();
+    return h % 2 === 0 ? String(h) : '';
+  });
+  // Dummy dataset om x-as volle breedte te forceren (laatste slot altijd zichtbaar)
+  const dummyData = tijden.map((t,i) => i === tijden.length-1 ? 0 : null);
+
+  // Max voor y-as
+  const maxSolar = SOLAR_MAX_KW;
+  document.getElementById('solar-max-lbl').textContent = `max ${maxSolar} kW`;
+
+  // Huidig slot markeren
+  const nuIdx = huidigSlot(tijden);
+
+  const barColors = solarData.map((v) => {
+    if (v === null || v <= 0) return 'transparent';
+    const intens = v / maxSolar;
+    const r = Math.round(200 + intens * 55);
+    const g = Math.round(140 + intens * 65);
+    return `rgba(${r},${g},20,0.85)`;
+  });
+
+  // Solar: zelfde lijnen als EPEX (middernacht + NOW + slider)
+  const nu2 = new Date(), morgen2 = new Date(nu2);
+  morgen2.setDate(nu2.getDate()+1); morgen2.setHours(0,0,0,0);
+  const midIdxS = tijden.findIndex(t => new Date(t).getTime() >= morgen2.getTime());
+  const nuIdxS  = huidigSlot(tijden);
+  const nuFracS = (Date.now() - new Date(tijden[nuIdxS]).getTime()) / detecteerInterval(tijden);
+
+  const lijnenPluginSolar = {
+    id: 'lijnenSolar',
+    afterDraw(ch) {
+      const { ctx, scales:{x,y} } = ch;
+      ctx.save();
+      if (midIdxS >= 0) {
+        const xPos = x.getPixelForValue(midIdxS - 0.5);
+        ctx.beginPath(); ctx.moveTo(xPos,y.top); ctx.lineTo(xPos,y.bottom);
+        ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
+        ctx.setLineDash([4,4]); ctx.stroke();
+      }
+      const nuXPos = x.getPixelForValue(nuIdxS + nuFracS);
+      ctx.beginPath(); ctx.moveTo(nuXPos,y.top); ctx.lineTo(nuXPos,y.bottom);
+      ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
+      ctx.setLineDash([3,3]); ctx.stroke();
+      ctx.restore();
+    }
+  };
+
+  if (chartSolar) chartSolar.destroy();
+  chartSolar = new Chart(ctx, {
+    plugins: [lijnenPluginSolar],
+    data: {
+      labels,
+      datasets: [{
+        type: 'bar',
+        data: solarData,
+        backgroundColor: barColors,
+        borderColor: 'transparent',
+        borderWidth: 0,
+        borderRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor:'#161b22', borderColor:'#21262d', borderWidth:1,
+          titleColor:'#8b949e', bodyColor:'#e6edf3',
+          titleFont:{family:'Space Mono',size:11}, bodyFont:{family:'DM Sans',size:12},
+          callbacks: {
+            title: (items) => {
+              const i = items[0].dataIndex;
+              const d = new Date(tijden[i]);
+              return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}  (${fmtDag(tijden[i])})`;
+            },
+            label: (item) => ` Solar: ${item.raw.toFixed(2)} kW`
+          }
+        }
+      },
+      scales: {
+        x: {
+          display: true,
+          ticks: {
+            color:'#8b949e', font:{family:'Space Mono',size:9},
+            maxRotation:0, autoSkip:false, maxTicksLimit:96,
+            callback:(v,i) => labels[i] || ''
+          },
+          grid: { color:'rgba(33,38,45,0.8)' }
+        },
+        y: {
+          min: 0,
+          max: maxSolar * 1.05,
+          border: { color:'rgba(88,166,255,0.5)', width:1.5 },
+          ticks: {
+            color:'#8b949e', font:{family:'Space Mono',size:10},
+            callback: v => v === 0 ? '' : v.toFixed(1)+' kW',
+            maxTicksLimit: 4
+          },
+          grid: { color:'rgba(33,38,45,0.8)' }
+        }
+      }
+    }
+  });
+}
+
+
+function renderBatChart() {
+  const tijden = allTimes;
+  if (!tijden.length || !_simSlots.length) return;
+
+  const nuMs   = Date.now();
+  const ctx    = document.getElementById('batChart').getContext('2d');
+
+  // Directe index: _simSlots[i] = slot voor allTimes[i]
+  const laadData    = tijden.map((t, i) => {
+    if (new Date(t).getTime() > nuMs) return null;
+    const s = _simSlots[i];
+    return (s && s.batActie === 'laden')    ? +s.batKw.toFixed(2)               : 0;
+  });
+  const ontlaadData = tijden.map((t, i) => {
+    if (new Date(t).getTime() > nuMs) return null;
+    const s = _simSlots[i];
+    return (s && s.batActie === 'ontladen') ? -Math.abs(s.batKw).toFixed(2)     : 0;
+  });
+  // SOC voor verleden slots; toekomst = null maar we bewaren de laatste waarde
+  // zodat de x-as de volle breedte behoudt
+  let lastSoc = SOC_START;
+  const socPctData = tijden.map((t, i) => {
+    if (new Date(t).getTime() > nuMs) return null;
+    const s = _simSlots[i];
+    if (s) { lastSoc = +s.soc.toFixed(1); return lastSoc; }
+    return null;
+  });
+  // Voeg één punt toe net na NU zodat x-as niet inkrimpt
+  // door 1 null-sentinel punt op de volle breedte te forceren via labels
+
+  // Identieke labels als EPEX en solar grafiek
+  const labels = tijden.map(t => {
+    const d = new Date(t);
+    if (d.getMinutes() !== 0) return '';
+    const h = d.getHours();
+    return h % 2 === 0 ? String(h) : '';
+  });
+  // Dummy dataset om x-as volle breedte te forceren (laatste slot altijd zichtbaar)
+  const dummyData = tijden.map((t,i) => i === tijden.length-1 ? 0 : null);
+
+  // Kleurverloop laden/ontladen
+  const nuIdxB2       = huidigSlot(tijden);
+  const laadKleuren   = laadData.map((v, i)    => (v !== null && v > 0) ? (i <= nuIdxB2 ? '#2a8a3eee' : '#2a8a3e44') : 'transparent');
+  const ontlaadKleuren= ontlaadData.map((v, i) => (v !== null && v < 0) ? (i <= nuIdxB2 ? '#d29922ee' : '#d2992244') : 'transparent');
+
+  // Dezelfde verticale lijnen als EPEX en solar
+  const nu3 = new Date(), morgen3 = new Date(nu3);
+  morgen3.setDate(nu3.getDate()+1); morgen3.setHours(0,0,0,0);
+  const midIdxB = tijden.findIndex(t => new Date(t).getTime() >= morgen3.getTime());
+  const nuFracB = (Date.now() - new Date(tijden[nuIdxB2]).getTime()) / detecteerInterval(tijden);
+
+  const lijnenPluginBat = {
+    id: 'lijnenBat',
+    afterDraw(ch) {
+      const { ctx, scales } = ch;
+      const x  = scales.x;
+      const yy = scales.yKw;  // gebruik yKw als hoogte-referentie
+      if (!x || !yy) return;
+      ctx.save();
+      if (midIdxB >= 0) {
+        const xPos = x.getPixelForValue(midIdxB - 0.5);
+        ctx.beginPath(); ctx.moveTo(xPos,yy.top); ctx.lineTo(xPos,yy.bottom);
+        ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
+        ctx.setLineDash([4,4]); ctx.stroke();
+      }
+      const nuXPos = x.getPixelForValue(nuIdxB2 + nuFracB);
+      ctx.beginPath(); ctx.moveTo(nuXPos,yy.top); ctx.lineTo(nuXPos,yy.bottom);
+      ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
+      ctx.setLineDash([3,3]); ctx.stroke();
+      ctx.restore();
+    }
+  };
+
+  if (chartBat) chartBat.destroy();
+  chartBat = new Chart(ctx, {
+    plugins: [lijnenPluginBat],
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',  label: 'Laden (kW)',
+          data: laadData,
+          backgroundColor: laadKleuren,
+          borderColor: 'transparent', borderRadius: 2, order: 2, yAxisID: 'yKw'
+        },
+        {
+          type: 'bar',  label: 'Ontladen (kW)',
+          data: ontlaadData,
+          backgroundColor: ontlaadKleuren,
+          borderColor: 'transparent', borderRadius: 2, order: 2, yAxisID: 'yKw'
+        },
+        {
+          type: 'bar', label: '_dummy',
+          data: dummyData,
+          backgroundColor: 'transparent',
+          borderColor: 'transparent',
+          yAxisID: 'yKw'
+        },
+        {
+          type: 'line', label: 'SOC (%)',
+          data: socPctData,
+          borderColor: 'rgba(88,166,255,0.9)',
+          borderWidth: 2, pointRadius: 0,
+          fill: { target:'origin', above:'rgba(88,166,255,0.08)' },
+          tension: 0.3, order: 1, yAxisID: 'yKwh',
+          spanGaps: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: { display:false },
+        tooltip: {
+          backgroundColor:'#161b22', borderColor:'#21262d', borderWidth:1,
+          titleColor:'#8b949e', bodyColor:'#e6edf3',
+          titleFont:{family:'Space Mono',size:11}, bodyFont:{family:'DM Sans',size:12},
+          callbacks: {
+            title: (items) => {
+              const i = items[0].dataIndex;
+              const d = new Date(tijden[i]);
+              return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}  (${fmtDag(tijden[i])})`;
+            },
+            label: (item) => {
+              if (item.datasetIndex === 1 && item.raw > 0)    return ` Laden:    ${item.raw.toFixed(2)} kW`;
+              if (item.datasetIndex === 2 && item.raw < 0)    return ` Ontladen: ${Math.abs(item.raw).toFixed(2)} kW`;
+              if (item.datasetIndex === 3 && item.raw !== null) {
+                const kwh = (item.raw * BAT_KWH / 100).toFixed(2);
+                return ` SOC: ${item.raw.toFixed(1)}%  (${kwh} kWh)`;
+              }
+              return null;
+            },
+            filter: (item) => {
+              if (item.datasetIndex === 0) return false; // dummy
+              if (item.raw === null) return false;
+              if (item.datasetIndex === 1) return item.raw > 0;
+              if (item.datasetIndex === 2) return item.raw < 0;
+              return true;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          display: true,
+          type: 'category',
+          ticks: {
+            color:'#8b949e', font:{family:'Space Mono',size:9},
+            maxRotation:0,
+            autoSkip: false,
+            callback:(v,i) => labels[i] || ''
+          },
+          grid: { color:'rgba(33,38,45,0.8)' }
+        },
+        yKw: {
+          position: 'left',
+          border: { color:'rgba(88,166,255,0.5)', width:1.5 },
+          ticks: {
+            color:'#8b949e', font:{family:'Space Mono',size:10},
+            callback: v => v === 0 ? '0' : v.toFixed(1)+' kW',
+            maxTicksLimit: 5
+          },
+          grid: { color:'rgba(33,38,45,0.8)' }
+        },
+        yKwh: {
+          position: 'right',
+          min: 0, max: 100,
+          ticks: {
+            color:'rgba(88,166,255,0.85)', font:{family:'Space Mono',size:9},
+            callback: v => v % 25 === 0 ? v+' %' : '',
+            maxTicksLimit: 5
+          },
+          grid: { display:false }
+        }
+      }
+    }
+  });
+}
+
+
+function renderNetChart() {
+  const tijden = allTimes;
+  if (!tijden.length || !_simSlots.length) return;
+  const nuMs  = Date.now();
+  const ctx   = document.getElementById('netChart').getContext('2d');
+  const ivl   = detecteerInterval(tijden);
+
+  // Netto per slot: solar - load - bat_ontladen + bat_laden
+  // Positief = injectie naar net (groen), negatief = afname van net (rood)
+  const nettoData  = tijden.map((t, i) => {
+    const s = _simSlots[i];
+    if (!s) return null;
+    return +s.netto.toFixed(2);
+  });
+
+  // Splits in injectie (>=0) en afname (<0) voor kleur
+  const injectieData = nettoData.map(v => v !== null && v >= 0 ? v    : null);
+  const afnameData   = nettoData.map(v => v !== null && v <  0 ? v    : null);
+
+  // Kostlijn: reële prijs per slot (ct/kWh), alleen verleden
+  const kostData = tijden.map((t, i) => {
+    if (new Date(t).getTime() > nuMs) return null;
+    const p = allPrices[i];
+    return p !== undefined ? +reelePrijs(p/10).toFixed(1) : null;
+  });
+
+  const labels = tijden.map(t => {
+    const d = new Date(t);
+    if (d.getMinutes() !== 0) return '';
+    return d.getHours() % 2 === 0 ? String(d.getHours()) : '';
+  });
+
+  const dummyNet = tijden.map((t,i) => i === tijden.length-1 ? 0 : null);
+
+  // Verticale lijnen
+  const nu4 = new Date(), morgen4 = new Date(nu4);
+  morgen4.setDate(nu4.getDate()+1); morgen4.setHours(0,0,0,0);
+  const midIdxN = tijden.findIndex(t => new Date(t).getTime() >= morgen4.getTime());
+  const nuIdxN  = huidigSlot(tijden);
+  const nuFracN = (Date.now() - new Date(tijden[nuIdxN]).getTime()) / ivl;
+
+  const lijnenPluginNet = {
+    id: 'lijnenNet',
+    afterDraw(ch) {
+      const { ctx, scales } = ch;
+      const x = scales.x, yy = scales.yKw;
+      if (!x || !yy) return;
+      ctx.save();
+      if (midIdxN >= 0) {
+        const xPos = x.getPixelForValue(midIdxN - 0.5);
+        ctx.beginPath(); ctx.moveTo(xPos,yy.top); ctx.lineTo(xPos,yy.bottom);
+        ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
+        ctx.setLineDash([4,4]); ctx.stroke();
+      }
+      const nuXPos = x.getPixelForValue(nuIdxN + nuFracN);
+      ctx.beginPath(); ctx.moveTo(nuXPos,yy.top); ctx.lineTo(nuXPos,yy.bottom);
+      ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
+      ctx.setLineDash([3,3]); ctx.stroke();
+      ctx.restore();
+    }
+  };
+
+  if (chartNet) chartNet.destroy();
+  chartNet = new Chart(ctx, {
+    plugins: [lijnenPluginNet],
+    data: {
+      labels,
+      datasets: [
+        { type:'bar',  label:'_dummy',    data:dummyNet,    backgroundColor:'transparent', borderColor:'transparent', yAxisID:'yKw' },
+        { type:'bar',  label:'Injectie',  data:injectieData, backgroundColor:'rgba(42,138,62,0.8)',  borderColor:'transparent', borderRadius:2, yAxisID:'yKw' },
+        { type:'bar',  label:'Afname',    data:afnameData,   backgroundColor:'rgba(248,81,73,0.8)',  borderColor:'transparent', borderRadius:2, yAxisID:'yKw' },
+        { type:'line', label:'Prijs',     data:kostData,     borderColor:'rgba(210,153,34,0.7)', borderWidth:1.5, pointRadius:0, fill:false, tension:0.2, yAxisID:'yCt', spanGaps:false },
+      ]
+    },
+    options: {
+      responsive:true, animation:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ display:false },
+        tooltip:{
+          backgroundColor:'#161b22', borderColor:'#21262d', borderWidth:1,
+          titleColor:'#8b949e', bodyColor:'#e6edf3',
+          titleFont:{family:'Space Mono',size:11}, bodyFont:{family:'DM Sans',size:12},
+          callbacks:{
+            title:(items)=>{
+              const i=items[0].dataIndex, d=new Date(tijden[i]);
+              return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}  (${fmtDag(tijden[i])})`;
+            },
+            label:(item)=>{
+              if (item.datasetIndex===0) return null;
+              if (item.datasetIndex===1 && item.raw>0)  return ` Injectie: +${item.raw.toFixed(2)} kW`;
+              if (item.datasetIndex===2 && item.raw<0)  return ` Afname:   ${item.raw.toFixed(2)} kW`;
+              if (item.datasetIndex===3 && item.raw!==null) return ` Prijs:    ${item.raw.toFixed(1)} ct/kWh`;
+              return null;
+            },
+            filter:(item)=>{
+              if (item.datasetIndex===0) return false;
+              if (item.raw===null) return false;
+              if (item.datasetIndex===1) return item.raw>0;
+              if (item.datasetIndex===2) return item.raw<0;
+              return true;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{ display:true, type:'category',
+            ticks:{ color:'#8b949e', font:{family:'Space Mono',size:9}, maxRotation:0, autoSkip:false, callback:(v,i)=>labels[i]||'' },
+            grid:{ color:'rgba(33,38,45,0.8)' }
+        },
+        yKw:{ position:'left',
+              border:{ color:'rgba(88,166,255,0.5)', width:1.5 },
+              ticks:{ color:'#8b949e', font:{family:'Space Mono',size:10},
+                      callback: v => v===0?'0':v.toFixed(1)+' kW', maxTicksLimit:5 },
+              grid:{ color:'rgba(33,38,45,0.8)' }
+        },
+        yCt:{ position:'right',
+              ticks:{ color:'rgba(210,153,34,0.8)', font:{family:'Space Mono',size:9},
+                      callback: v => v.toFixed(0)+' ct', maxTicksLimit:5 },
+              grid:{ display:false }
+        }
+      }
+    }
+  });
+}
+
+
+function updateDagkost() {
+  if (!_simSlots.length || !allTimes.length) return;
+
+  const nu    = new Date();
+  const vandaag = new Date(); vandaag.setHours(0,0,0,0);
+  const ivl   = detecteerInterval(allTimes) / 3600000; // uren per slot
+
+  const INJECTIE_CT = 5.0; // ct/kWh injectietarief na 2028
+
+  let kostDyn  = 0; // dynamisch contract kost
+  let kostVast = 0; // vast contract kost
+  let heeftData = false;
+
+  allTimes.forEach((t, i) => {
+    const d = new Date(t);
+    // Alleen vandaag, alleen verleden
+    if (d < vandaag || d > nu) return;
+    const s = _simSlots[i];
+    if (!s) return;
+    heeftData = true;
+
+    const epexCt  = allPrices[i] / 10;
+    const reeel   = reelePrijs(epexCt);          // ct/kWh reële prijs
+    const vastCt  = vast;                         // ct/kWh vast contract
+
+    // Netto per slot: positief = afname (kost), negatief = injectie (opbrengst)
+    const afname   = Math.max(0,  -s.netto) * ivl; // kWh afgenomen
+    const injectie = Math.max(0,   s.netto) * ivl; // kWh geïnjecteerd
+
+    // Kost dynamisch
+    kostDyn  += afname   * reeel    / 100;
+    kostDyn  -= injectie * INJECTIE_CT / 100;
+
+    // Kost vast
+    kostVast += afname   * vastCt   / 100;
+    kostVast -= injectie * INJECTIE_CT / 100;
+  });
+
+  if (!heeftData) return;
+
+  // Vaste dagkost (pro-rata van maand naar dag)
+  const dagenInMaand = new Date(nu.getFullYear(), nu.getMonth()+1, 0).getDate();
+  const capMaand     = CAP_TAR * Math.max(2.5, liveMapndpiek);
+  const vasteDagEur  = (ABO_EUR + DATABEHEER + capMaand) / dagenInMaand;
+  // Pro-rata tot huidig uur
+  const dagFractie   = (nu.getHours() * 60 + nu.getMinutes()) / (24 * 60);
+  const vasteDeelEur = vasteDagEur * dagFractie;
+
+  // Totale kost incl. vaste deel
+  const kostDynTotaal  = kostDyn  + vasteDeelEur;
+  const kostVastTotaal = kostVast + vasteDeelEur;
+  const besparing      = kostVast - kostDyn; // verschil blijft zelfde
+
+  const dagkostEl = document.getElementById('info-dagkost');
+  dagkostEl.textContent = `€ ${kostDynTotaal.toFixed(2)}`;
+  dagkostEl.style.color = kostDynTotaal >= 0 ? 'var(--yellow)' : 'var(--green)';
+
+  const capStr = `cap. €${(capMaand/dagenInMaand*dagFractie).toFixed(2)} · abo €${(vasteDeelEur-(capMaand/dagenInMaand*dagFractie)).toFixed(2)}`;
+  document.getElementById('info-dagkost-sub').textContent =
+    `t/m ${String(nu.getHours()).padStart(2,'0')}:${String(nu.getMinutes()).padStart(2,'0')} · energie €${kostDyn.toFixed(2)} + vaste €${vasteDeelEur.toFixed(2)}`;
+
+  const vergelijkEl = document.getElementById('info-vergelijk');
+  const klr = besparing >= 0 ? 'var(--green)' : 'var(--red)';
+  vergelijkEl.style.color = klr;
+  if (besparing >= 0) {
+    vergelijkEl.textContent = `€ ${besparing.toFixed(2)} goedkoper`;
+    document.getElementById('info-vergelijk-sub').textContent =
+      `Dyn energie € ${kostDyn.toFixed(2)} vs vast € ${kostVast.toFixed(2)} · vaste kosten gelijk voor beide`;
+  } else {
+    vergelijkEl.textContent = `€ ${Math.abs(besparing).toFixed(2)} duurder`;
+    document.getElementById('info-vergelijk-sub').textContent =
+      `Dyn energie € ${kostDyn.toFixed(2)} vs vast € ${kostVast.toFixed(2)} · vaste kosten gelijk voor beide`;
+  }
+}
+
+
+function updateKaarten(tijden) {
+  const nu = new Date(), morgen = new Date(nu); morgen.setDate(nu.getDate()+1);
+  document.getElementById('datum').textContent = nu.toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('dag-label-1').textContent = `▶ Vandaag ${nu.toLocaleDateString('nl-BE',{day:'numeric',month:'short'})}`;
+  document.getElementById('dag-label-2').textContent = `Morgen ${morgen.toLocaleDateString('nl-BE',{day:'numeric',month:'short'})}`;
+}
+
+// ─── DATA LADEN ───────────────────────────────────────────────────────────────
+function demoData() {
+  const basis = new Date(); basis.setHours(0,0,0,0);
+  const v = [42,38,35,32,30,28,31,55,88,102,95,87,76,72,68,74,89,115,130,118,95,78,60,48];
+  const m = [45,40,36,33,31,29,34,58,91,105,98,90,79,75,71,77,92,118,125,110,91,75,58,44];
+  const prijzen=[...v,...m];
+  const tijden=prijzen.map((_,i)=>{const d=new Date(basis);d.setHours(i);return d.toISOString();});
+  return {tijden,prijzen};
+}
+
+// EPEX data laden via RPi server (geen corsproxy nodig)
+function slaDataOp(t,p) {
+  // Cache ook in localStorage als snelle fallback
+  try {
+    localStorage.setItem('epex_tijden', JSON.stringify(t));
+    localStorage.setItem('epex_prijzen', JSON.stringify(p));
+    localStorage.setItem('epex_ts', Date.now().toString());
+  } catch(e) {}
+}
+
+function laadCache() {
+  try {
+    const ts = parseInt(localStorage.getItem('epex_ts')||'0');
+    if (Date.now()-ts > 26*3600000) return null;
+    const tijden  = JSON.parse(localStorage.getItem('epex_tijden')||'null');
+    const prijzen = JSON.parse(localStorage.getItem('epex_prijzen')||'null');
+    if (!tijden||!prijzen||!tijden.length) return null;
+    const vandaag = new Date(); vandaag.setHours(0,0,0,0);
+    const idx = tijden.findIndex(t => new Date(t).getTime() >= vandaag.getTime());
+    if (idx<0) return null;
+    return { tijden: tijden.slice(idx), prijzen: prijzen.slice(idx) };
+  } catch(e) { return null; }
+}
+
+function toonData(tijden,prijzen,bron) {
+  allTimes=tijden; allPrices=prijzen;
+  berekenPastTijden();
+  renderChart(tijden,prijzen);
+  renderSolarChart();
+  updateKaarten(tijden);
+  updateArbitrage(tijden,prijzen);
+  document.querySelectorAll('.data-banner').forEach(b=>b.remove());
+  if(bron!=='live'){
+    const b=document.createElement('div');
+    b.className='data-banner';
+    b.style.cssText='font-size:.68rem;font-family:Space Mono,monospace;text-align:center;margin-top:10px;';
+    b.style.color=bron==='cache'?'#58a6ff':'#d29922';
+    b.textContent=bron==='cache'?'ℹ Gecachte data':'⚠ Demo-data';
+    document.querySelector('.chart-wrap').appendChild(b);
+  }
+}
+
+async function laadEPEX() {
+  document.getElementById('status-msg').style.display='block';
+  document.getElementById('epexChart').style.display='none';
+  try {
+    // Via RPi server — geen CORS-proxy nodig
+    const r    = await fetch('/api/epex');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    if (!data.unix_seconds?.length) throw new Error('Geen data');
+
+    // Zet unix timestamps om naar ISO strings
+    const vandaag = new Date(); vandaag.setHours(0,0,0,0);
+    let tijden  = data.unix_seconds.map(s => new Date(s*1000).toISOString());
+    let prijzen = data.price || [];
+
+    // Filter op vandaag 00:00 als startpunt
+    const idx = tijden.findIndex(t => new Date(t).getTime() >= vandaag.getTime());
+    if (idx > 0) { tijden = tijden.slice(idx); prijzen = prijzen.slice(idx); }
+
+    slaDataOp(tijden, prijzen);
+    toonData(tijden, prijzen, data.bron === 'live' ? 'live' : 'cache');
+
+    if (!data.morgen_beschikbaar) {
+      const b = document.createElement('div'); b.className='data-banner';
+      b.style.cssText = 'font-size:.68rem;color:#58a6ff;font-family:Space Mono,monospace;text-align:center;margin-top:10px;';
+      b.textContent = 'ℹ Prijzen voor morgen nog niet gepubliceerd (~13u)';
+      document.querySelector('.chart-wrap')?.appendChild(b);
+    }
+  } catch(e) {
+    // Fallback 1: localStorage cache
+    const cache = laadCache();
+    if (cache) { toonData(cache.tijden, cache.prijzen, 'cache'); return; }
+    // Fallback 2: demo data
+    const { tijden, prijzen } = demoData();
+    toonData(tijden, prijzen, 'demo');
+  }
+}
+
+// ─── EVENT LISTENERS ──────────────────────────────────────────────────────────
+// Override instellen — hertekent tabel + simulatie
+function setOverride(id, waarde) {
+  overrides[id] = waarde;
+  try { localStorage.setItem('overrides', JSON.stringify(overrides)); } catch(e){}
+  // Reset periode-keuzes voor grootverbruikers zodat algoritme opnieuw berekent
+  for (const pid in periodeKeuzes) {
+    const klasse = pid.split('_')[0];
+    const base   = CB_DEFAULTS[klasse] || {};
+    for (const v of VERBRUIKERS) {
+      // Alleen resetten als het niet door gebruiker manueel gewijzigd is
+      // (we herschrijven enkel de auto-waarden)
+      periodeKeuzes[pid][v.id] = base[v.id] || false;
+    }
+    periodeKeuzes[pid]['bat_laden']    = base['bat_laden']    || false;
+    periodeKeuzes[pid]['bat_ontladen'] = base['bat_ontladen'] || false;
+  }
+  slaKeuzeOp();
+  if (allPrices.length) updateArbitrage(allTimes, allPrices);
+  updateSimulatie();
+}
+
+function herbereken(){if(allPrices.length){renderChart(allTimes,allPrices);renderSolarChart();updateArbitrage(allTimes,allPrices);}}
+
+document.getElementById('inp-vast').addEventListener('change',e=>{
+  vast=parseFloat(e.target.value)||VAST_DEFAULT;
+  slaSettingsOp('vast_prijs', vast);herbereken();
+});
+document.getElementById('inp-bat').addEventListener('change',e=>{
+  BAT_KWH=parseFloat(e.target.value)||10;
+  slaSettingsOp('bat_kwh', BAT_KWH);updateSimulatie();
+});
+document.getElementById('inp-soc').addEventListener('change',e=>{
+  SOC_START=parseFloat(e.target.value)||50;
+  slaSettingsOp('soc_start', SOC_START);updateSimulatie();
+});
+document.getElementById('inp-solar-max').addEventListener('change',e=>{
+  SOLAR_MAX_KW=parseFloat(e.target.value)||8;
+  slaSettingsOp('solar_max_kw', SOLAR_MAX_KW);updateSimulatie();
+});
+document.getElementById('inp-piek').addEventListener('change',e=>{
+  MAX_PIEK=parseFloat(e.target.value)||8;
+  slaSettingsOp('max_piek', MAX_PIEK);updateSimulatie();
+});
+document.getElementById('inp-cap').addEventListener('change',e=>{
+  CAP_TAR=parseFloat(e.target.value)||4.80;
+  slaSettingsOp('cap_tar', CAP_TAR);updateSimulatie();
+});
+// Tariefcomponent listeners
+function updateTariefComponent() {
+  updateOpslagTotaal();
+  herbereken();
+}
+document.getElementById('inp-fluvius').addEventListener('change', e => {
+  T_FLUVIUS = parseFloat(e.target.value)||9;
+  slaSettingsOp('t_fluvius', T_FLUVIUS); updateTariefComponent(); });
+document.getElementById('inp-elia').addEventListener('change', e => {
+  T_ELIA = parseFloat(e.target.value)||1;
+  slaSettingsOp('t_elia', T_ELIA); updateTariefComponent(); });
+document.getElementById('inp-heffingen').addEventListener('change', e => {
+  T_HEFFINGEN = parseFloat(e.target.value)||2;
+  slaSettingsOp('t_heffingen', T_HEFFINGEN); updateTariefComponent(); });
+document.getElementById('inp-hernieuwbaar').addEventListener('change', e => {
+  T_HERNIEUWBAAR = parseFloat(e.target.value)||1.5;
+  slaSettingsOp('t_hernieuwbaar', T_HERNIEUWBAAR); updateTariefComponent(); });
+document.getElementById('inp-btw').addEventListener('change', e => {
+  T_BTW_PCT = parseFloat(e.target.value)||6;
+  slaSettingsOp('t_btw_pct', T_BTW_PCT); updateTariefComponent(); });
+
+document.getElementById('sim-slider').addEventListener('input',e=>{
+  simSlot=parseInt(e.target.value);
+  const nuIdx=huidigSlot(allTimes);
+  tekenSimulatieSlot(nuIdx+simSlot);
+  if(chart) chart.update('none');
+  if(chartSolar) chartSolar.update('none');
+  if(chartBat) chartBat.update('none');
+});
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+function pasInstellingenToe(s) {
+  if (!s) return;
+  if (s.vast_prijs    !== undefined) { vast           = s.vast_prijs;     document.getElementById('inp-vast').value        = vast; }
+  if (s.bat_kwh       !== undefined) { BAT_KWH        = s.bat_kwh;        document.getElementById('inp-bat').value         = BAT_KWH; }
+  if (s.soc_start     !== undefined) { SOC_START      = s.soc_start;      document.getElementById('inp-soc').value         = SOC_START; }
+  if (s.solar_max_kw  !== undefined) { SOLAR_MAX_KW   = s.solar_max_kw;   document.getElementById('inp-solar-max').value   = SOLAR_MAX_KW; }
+  if (s.max_piek      !== undefined) { MAX_PIEK       = s.max_piek;       document.getElementById('inp-piek').value        = MAX_PIEK; }
+  if (s.cap_tar       !== undefined) { CAP_TAR        = s.cap_tar;        document.getElementById('inp-cap').value         = CAP_TAR; }
+  if (s.abo_eur       !== undefined) { ABO_EUR        = s.abo_eur;        document.getElementById('inp-abo').value         = ABO_EUR; }
+  if (s.databeheer    !== undefined) { DATABEHEER     = s.databeheer;     document.getElementById('inp-databeheer').value  = DATABEHEER; }
+  if (s.maand_kwh     !== undefined) { MAAND_KWH      = s.maand_kwh;      document.getElementById('inp-maandkwh').value    = MAAND_KWH; }
+  if (s.t_fluvius     !== undefined) { T_FLUVIUS      = s.t_fluvius;      document.getElementById('inp-fluvius').value     = T_FLUVIUS; }
+  if (s.t_elia        !== undefined) { T_ELIA         = s.t_elia;         document.getElementById('inp-elia').value        = T_ELIA; }
+  if (s.t_hernieuwbaar!== undefined) { T_HERNIEUWBAAR = s.t_hernieuwbaar; document.getElementById('inp-hernieuwbaar').value= T_HERNIEUWBAAR; }
+  if (s.t_heffingen   !== undefined) { T_HEFFINGEN    = s.t_heffingen;    document.getElementById('inp-heffingen').value   = T_HEFFINGEN; }
+  if (s.t_btw_pct     !== undefined) { T_BTW_PCT      = s.t_btw_pct;      document.getElementById('inp-btw').value         = T_BTW_PCT; }
+  updateOpslagTotaal();
+}
+
+async function slaSettingsOp(key, value) {
+  // Sla één instelling op naar /api/settings op de RPi
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: value })
+    });
+  } catch(e) {
+    // Fallback naar localStorage als server niet bereikbaar
+    localStorage.setItem(key, value);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Laad instellingen van RPi server (of localStorage als fallback)
+  try {
+    const r = await fetch('/api/settings');
+    if (r.ok) { pasInstellingenToe(await r.json()); }
+    else { throw new Error('settings niet bereikbaar'); }
+  } catch {
+    // Fallback: localStorage
+    pasInstellingenToe({
+      vast_prijs: parseFloat(localStorage.getItem('vast_prijs')) || vast,
+      bat_kwh:    parseFloat(localStorage.getItem('bat_kwh'))    || BAT_KWH,
+    });
+  }
+  try {
+    const opgeslagen = localStorage.getItem('periode_keuzes');
+    if (opgeslagen) periodeKeuzes = JSON.parse(opgeslagen);
+  } catch(e) { periodeKeuzes = {}; }
+});
+
+initLedStrip();
+laadEPEX();
+setInterval(laadEPEX, 60*60*1000);
+</script>
+</body>
+</html>
