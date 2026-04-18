@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zarlar Portal — Overzicht</title>
+  <link rel="stylesheet" href="/zarlar.css">
+  <style>
+    /* ── Pagina-specifieke stijlen ── */
+
+    /* Controller type kleuren */
+    .type-system .card-name { color: var(--blue); }
+    .type-room   .card-name { color: var(--green); }
+    .type-energy .card-name { color: var(--amber); }
+
+    /* HVAC duty kolommen */
+    .circuit-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 3px;
+      margin-top: 8px;
+    }
+
+    .circuit-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .circuit-bar-wrap {
+      width: 100%;
+      height: 40px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+    }
+
+    .circuit-bar-fill {
+      width: 100%;
+      transition: height 0.5s ease;
+      border-radius: 3px;
+    }
+
+    .circuit-label {
+      font-family: var(--font-data);
+      font-size: 9px;
+      color: var(--text-dim);
+    }
+
+    /* Matrix mini-preview */
+    .matrix-mini {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      gap: 1.5px;
+      margin-top: 8px;
+    }
+
+    .matrix-cell {
+      aspect-ratio: 1;
+      border-radius: 1px;
+      background: #111;
+      transition: background 0.4s;
+    }
+
+    /* Boiler lagen */
+    .boiler-layers {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-top: 6px;
+    }
+
+    .boiler-layer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .boiler-layer-label {
+      font-family: var(--font-data);
+      font-size: 9px;
+      color: var(--text-dim);
+      width: 40px;
+      flex-shrink: 0;
+    }
+
+    .boiler-layer-bar {
+      flex: 1;
+      height: 8px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .boiler-layer-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.5s, background 0.5s;
+    }
+
+    .boiler-layer-val {
+      font-family: var(--font-data);
+      font-size: 10px;
+      color: var(--text-muted);
+      width: 38px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* Home mode indicator */
+    .home-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-family: var(--font-data);
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .home-pill.thuis { background: rgba(0,200,150,0.15); color: var(--green); }
+    .home-pill.weg   { background: rgba(255,184,48,0.12); color: var(--amber); }
+
+    /* Offline overlay */
+    .card.card-offline .card-body {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    /* Grote systeem-stats bovenaan */
+    .sys-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .sys-stat {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+    }
+
+    .sys-stat-val {
+      font-family: var(--font-data);
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .sys-stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    .sys-stat.green-accent { border-color: rgba(0,200,150,0.2); }
+    .sys-stat.green-accent .sys-stat-val { color: var(--green); }
+    .sys-stat.amber-accent { border-color: rgba(255,184,48,0.2); }
+    .sys-stat.amber-accent .sys-stat-val { color: var(--amber); }
+  </style>
+</head>
+<body>
+
+<div class="zarlar-layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-mark">portal</span>
+      <span class="logo-name">Zarlar</span>
+      <div class="logo-sub">Zarlardinge ↗ 192.168.0.50</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section">Systeem</div>
+      <a href="/" class="nav-link active">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor">
+          <rect x="1" y="1" width="6" height="6" rx="1"/>
+          <rect x="9" y="1" width="6" height="6" rx="1"/>
+          <rect x="1" y="9" width="6" height="6" rx="1"/>
+          <rect x="9" y="9" width="6" height="6" rx="1"/>
+        </svg>
+        Overzicht
+      </a>
+      <a href="/matrix/" class="nav-link">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="3" height="3" rx="0.5"/>
+          <rect x="6.5" y="2" width="3" height="3" rx="0.5"/>
+          <rect x="11" y="2" width="3" height="3" rx="0.5"/>
+          <rect x="2" y="6.5" width="3" height="3" rx="0.5"/>
+          <rect x="6.5" y="6.5" width="3" height="3" rx="0.5"/>
+          <rect x="11" y="6.5" width="3" height="3" rx="0.5"/>
+          <rect x="2" y="11" width="3" height="3" rx="0.5"/>
+          <rect x="6.5" y="11" width="3" height="3" rx="0.5"/>
+          <rect x="11" y="11" width="3" height="3" rx="0.5"/>
+        </svg>
+        Matrix
+      </a>
+
+      <div class="nav-section">Controllers</div>
+      <a href="/controllers/hvac/" class="nav-link">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M8 2v12M2 8h12"/>
+          <circle cx="8" cy="8" r="3"/>
+        </svg>
+        HVAC
+      </a>
+      <a href="/controllers/eco/" class="nav-link">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M8 14C4.7 14 2 11.3 2 8c0-2 1-3.8 2.5-4.9"/>
+          <path d="M8 2c3.3 0 6 2.7 6 6 0 2-1 3.8-2.5 4.9"/>
+          <circle cx="8" cy="8" r="2"/>
+        </svg>
+        ECO Boiler
+      </a>
+      <a href="/controllers/room/" class="nav-link">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M2 14V7L8 2l6 5v7"/>
+          <rect x="5" y="9" width="3" height="5"/>
+          <rect x="10" y="9" width="3" height="3"/>
+        </svg>
+        Kamers
+      </a>
+
+      <div class="nav-section">Energie</div>
+      <a href="/energy/" class="nav-link">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <polyline points="1,11 5,5 9,8 13,3"/>
+          <polyline points="11,3 13,3 13,5"/>
+        </svg>
+        EPEX Prijzen
+      </a>
+
+      <div class="nav-section">Verlichting</div>
+      <a href="/verlichting/" class="nav-link">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="8" cy="6.5" r="3"/>
+          <path d="M6 10.5h4l-.5 3h-3z"/>
+          <path d="M8 1v1M2 6.5H1M3.5 3L2.8 2.3M12.5 3l.7-.7M15 6.5h-1"/>
+        </svg>
+        Verlichting
+      </a>
+      <a href="/scenes/" class="nav-link">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="4" width="12" height="8" rx="1"/>
+          <path d="M5 4V3a1 1 0 012 0v1M9 4V3a1 1 0 012 0v1"/>
+          <path d="M5 8h6M5 10.5h4"/>
+        </svg>
+        Scènes
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="server-info">
+        <div>Portal v2.0</div>
+        <div class="server-ip">192.168.0.50:3000</div>
+        <div id="sidebar-ts" style="margin-top:2px;">—</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Hoofdinhoud ── -->
+  <div class="main-content">
+
+    <!-- Topbalk -->
+    <header class="topbar">
+      <div class="topbar-title">Systeem Overzicht</div>
+      <div class="topbar-right">
+        <span id="topbar-clock" class="topbar-clock"></span>
+        <button class="topbar-refresh" id="refresh-btn">
+          <span class="refresh-dot" id="refresh-dot"></span>
+          Vernieuwen
+        </button>
+      </div>
+    </header>
+
+    <!-- Pagina inhoud -->
+    <main class="page">
+
+      <!-- ── Systeem statistieken ── -->
+      <div class="sys-stats" id="sys-stats">
+        <div class="sys-stat">
+          <div class="sys-stat-val" id="stat-online">—</div>
+          <div class="sys-stat-label">Controllers online</div>
+        </div>
+        <div class="sys-stat amber-accent">
+          <div class="sys-stat-val" id="stat-power">— kW</div>
+          <div class="sys-stat-label">Verwarmingsvermogen</div>
+        </div>
+        <div class="sys-stat green-accent">
+          <div class="sys-stat-val" id="stat-eq">— kWh</div>
+          <div class="sys-stat-label">Boilerenergie</div>
+        </div>
+        <div class="sys-stat">
+          <div class="sys-stat-val" id="stat-temp">— °C</div>
+          <div class="sys-stat-label">Kamertemperatuur</div>
+        </div>
+      </div>
+
+      <!-- ── Controller kaarten ── -->
+      <div id="error-banner" class="error-banner" style="display:none;"></div>
+
+      <div class="section-divider"><span>Systeem & Energie</span></div>
+      <div class="card-grid" id="cards-systeem"></div>
+
+      <div class="section-divider"><span>Kamers</span></div>
+      <div class="card-grid" id="cards-rooms"></div>
+
+    </main>
+  </div>
+</div>
+
+<script src="/zarlar.js"></script>
+<script>
+'use strict';
+
+// ── Klok starten ──────────────────────────────────────────────────────────────
+zarlarClock('topbar-clock');
+
+// ── Controller metadata ───────────────────────────────────────────────────────
+const CONTROLLER_META = {
+  zarlar: { label: 'Dashboard', type: 'systeem', sectie: 'systeem' },
+  hvac:   { label: 'HVAC',     type: 'systeem', sectie: 'systeem' },
+  eco:    { label: 'ECO Boiler', type: 'energie', sectie: 'systeem' },
+  senrg:  { label: 'Smart Energy', type: 'energie', sectie: 'systeem' },
+  room:   { label: 'Testroom', type: 'kamer', sectie: 'rooms' },
+};
+
+// ── Kaart renderers per controller type ───────────────────────────────────────
+
+function renderHVAC(naam, d) {
+  const circuits   = ['p','q','r','s','t','u','v'];
+  const duty4h     = ['i','j','k','l','m','n','o'];
+  const aanCount   = circuits.filter(k => parseInt(d[k]) === 1).length;
+  const totalPower = parseFloat(d.w) || 0;
+  const vent       = parseInt(d.x) || 0;
+  const schPump    = parseInt(d.y) === 1;
+  const wonPump    = parseInt(d.aa) === 1;
+
+  // Circuit visualisatie: duty4h als balk hoogte
+  let circuitHtml = '<div class="circuit-grid">';
+  circuits.forEach((k, i) => {
+    const aan    = parseInt(d[k]) === 1;
+    const duty   = parseFloat(d[duty4h[i]]) || 0;
+    const hoogte = Math.max(4, duty);
+    const kleur  = aan ? 'var(--green)' : 'rgba(0,200,150,0.2)';
+    circuitHtml += `
+      <div class="circuit-col">
+        <div class="circuit-bar-wrap">
+          <div class="circuit-bar-fill"
+               style="height:${hoogte}%;background:${kleur};"
+               title="C${i+1}: ${aan?'AAN':'UIT'} | duty 4u: ${duty.toFixed(0)}%">
+          </div>
+        </div>
+        <div class="circuit-label">C${i+1}</div>
+      </div>`;
+  });
+  circuitHtml += '</div>';
+
+  return `
+    <div class="data-row">
+      <span class="data-label">Circuits aan</span>
+      <span class="data-value ${aanCount > 0 ? 'amber' : 'muted'}">${aanCount} / ${circuits.length}</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Totaalvermogen</span>
+      <span class="data-value ${totalPower > 0 ? 'amber' : 'muted'}">${totalPower.toFixed(1)} kW</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Ventilatie</span>
+      <span class="data-value ${vent > 30 ? 'blue' : 'muted'}">${vent}%</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Pomp SCH</span>
+      ${zarlarBool(schPump)}
+    </div>
+    <div class="data-row">
+      <span class="data-label">Pomp WON</span>
+      ${zarlarBool(wonPump)}
+    </div>
+    <div class="data-row">
+      <span class="data-label">Circuits (duty 4u)</span>
+      <span></span>
+    </div>
+    ${circuitHtml}
+    <div class="data-row" style="margin-top:6px;">
+      <span class="data-label">Gem. boilertemp (SCH)</span>
+      ${zarlarTemp(d.h)}
+    </div>
+    <div class="data-row">
+      <span class="data-label">RSSI</span>
+      <span>${zarlarRssi(d.ac)}</span>
+    </div>`;
+}
+
+function renderECO(naam, d) {
+  const lagen = [
+    { key: 'b', label: 'Top-H' },
+    { key: 'c', label: 'Top-L' },
+    { key: 'd', label: 'Mid-H' },
+    { key: 'e', label: 'Mid-L' },
+    { key: 'f', label: 'Bot-H' },
+    { key: 'g', label: 'Bot-L' },
+  ];
+  const maxT = 90, minT = 20;
+  let lagenHtml = '<div class="boiler-layers">';
+  for (const laag of lagen) {
+    const t   = parseFloat(d[laag.key]) || 0;
+    const pct = Math.max(0, Math.min(100, (t - minT) / (maxT - minT) * 100));
+    const r   = Math.floor(Math.min(255, pct / 100 * 255));
+    const b   = Math.floor(Math.max(0, 255 - r));
+    lagenHtml += `
+      <div class="boiler-layer">
+        <div class="boiler-layer-label">${laag.label}</div>
+        <div class="boiler-layer-bar">
+          <div class="boiler-layer-fill" style="width:${pct}%;background:rgb(${r},80,${b})"></div>
+        </div>
+        <div class="boiler-layer-val">${t.toFixed(1)}°</div>
+      </div>`;
+  }
+  lagenHtml += '</div>';
+
+  const eqtot  = parseFloat(d.i) || 0;
+  const tsun   = parseFloat(d.l) || 0;
+  const pump   = parseInt(d.o) === 1;
+  const pwm    = parseInt(d.n) || 0;
+  const eqMax  = 25;
+  const eqPct  = Math.min(100, eqtot / eqMax * 100);
+  const eqKleur = eqPct > 70 ? 'green' : eqPct > 40 ? 'amber' : 'red';
+
+  return `
+    <div class="data-row">
+      <span class="data-label">Collector (Tsun)</span>
+      ${zarlarTemp(tsun)}
+    </div>
+    <div class="data-row">
+      <span class="data-label">Boilerenergie</span>
+      <span class="data-value ${eqKleur}">${eqtot.toFixed(2)} kWh</span>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-fill ${eqKleur}" style="width:${eqPct}%"></div>
+    </div>
+    <div class="data-row" style="margin-top:6px;">
+      <span class="data-label">Pomp</span>
+      <span class="data-value ${pump ? 'green' : 'muted'}">${pump ? `AAN — PWM ${pwm}` : 'UIT'}</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Boilerlagen (Top→Bot)</span>
+      <span></span>
+    </div>
+    ${lagenHtml}
+    <div class="data-row" style="margin-top:6px;">
+      <span class="data-label">RSSI</span>
+      <span>${zarlarRssi(d.p)}</span>
+    </div>`;
+}
+
+function renderRoom(naam, d) {
+  const temp    = parseFloat(d.f) || parseFloat(d.e) || 0;
+  const humi    = parseInt(d.h) || 0;
+  const co2     = parseInt(d.k) || 0;
+  const homeMode = parseInt(d.v) === 1;
+  const heating = parseInt(d.b) === 1;
+  const vent    = parseInt(d.g) || 0;
+  const setpt   = parseInt(d.c) || 0;
+  const co2Kleur = co2 > 1000 ? 'red' : co2 > 700 ? 'amber' : 'green';
+
+  const pixelHtml = zarlarPixels(d.t, d.q, d.r, d.s);
+
+  return `
+    <div class="data-row">
+      <span class="data-label">Temperatuur</span>
+      ${zarlarTemp(temp)}
+    </div>
+    <div class="data-row">
+      <span class="data-label">Vochtigheid</span>
+      <span class="data-value">${humi}%</span>
+    </div>
+    ${co2 > 0 ? `
+    <div class="data-row">
+      <span class="data-label">CO₂</span>
+      <span class="data-value ${co2Kleur}">${co2} ppm</span>
+    </div>` : ''}
+    <div class="data-row">
+      <span class="data-label">Setpoint</span>
+      <span class="data-value">${setpt}°C</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Verwarming</span>
+      ${zarlarBool(heating, 'AAN', 'UIT')}
+    </div>
+    <div class="data-row">
+      <span class="data-label">Ventilatie</span>
+      <span class="data-value ${vent > 30 ? 'blue' : 'muted'}">${vent}%</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Modus</span>
+      <span class="home-pill ${homeMode ? 'thuis' : 'weg'}">${homeMode ? '🏠 Thuis' : '🚶 Weg'}</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Pixels</span>
+      <span></span>
+    </div>
+    ${pixelHtml}`;
+}
+
+function renderZarlar(naam, d) {
+  const uptime = zarlarUptime(d.a);
+  return `
+    <div class="data-row">
+      <span class="data-label">Uptime</span>
+      <span class="data-value">${uptime}</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Matrix</span>
+      <span class="data-value green">16×16 actief</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">RSSI</span>
+      <span>${zarlarRssi(d.ac || d.rssi)}</span>
+    </div>`;
+}
+
+function renderOnbekend(naam, d) {
+  const keys = Object.keys(d).filter(k => !['online','ts','ip'].includes(k)).slice(0,6);
+  return keys.map(k =>
+    `<div class="data-row">
+       <span class="data-label">${k}</span>
+       <span class="data-value muted">${d[k]}</span>
+     </div>`
+  ).join('');
+}
+
+// ── Kaart bouwen ─────────────────────────────────────────────────────────────
+function bouwKaart(naam, d, meta) {
+  const online   = d.online === true;
+  const ts       = d.ts;
+  const klasse   = online ? 'card-online' : (ts ? 'card-offline' : 'card-pending');
+  const typeKlasse = meta ? `type-${meta.type}` : '';
+
+  let bodyHtml = '';
+  if (online) {
+    if      (naam === 'hvac')   bodyHtml = renderHVAC(naam, d);
+    else if (naam === 'eco')    bodyHtml = renderECO(naam, d);
+    else if (naam === 'room' || naam.startsWith('room')) bodyHtml = renderRoom(naam, d);
+    else if (naam === 'zarlar') bodyHtml = renderZarlar(naam, d);
+    else                        bodyHtml = renderOnbekend(naam, d);
+  } else {
+    bodyHtml = `<div style="padding:8px 0;color:var(--text-dim);font-size:12px;">Controller niet bereikbaar</div>`;
+  }
+
+  const ipTekst = (d.ip || '').replace('http://','');
+  const label   = meta?.label || naam.toUpperCase();
+
+  return `
+    <div class="card ${klasse} ${typeKlasse}" data-controller="${naam}">
+      <div class="card-header">
+        <div class="card-title-group">
+          <div class="card-name">${naam.toUpperCase()}</div>
+          <div class="card-label">${label}</div>
+          <div class="card-ip">${ipTekst}</div>
+        </div>
+        ${zarlarBadge(online, ts)}
+      </div>
+      <div class="card-body">${bodyHtml}</div>
+      <div class="card-footer">
+        <span class="ts">bijgewerkt ${zarlarTs(ts)}</span>
+        <a href="/controllers/${naam}/">details →</a>
+      </div>
+    </div>`;
+}
+
+// ── Statistieken bijwerken ────────────────────────────────────────────────────
+function bijwerkenStats(status) {
+  const controllers = Object.values(status);
+  const online  = controllers.filter(c => c.online).length;
+  const totaal  = controllers.length;
+
+  document.getElementById('stat-online').textContent = `${online}/${totaal}`;
+
+  const hvac = status.hvac;
+  if (hvac?.online) {
+    document.getElementById('stat-power').textContent = `${(parseFloat(hvac.w)||0).toFixed(1)} kW`;
+  }
+
+  const eco = status.eco;
+  if (eco?.online) {
+    document.getElementById('stat-eq').textContent = `${(parseFloat(eco.i)||0).toFixed(1)} kWh`;
+  }
+
+  // Kamertemperatuur: gemiddelde van alle online room controllers
+  const rooms = Object.entries(status).filter(([n]) => n === 'room' || n.startsWith('room'));
+  const temps = rooms
+    .filter(([,d]) => d.online)
+    .map(([,d]) => parseFloat(d.f) || parseFloat(d.e) || null)
+    .filter(t => t !== null && t > 0);
+  if (temps.length > 0) {
+    const gem = temps.reduce((a,b) => a+b, 0) / temps.length;
+    document.getElementById('stat-temp').textContent = `${gem.toFixed(1)} °C`;
+  }
+}
+
+// ── Hoofdfunctie: alles laden ─────────────────────────────────────────────────
+async function laadStatus() {
+  const errEl = document.getElementById('error-banner');
+  errEl.style.display = 'none';
+
+  try {
+    const status = await zarlarFetch('/api/status');
+
+    bijwerkenStats(status);
+
+    // Kaarten verdelen over secties
+    const systeemEl = document.getElementById('cards-systeem');
+    const roomsEl   = document.getElementById('cards-rooms');
+
+    let systeemHtml = '';
+    let roomsHtml   = '';
+
+    // Vaste volgorde
+    const volgorde = ['zarlar', 'hvac', 'eco', 'senrg', 'room'];
+
+    for (const naam of volgorde) {
+      if (!status[naam]) continue;
+      const meta  = CONTROLLER_META[naam];
+      const kaart = bouwKaart(naam, status[naam], meta);
+
+      if (meta?.sectie === 'rooms') roomsHtml   += kaart;
+      else                          systeemHtml += kaart;
+    }
+
+    // Extra rooms die niet in vaste volgorde staan
+    for (const [naam, d] of Object.entries(status)) {
+      if (volgorde.includes(naam)) continue;
+      const meta  = CONTROLLER_META[naam];
+      const kaart = bouwKaart(naam, d, meta);
+      if (naam.startsWith('room')) roomsHtml += kaart;
+      else systeemHtml += kaart;
+    }
+
+    systeemEl.innerHTML = systeemHtml || '<p style="color:var(--text-dim)">Geen systeem controllers gevonden.</p>';
+    roomsEl.innerHTML   = roomsHtml   || '<p style="color:var(--text-dim)">Geen kamer controllers gevonden.</p>';
+
+    // Sidebar timestamp
+    document.getElementById('sidebar-ts').textContent = zarlarTs(Date.now());
+
+  } catch(e) {
+    errEl.textContent = `Fout bij laden: ${e.message}`;
+    errEl.style.display = 'block';
+  }
+}
+
+// ── Auto-refresh starten (15 seconden) ───────────────────────────────────────
+zarlarAutoRefresh(15, laadStatus);
+</script>
+</body>
+</html>
