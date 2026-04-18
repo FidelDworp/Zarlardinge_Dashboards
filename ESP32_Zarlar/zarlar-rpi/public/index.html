@@ -561,6 +561,15 @@ function bouwKaart(naam, d, meta) {
   const ipTekst = (d.ip || '').replace('http://','');
   const label   = meta?.label || naam.toUpperCase();
 
+  const detailLinks = {
+    senrg:  '/epex-grafiek.html',
+    zarlar: '/controllers/zarlar/',
+    hvac:   '/controllers/hvac/',
+    eco:    '/controllers/eco/',
+    room:   '/controllers/room/',
+  };
+  const detailUrl = detailLinks[naam] || `/controllers/${naam}/`;
+
   return `
     <div class="card ${klasse} ${typeKlasse}" data-controller="${naam}">
       <div class="card-header">
@@ -574,7 +583,7 @@ function bouwKaart(naam, d, meta) {
       <div class="card-body">${bodyHtml}</div>
       <div class="card-footer">
         <span class="ts">bijgewerkt ${zarlarTs(ts)}</span>
-        <a href="/controllers/${naam}/">details →</a>
+        <a href="${detailUrl}">details →</a>
       </div>
     </div>`;
 }
