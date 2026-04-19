@@ -2346,14 +2346,9 @@ async function laadEPEX() {
     const data = await r.json();
     if (!data.unix_seconds?.length) throw new Error('Geen data');
 
-    // Zet unix timestamps om naar ISO strings
-    const vandaag = new Date(); vandaag.setHours(0,0,0,0);
-    let tijden  = data.unix_seconds.map(s => new Date(s*1000).toISOString());
-    let prijzen = data.price || [];
-
-    // Filter op vandaag 00:00 als startpunt
-    const idx = tijden.findIndex(t => new Date(t).getTime() >= vandaag.getTime());
-    if (idx > 0) { tijden = tijden.slice(idx); prijzen = prijzen.slice(idx); }
+    // Zet unix timestamps om naar ISO strings — geen filter, originele volgorde bewaren
+    const tijden  = data.unix_seconds.map(s => new Date(s*1000).toISOString());
+    const prijzen = data.price || [];
 
     slaDataOp(tijden, prijzen);
     toonData(tijden, prijzen, data.bron === 'live' ? 'live' : 'cache');
