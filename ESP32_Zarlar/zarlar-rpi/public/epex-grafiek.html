@@ -517,9 +517,9 @@ window.addEventListener('load', function() {
 <div class="instellingen">
   <span class="inst-title">⚙ Instellingen</span>
   <label class="inst-item">
-    <span>Vaste prijs</span>
+    <span>Vast contract <span style="color:var(--text-dim);font-size:.68rem">(auto-berekend)</span></span>
     <span class="inst-input-wrap">
-      <input id="inp-vast" type="number" value="28.0" step="0.1" min="0" max="99">
+      <input id="inp-vast" type="number" value="28.0" step="0.1" min="0" max="99" readonly style="opacity:.6;cursor:default;background:rgba(255,255,255,0.03)">
       <span class="inst-unit">ct/kWh</span>
     </span>
   </label>
@@ -590,47 +590,118 @@ window.addEventListener('load', function() {
 </div>
 
 
-<!-- TARIEFCOMPONENTEN -->
+<!-- TARIEFVERGELIJKING -->
 <div class="instellingen" style="margin-top:6px">
-  <span class="inst-title">💶 Tariefcomponenten — Ecopower Dynamische burgerstroom</span>
-  <label class="inst-item">
-    <span style="border-left:3px solid rgba(91,155,213,0.9);padding-left:6px">Afnametarief (Fluvius)</span>
-    <span class="inst-input-wrap">
-      <input id="inp-fluvius" type="number" value="5.23" step="0.01" min="0" max="30">
-      <span class="inst-unit">ct/kWh</span>
-    </span>
-  </label>
-  <label class="inst-item">
-    <span style="border-left:3px solid rgba(77,182,172,0.9);padding-left:6px">GSC (groenestroomcert.)</span>
-    <span class="inst-input-wrap">
-      <input id="inp-elia" type="number" value="1.10" step="0.01" min="0" max="10">
-      <span class="inst-unit">ct/kWh</span>
-    </span>
-  </label>
-  <label class="inst-item">
-    <span style="border-left:3px solid rgba(149,117,205,0.9);padding-left:6px">WKK (warmtekracht)</span>
-    <span class="inst-input-wrap">
-      <input id="inp-hernieuwbaar" type="number" value="0.39" step="0.01" min="0" max="10">
-      <span class="inst-unit">ct/kWh</span>
-    </span>
-  </label>
-  <label class="inst-item">
-    <span style="border-left:3px solid rgba(160,120,90,0.9);padding-left:6px">Heffingen & accijnzen</span>
-    <span class="inst-input-wrap">
-      <input id="inp-heffingen" type="number" value="4.94" step="0.01" min="0" max="20">
-      <span class="inst-unit">ct/kWh</span>
-    </span>
-  </label>
-  <label class="inst-item">
-    <span style="padding-left:9px">BTW (op volledige som)</span>
-    <span class="inst-input-wrap">
-      <input id="inp-btw" type="number" value="6" step="0.5" min="0" max="30">
-      <span class="inst-unit">%</span>
-    </span>
-  </label>
-  <span class="inst-item" style="color:var(--muted);font-size:.68rem">
-    Vaste opslag (excl. BTW): <span id="opslag-totaal" style="color:var(--yellow);font-weight:700">—</span> ct/kWh
-  </span>
+  <span class="inst-title">💶 Tariefvergelijking — Ecopower</span>
+
+  <!-- Contract headers -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin:8px 0 4px;font-size:.68rem;font-family:var(--mono)">
+    <div></div>
+    <div style="background:rgba(88,166,255,0.1);border:1px solid rgba(88,166,255,0.3);border-radius:6px 6px 0 0;padding:8px;text-align:center">
+      <div style="color:var(--blue);font-weight:700;font-size:.72rem">DYNAMISCH</div>
+      <div style="color:var(--muted);margin-top:2px">Dynamische burgerstroom</div>
+      <div style="color:var(--muted)">Geert Van Leuven · Lede</div>
+      <div style="color:var(--muted)">Fluvius Imewo · mrt. 2026</div>
+    </div>
+    <div style="background:rgba(168,255,62,0.08);border:1px solid rgba(168,255,62,0.3);border-radius:6px 6px 0 0;padding:8px;text-align:center">
+      <div style="color:var(--lime);font-weight:700;font-size:.72rem">VAST</div>
+      <div style="color:var(--muted);margin-top:2px">Groene burgerstroom</div>
+      <div style="color:var(--muted)">Filip Delannoy · Zarlardinge</div>
+      <div style="color:var(--muted)">Fluvius West · nov. 2025</div>
+    </div>
+  </div>
+
+  <!-- Vergelijkingstabel -->
+  <table style="width:100%;border-collapse:collapse;font-size:.78rem">
+    <tbody>
+      <!-- Energieprijs -->
+      <tr style="background:rgba(255,255,255,0.03)">
+        <td style="padding:7px 8px;color:var(--muted);border-bottom:1px solid rgba(255,255,255,0.05)">Energieprijs</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-left:1px solid rgba(88,166,255,0.2);border-right:1px solid rgba(88,166,255,0.2);color:var(--blue);font-family:var(--mono)">EPEX spotprijs</td>
+        <td style="padding:7px 4px;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(168,255,62,0.2)">
+          <span class="inst-input-wrap" style="justify-content:center">
+            <input id="inp-energieprijs-vast" type="number" value="12.80" step="0.01" min="0" max="50" style="width:60px;text-align:center">
+            <span class="inst-unit">ct/kWh</span>
+          </span>
+        </td>
+      </tr>
+      <!-- Afnametarief -->
+      <tr>
+        <td style="padding:7px 8px;border-bottom:1px solid rgba(255,255,255,0.05)"><span style="display:inline-block;width:8px;height:8px;background:rgba(91,155,213,0.8);border-radius:2px;margin-right:5px;vertical-align:middle"></span>Afnametarief</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-left:1px solid rgba(88,166,255,0.2);border-right:1px solid rgba(88,166,255,0.2)">
+          <span class="inst-input-wrap" style="justify-content:center">
+            <input id="inp-fluvius" type="number" value="5.23" step="0.01" min="0" max="30" style="width:55px;text-align:center">
+            <span class="inst-unit">ct/kWh</span>
+          </span>
+        </td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="vast-fluvius-val">5.23 ct</td>
+      </tr>
+      <!-- GSC -->
+      <tr style="background:rgba(255,255,255,0.03)">
+        <td style="padding:7px 8px;border-bottom:1px solid rgba(255,255,255,0.05)"><span style="display:inline-block;width:8px;height:8px;background:rgba(77,182,172,0.8);border-radius:2px;margin-right:5px;vertical-align:middle"></span>GSC</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-left:1px solid rgba(88,166,255,0.2);border-right:1px solid rgba(88,166,255,0.2)">
+          <span class="inst-input-wrap" style="justify-content:center">
+            <input id="inp-elia" type="number" value="1.10" step="0.01" min="0" max="10" style="width:55px;text-align:center">
+            <span class="inst-unit">ct/kWh</span>
+          </span>
+        </td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="vast-gsc-val">1.10 ct</td>
+      </tr>
+      <!-- WKK -->
+      <tr>
+        <td style="padding:7px 8px;border-bottom:1px solid rgba(255,255,255,0.05)"><span style="display:inline-block;width:8px;height:8px;background:rgba(149,117,205,0.8);border-radius:2px;margin-right:5px;vertical-align:middle"></span>WKK</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-left:1px solid rgba(88,166,255,0.2);border-right:1px solid rgba(88,166,255,0.2)">
+          <span class="inst-input-wrap" style="justify-content:center">
+            <input id="inp-hernieuwbaar" type="number" value="0.39" step="0.01" min="0" max="10" style="width:55px;text-align:center">
+            <span class="inst-unit">ct/kWh</span>
+          </span>
+        </td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="vast-wkk-val">0.39 ct</td>
+      </tr>
+      <!-- Heffingen -->
+      <tr style="background:rgba(255,255,255,0.03)">
+        <td style="padding:7px 8px;border-bottom:1px solid rgba(255,255,255,0.05)"><span style="display:inline-block;width:8px;height:8px;background:rgba(160,120,90,0.8);border-radius:2px;margin-right:5px;vertical-align:middle"></span>Heffingen</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-left:1px solid rgba(88,166,255,0.2);border-right:1px solid rgba(88,166,255,0.2)">
+          <span class="inst-input-wrap" style="justify-content:center">
+            <input id="inp-heffingen" type="number" value="4.94" step="0.01" min="0" max="20" style="width:55px;text-align:center">
+            <span class="inst-unit">ct/kWh</span>
+          </span>
+        </td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="vast-heff-val">4.94 ct</td>
+      </tr>
+      <!-- BTW -->
+      <tr>
+        <td style="padding:7px 8px;border-bottom:1px solid rgba(255,255,255,0.05)">BTW</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-left:1px solid rgba(88,166,255,0.2);border-right:1px solid rgba(88,166,255,0.2)">
+          <span class="inst-input-wrap" style="justify-content:center">
+            <input id="inp-btw" type="number" value="6" step="0.5" min="0" max="30" style="width:50px;text-align:center">
+            <span class="inst-unit">%</span>
+          </span>
+        </td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="vast-btw-val">6%</td>
+      </tr>
+      <!-- Abo + Cap -->
+      <tr style="background:rgba(255,255,255,0.03)">
+        <td style="padding:7px 8px;border-bottom:2px solid rgba(255,255,255,0.1)"><span style="display:inline-block;width:8px;height:8px;background:rgba(255,167,38,0.7);border-radius:2px;margin-right:5px;vertical-align:middle"></span>Abo + Cap.</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:2px solid rgba(88,166,255,0.3);border-left:1px solid rgba(88,166,255,0.2);border-right:1px solid rgba(88,166,255,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="dyn-abo-val">—</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:2px solid rgba(168,255,62,0.3);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="vast-abo-val">—</td>
+      </tr>
+      <!-- Totaal -->
+      <tr>
+        <td style="padding:8px 8px;font-weight:700">Totaal</td>
+        <td style="padding:8px 8px;text-align:center;border-left:1px solid rgba(88,166,255,0.2);border-right:1px solid rgba(88,166,255,0.2);border-bottom:1px solid rgba(88,166,255,0.3);background:rgba(88,166,255,0.08);border-radius:0 0 0 0">
+          <span style="color:var(--blue);font-family:var(--mono);font-weight:700;font-size:.82rem">EPEX + <span id="opslag-totaal">—</span> ct</span>
+        </td>
+        <td style="padding:8px 8px;text-align:center;border-right:1px solid rgba(168,255,62,0.2);border-bottom:1px solid rgba(168,255,62,0.3);background:rgba(168,255,62,0.08)">
+          <span style="color:var(--lime);font-family:var(--mono);font-weight:700;font-size:.82rem" id="vast-totaal">—</span>
+          <span style="color:var(--muted);font-size:.68rem;margin-left:4px">ct/kWh</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <div style="font-size:.65rem;color:var(--text-dim);margin-top:6px;font-family:var(--mono)">
+    Vast totaal = auto-berekend · voedt de witte stippellijn in de grafiek
+  </div>
 </div>
 
 
@@ -801,7 +872,7 @@ function reelePrijs(ct) { return ct + opslagInclBtw(ct); }
 function kleurReeel(ct) { return kleur(reelePrijs(ct)); }
 
 // Update de opslag-totaal indicator onderaan
-function updateOpslagTotaal() {
+function berekenVastTotaal() {
   const vaste = vastefComponents();
   document.getElementById('opslag-totaal').textContent = vaste.toFixed(2);
 }
@@ -2406,12 +2477,45 @@ function setOverride(id, waarde) {
   updateSimulatie();
 }
 
-function herbereken(){if(allPrices.length){renderChart(allTimes,allPrices);renderSolarChart();updateArbitrage(allTimes,allPrices);}}
+function herbereken(){berekenVastTotaal();if(allPrices.length){renderChart(allTimes,allPrices);renderSolarChart();updateArbitrage(allTimes,allPrices);}}
 
-document.getElementById('inp-vast').addEventListener('change',e=>{
-  vast=parseFloat(e.target.value)||VAST_DEFAULT;
-  slaSettingsOp('vast_prijs', vast);herbereken();
-});
+// inp-vast is read-only — wordt auto-berekend vanuit vast contract componenten
+function berekenVastTotaal() {
+  const energieVast = parseFloat(document.getElementById('inp-energieprijs-vast').value) || 12.80;
+  const fluvius     = parseFloat(document.getElementById('inp-fluvius').value)           || T_FLUVIUS;
+  const gsc         = parseFloat(document.getElementById('inp-elia').value)              || T_ELIA;
+  const wkk         = parseFloat(document.getElementById('inp-hernieuwbaar').value)      || T_HERNIEUWBAAR;
+  const heff        = parseFloat(document.getElementById('inp-heffingen').value)         || T_HEFFINGEN;
+  const btw         = parseFloat(document.getElementById('inp-btw').value)               || T_BTW_PCT;
+  const btwF        = btw / 100;
+  const aboCtKwh    = vasteMaandCtKwh(liveMapndpiek);
+
+  // Totale reële prijs vast contract
+  const subtotaal   = energieVast + fluvius + gsc + wkk + heff;
+  const totaal      = subtotaal * (1 + btwF) + aboCtKwh * (1 + btwF);
+
+  // Zelfde componenten als dynamisch (worden gedeeld)
+  const dynOpslag   = fluvius + gsc + wkk + heff;
+
+  // Update vast totaal display
+  document.getElementById('vast-totaal').textContent   = totaal.toFixed(2);
+  document.getElementById('vast-fluvius-val').textContent = fluvius.toFixed(2) + ' ct';
+  document.getElementById('vast-gsc-val').textContent  = gsc.toFixed(2) + ' ct';
+  document.getElementById('vast-wkk-val').textContent  = wkk.toFixed(2) + ' ct';
+  document.getElementById('vast-heff-val').textContent = heff.toFixed(2) + ' ct';
+  document.getElementById('vast-btw-val').textContent  = btw + '%';
+  document.getElementById('vast-abo-val').textContent  = aboCtKwh.toFixed(2) + ' ct';
+  document.getElementById('dyn-abo-val').textContent   = aboCtKwh.toFixed(2) + ' ct';
+  document.getElementById('opslag-totaal').textContent = dynOpslag.toFixed(2);
+
+  // Update vast lijn in grafiek
+  vast = totaal;
+  document.getElementById('inp-vast').value = totaal.toFixed(2);
+  slaSettingsOp('vast_prijs', vast);
+  slaSettingsOp('energieprijs_vast', energieVast);
+}
+
+document.getElementById('inp-energieprijs-vast').addEventListener('change', () => { berekenVastTotaal(); herbereken(); });
 document.getElementById('inp-bat').addEventListener('change',e=>{
   BAT_KWH=parseFloat(e.target.value)||10;
   slaSettingsOp('bat_kwh', BAT_KWH);updateSimulatie();
@@ -2434,7 +2538,7 @@ document.getElementById('inp-cap').addEventListener('change',e=>{
 });
 // Tariefcomponent listeners
 function updateTariefComponent() {
-  updateOpslagTotaal();
+  berekenVastTotaal();
   herbereken();
 }
 document.getElementById('inp-fluvius').addEventListener('change', e => {
@@ -2478,8 +2582,9 @@ function pasInstellingenToe(s) {
   if (s.t_elia        !== undefined) { T_ELIA         = s.t_elia;         document.getElementById('inp-elia').value        = T_ELIA; }
   if (s.t_hernieuwbaar!== undefined) { T_HERNIEUWBAAR = s.t_hernieuwbaar; document.getElementById('inp-hernieuwbaar').value= T_HERNIEUWBAAR; }
   if (s.t_heffingen   !== undefined) { T_HEFFINGEN    = s.t_heffingen;    document.getElementById('inp-heffingen').value   = T_HEFFINGEN; }
-  if (s.t_btw_pct     !== undefined) { T_BTW_PCT      = s.t_btw_pct;      document.getElementById('inp-btw').value         = T_BTW_PCT; }
-  updateOpslagTotaal();
+  if (s.t_btw_pct        !== undefined) { T_BTW_PCT      = s.t_btw_pct;      document.getElementById('inp-btw').value              = T_BTW_PCT; }
+  if (s.energieprijs_vast !== undefined) { document.getElementById('inp-energieprijs-vast').value = s.energieprijs_vast; }
+  berekenVastTotaal();
 }
 
 async function slaSettingsOp(key, value) {
