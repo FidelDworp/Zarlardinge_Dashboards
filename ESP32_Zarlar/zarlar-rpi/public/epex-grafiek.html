@@ -1775,11 +1775,10 @@ function renderSolarChart() {
   const nu = Date.now();
   const ctx = document.getElementById('solarChart').getContext('2d');
 
-  // Bereken solar per slot
+  // Bereken solar per slot — verleden én toekomst (gesimuleerd)
   const solarData = tijden.map(t => {
-    // Alleen verleden tonen — toekomst leeg laten
-    if (new Date(t).getTime() > nu) return null;
-    return parseFloat(solarKw(t).toFixed(2));
+    const kw = solarKw(t);
+    return kw > 0 ? parseFloat(kw.toFixed(2)) : null;
   });
   // Identieke labels als EPEX en solar grafiek
   const labels = tijden.map(t => {
@@ -1798,12 +1797,14 @@ function renderSolarChart() {
   // Huidig slot markeren
   const nuIdx = huidigSlot(tijden);
 
-  const barColors = solarData.map((v) => {
+  const barColors = solarData.map((v, i) => {
     if (v === null || v <= 0) return 'transparent';
-    const intens = v / maxSolar;
-    const r = Math.round(200 + intens * 55);
-    const g = Math.round(140 + intens * 65);
-    return `rgba(${r},${g},20,0.85)`;
+    const intens   = v / maxSolar;
+    const r        = Math.round(200 + intens * 55);
+    const g        = Math.round(140 + intens * 65);
+    const toekomst = new Date(tijden[i]).getTime() > nu;
+    const alpha    = toekomst ? 0.30 : 0.85;
+    return `rgba(${r},${g},20,${alpha})`;
   });
 
   // Solar: zelfde lijnen als EPEX (middernacht + NOW + slider)
@@ -2346,9 +2347,14 @@ async function laadEPEX() {
     const data = await r.json();
     if (!data.unix_seconds?.length) throw new Error('Geen data');
 
-    // Zet unix timestamps om naar ISO strings — geen filter, originele volgorde bewaren
-    const tijden  = data.unix_seconds.map(s => new Date(s*1000).toISOString());
-    const prijzen = data.price || [];
+    // Zet unix timestamps om naar ISO strings
+    const vandaag = new Date(); vandaag.setHours(0,0,0,0);
+    let tijden  = data.unix_seconds.map(s => new Date(s*1000).toISOString());
+    let prijzen = data.price || [];
+
+    // Filter op vandaag 00:00 als startpunt
+    const idx = tijden.findIndex(t => new Date(t).getTime() >= vandaag.getTime());
+    if (idx > 0) { tijden = tijden.slice(idx); prijzen = prijzen.slice(idx); }
 
     slaDataOp(tijden, prijzen);
     toonData(tijden, prijzen, data.bron === 'live' ? 'live' : 'cache');
