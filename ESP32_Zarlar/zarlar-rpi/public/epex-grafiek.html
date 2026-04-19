@@ -876,27 +876,24 @@ function renderChart(tijden, prijzen) {
   const fWKK       = +(T_HERNIEUWBAAR * 10).toFixed(2);
   const fHeffingen = +(T_HEFFINGEN    * 10).toFixed(2);
 
-  // Floating bars: elke laag = [basis, top] zodat negatieve EPEX de stack naar beneden trekt
-  const dsEpex = [], dsFluvius = [], dsGSC = [], dsWKK = [];
-  const dsHeffingen = [], dsBtw = [], dsAbo = [];
+  // Bij negatieve EPEX: vaste lagen starten op de EPEX waarde (zakken mee naar beneden)
+  // Bij positieve EPEX: vaste lagen starten op 0 (normaal gestapeld)
+  const basePerSlot = prijzen.map(p => Math.min(0, p));
 
-  prijzen.forEach((p, i) => {
-    const epex   = +p.toFixed(2);
-    const epexCt = epex / 10;
-    const btw    = +((Math.max(0, epexCt) + vastefComponents()) * btwFactor * 10).toFixed(2);
+  const opslagFluvius   = prijzen.map((p, i) => ({ y: fFluvius,   base: basePerSlot[i] }));
+  const opslagGSC       = prijzen.map((p, i) => ({ y: fGSC,       base: basePerSlot[i] + fFluvius }));
+  const opslagWKK       = prijzen.map((p, i) => ({ y: fWKK,       base: basePerSlot[i] + fFluvius + fGSC }));
+  const opslagHeffingen = prijzen.map((p, i) => ({ y: fHeffingen, base: basePerSlot[i] + fFluvius + fGSC + fWKK }));
+  const opslagBtw = prijzen.map((p, i) => {
+    const epexCt = Math.max(0, p / 10);
+    const btw    = +((epexCt + vastefComponents()) * btwFactor * 10).toFixed(2);
+    return { y: btw, base: basePerSlot[i] + fFluvius + fGSC + fWKK + fHeffingen };
+  });
+  const opslagAbo = prijzen.map((p, i) => {
+    const epexCt = Math.max(0, p / 10);
+    const btw    = +((epexCt + vastefComponents()) * btwFactor * 10).toFixed(2);
     const abo    = +(vasteMaandCtKwh(liveMapndpiek) * 10).toFixed(2);
-
-    // EPEX: negatief = bar onder x-as
-    dsEpex[i] = epex < 0 ? [epex, 0] : epex;
-
-    // Vaste lagen stapelen vanaf min(0, epex)
-    let base = Math.min(0, epex);
-    dsFluvius[i]   = [base, base += fFluvius];
-    dsGSC[i]       = [base, base += fGSC];
-    dsWKK[i]       = [base, base += fWKK];
-    dsHeffingen[i] = [base, base += fHeffingen];
-    dsBtw[i]       = [base, base += btw];
-    dsAbo[i]       = [base, base += abo];
+    return { y: abo, base: basePerSlot[i] + fFluvius + fGSC + fWKK + fHeffingen + btw };
   });
 
   if (chart) chart.destroy();
@@ -951,14 +948,14 @@ function renderChart(tijden, prijzen) {
     data: {
       labels,
       datasets: [
-        { type:'bar', data:dsEpex,      backgroundColor:barColors,                    borderColor:borderColors,           borderWidth:1.5, borderRadius:0, order:3 },
-        { type:'bar', data:dsFluvius,   backgroundColor:'rgba(91,155,213,0.70)',     borderColor:'transparent',              borderWidth:0,   borderRadius:0, order:2 },
-        { type:'bar', data:dsGSC,       backgroundColor:'rgba(77,182,172,0.70)',     borderColor:'transparent',              borderWidth:0,   borderRadius:0, order:2 },
-        { type:'bar', data:dsWKK,       backgroundColor:'rgba(149,117,205,0.70)',    borderColor:'transparent',              borderWidth:0,   borderRadius:0, order:2 },
-        { type:'bar', data:dsHeffingen, backgroundColor:'rgba(160,120,90,0.70)',     borderColor:'transparent',              borderWidth:0,   borderRadius:0, order:2 },
-        { type:'bar', data:dsBtw,       backgroundColor:'rgba(200,200,200,0.35)',    borderColor:'transparent',              borderWidth:0,   borderRadius:0, order:2 },
-        { type:'bar', data:dsAbo,       backgroundColor:'rgba(255,167,38,0.60)',     borderColor:'transparent',              borderWidth:0,   borderRadius:3, order:2 },
-        { type:'line', data:vastLine,   borderColor:'rgba(255,255,255,0.7)',         borderWidth:2, borderDash:[5,3], pointRadius:0, fill:false, order:1 }
+        { type:'bar', data:prijzen,       backgroundColor:barColors,                   borderColor:borderColors,          borderWidth:1.5, borderRadius:0, order:3, stack:'prijs' },
+        { type:'bar', data:opslagFluvius,  backgroundColor:'rgba(91,155,213,0.70)',  borderColor:'transparent',             borderWidth:0,   borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagGSC,      backgroundColor:'rgba(77,182,172,0.70)',  borderColor:'transparent',             borderWidth:0,   borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagWKK,      backgroundColor:'rgba(149,117,205,0.70)', borderColor:'transparent',             borderWidth:0,   borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagHeffingen,backgroundColor:'rgba(160,120,90,0.70)',  borderColor:'transparent',             borderWidth:0,   borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagBtw,      backgroundColor:'rgba(200,200,200,0.35)', borderColor:'transparent',             borderWidth:0,   borderRadius:0, order:2, stack:'prijs' },
+        { type:'bar', data:opslagAbo,      backgroundColor:'rgba(255,167,38,0.60)',  borderColor:'transparent',             borderWidth:0,   borderRadius:3, order:2, stack:'prijs' },
+        { type:'line', data:vastLine,      borderColor:'rgba(255,255,255,0.7)',       borderWidth:2, borderDash:[5,3], pointRadius:0, fill:false, order:1 }
       ]
     },
     options: {
