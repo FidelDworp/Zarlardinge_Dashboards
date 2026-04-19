@@ -12,10 +12,11 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo " Zarlar update — $(date '+%d/%m/%Y %H:%M')"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# 1. Git pull
+# 1. Git pull (rebase voorkomt merge-conflicten)
 cd "$REPO"
 echo "→ git pull..."
-git pull
+git fetch origin
+git rebase origin/main
 
 # 2. Was server.js gewijzigd?
 CHANGED=$(git diff HEAD@{1} HEAD --name-only 2>/dev/null | grep "$SUBMAP/server.js")
