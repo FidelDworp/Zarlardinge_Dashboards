@@ -91,8 +91,17 @@ app.get('/api/epex', async (req, res) => {
   try {
     if (fs.existsSync(EPEX_CACHE)) {
       const cache = readJSON(EPEX_CACHE);
-      if (cache && Date.now() - cache.ts < 26 * 3600000)
-        return res.json({ ...cache, bron: 'cache' });
+      if (cache) {
+        const nu          = new Date();
+        const ouderDan26u = Date.now() - cache.ts > 26 * 3600000;
+        const na13u       = nu.getHours() >= 13;
+        const mismorgen   = !cache.morgen_beschikbaar;
+        const cachedag    = new Date(cache.ts);
+        const daggewisseld = cachedag.getDate()  !== nu.getDate() ||
+                             cachedag.getMonth() !== nu.getMonth();
+        const cacheGeldig = !ouderDan26u && !(na13u && mismorgen) && !daggewisseld;
+        if (cacheGeldig) return res.json({ ...cache, bron: 'cache' });
+      }
     }
 
     const nu     = new Date();
