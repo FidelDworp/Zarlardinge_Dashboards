@@ -2282,7 +2282,10 @@ function updateKaarten(tijden) {
   const nu = new Date(), morgen = new Date(nu); morgen.setDate(nu.getDate()+1);
   document.getElementById('datum').textContent = nu.toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'});
   document.getElementById('dag-label-1').textContent = `▶ Vandaag ${nu.toLocaleDateString('nl-BE',{day:'numeric',month:'short'})}`;
-  document.getElementById('dag-label-2').textContent = `Morgen ${morgen.toLocaleDateString('nl-BE',{day:'numeric',month:'short'})}`;
+  // Morgen label alleen tonen als er ook morgen data is in de tijden array
+  const morgenData = tijden.some(t => new Date(t).getTime() >= morgen.setHours(0,0,0,0));
+  const label2 = document.getElementById('dag-label-2');
+  label2.textContent = morgenData ? `Morgen ${morgen.toLocaleDateString('nl-BE',{day:'numeric',month:'short'})}` : '';
 }
 
 // ─── DATA LADEN ───────────────────────────────────────────────────────────────
