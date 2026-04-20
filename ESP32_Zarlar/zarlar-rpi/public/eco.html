@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Zarlar — ECO Boiler</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:    #0a0d12;
+  --card:  #111620;
+  --card2: #161d28;
+  --bdr:   rgba(255,255,255,0.07);
+  --text:  #e8eef4;
+  --muted: #6b7f8e;
+  --dim:   #1e2a36;
+  --green: #00d18c;
+  --amber: #ffb030;
+  --red:   #ff4555;
+  --blue:  #4da6ff;
+  --font:  'DM Sans', sans-serif;
+  --mono:  'DM Mono', monospace;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html,body { background:var(--bg); color:var(--text); font-family:var(--font); -webkit-font-smoothing:antialiased; min-height:100%; }
+
+/* HEADER */
+.hdr { display:flex; align-items:center; gap:10px; padding:14px 16px 12px; border-bottom:1px solid var(--bdr); }
+.back { width:34px; height:34px; border-radius:50%; background:var(--card); border:1px solid var(--bdr);
+  display:flex; align-items:center; justify-content:center; cursor:pointer; text-decoration:none; color:var(--muted); }
+.back:hover { color:var(--text); border-color:rgba(255,255,255,0.15); }
+.hdr-title { flex:1; }
+.hdr-title h1 { font-size:16px; font-weight:600; }
+.hdr-title p  { font-size:11px; color:var(--muted); margin-top:1px; font-family:var(--mono); }
+.status-badge { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); font-family:var(--mono); }
+.sdot { width:7px; height:7px; border-radius:50%; }
+
+/* CONTENT */
+.content { padding:14px; }
+
+/* BOILER + STATS LAYOUT */
+.main-row { display:flex; gap:14px; align-items:flex-start; margin-bottom:14px; }
+
+/* BOILER SVG CONTAINER */
+.boiler-wrap {
+  flex-shrink:0;
+  background:var(--card); border:1px solid var(--bdr); border-radius:16px;
+  padding:16px 12px 12px;
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  position:relative;
+}
+.boiler-title { font-size:10px; font-weight:600; color:var(--muted); letter-spacing:.8px; text-transform:uppercase; }
+
+/* SOLAR animatie */
+.freshwater { stroke:url(#FreshWaterCoil); stroke-linecap:round; stroke-linejoin:round; stroke-width:8; stroke-dasharray:8; fill:none; animation:dash .5s linear infinite; }
+@keyframes dash { to { stroke-dashoffset:16; } }
+.freshwater-off { stroke:rgba(100,120,140,0.3); stroke-linecap:round; stroke-linejoin:round; stroke-width:8; fill:none; }
+
+/* STATS KOLOM */
+.stats-col { flex:1; display:flex; flex-direction:column; gap:8px; }
+
+/* ENERGIE KAART */
+.energy-card {
+  background:var(--card); border:1px solid var(--bdr); border-radius:14px;
+  padding:14px 14px;
+}
+.ec-label { font-size:10px; color:var(--muted); letter-spacing:.6px; text-transform:uppercase; margin-bottom:4px; }
+.ec-val { font-family:var(--mono); font-size:28px; font-weight:500; line-height:1; }
+.ec-unit { font-size:13px; color:var(--muted); margin-left:4px; }
+.ec-sub  { font-size:11px; color:var(--muted); margin-top:6px; font-family:var(--mono); }
+
+/* ENERGIE BAR */
+.ebar-wrap { background:var(--dim); border-radius:6px; height:8px; margin-top:8px; overflow:hidden; }
+.ebar-fill { height:100%; border-radius:6px; transition:width .6s; background:linear-gradient(90deg,#4da6ff,#00d18c,#ffb030); }
+
+/* LAAG TABEL */
+.lagen-card {
+  background:var(--card); border:1px solid var(--bdr); border-radius:14px;
+  overflow:hidden;
+}
+.lagen-row {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 14px; border-bottom:1px solid var(--bdr);
+  transition:background .2s;
+}
+.lagen-row:last-child { border-bottom:none; }
+.laag-dot { width:10px; height:10px; border-radius:3px; flex-shrink:0; }
+.laag-naam { font-size:12px; color:var(--muted); flex:1; }
+.laag-temp { font-family:var(--mono); font-size:14px; font-weight:500; text-align:right; }
+.laag-bar-wrap { width:50px; height:4px; background:var(--dim); border-radius:2px; overflow:hidden; }
+.laag-bar-fill { height:100%; border-radius:2px; transition:width .5s; }
+
+/* POMP + COLLECTOR RIJEN */
+.info-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.info-card {
+  background:var(--card); border:1px solid var(--bdr); border-radius:12px;
+  padding:12px 13px;
+}
+.ic-label { font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; margin-bottom:5px; }
+.ic-val { font-family:var(--mono); font-size:18px; font-weight:500; }
+.ic-sub { font-size:10px; color:var(--muted); margin-top:3px; }
+
+/* PUMP STATUS */
+.pump-badge {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 12px; border-radius:99px; font-size:12px; font-weight:600;
+  font-family:var(--mono);
+}
+.pump-aan  { background:rgba(0,209,140,0.12); border:1px solid rgba(0,209,140,0.3); color:var(--green); }
+.pump-uit  { background:rgba(255,255,255,0.05); border:1px solid var(--bdr); color:var(--muted); }
+.pump-dot  { width:7px; height:7px; border-radius:50%; }
+.pump-aan .pump-dot { background:var(--green); box-shadow:0 0 6px var(--green); animation:blink 2s infinite; }
+.pump-uit .pump-dot { background:var(--muted); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* PWM BALK */
+.pwm-wrap { background:var(--dim); border-radius:4px; height:6px; margin-top:8px; overflow:hidden; }
+.pwm-fill { height:100%; border-radius:4px; background:var(--green); transition:width .5s; }
+
+/* DT indicator */
+.dt-badge {
+  display:inline-flex; align-items:center; gap:4px; font-family:var(--mono); font-size:12px;
+  padding:3px 8px; border-radius:99px;
+}
+.dt-pos { background:rgba(255,80,85,0.12); color:var(--red); border:1px solid rgba(255,80,85,0.25); }
+.dt-neg { background:rgba(77,166,255,0.12); color:var(--blue); border:1px solid rgba(77,166,255,0.25); }
+
+/* REFRESH INDICATOR */
+.refresh { font-size:10px; color:var(--muted); text-align:center; padding:10px; font-family:var(--mono); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <a href="/" class="back">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <path d="M19 12H5M12 5l-7 7 7 7"/>
+    </svg>
+  </a>
+  <div class="hdr-title">
+    <h1>ECO Boiler</h1>
+    <p id="hdr-sub">192.168.0.71</p>
+  </div>
+  <div class="status-badge">
+    <div class="sdot" id="sdot" style="background:var(--amber)"></div>
+    <span id="status-txt">—</span>
+  </div>
+</header>
+
+<div class="content">
+
+  <!-- HOOFD RIJ: Boiler + Stats -->
+  <div class="main-row">
+
+    <!-- BOILER SVG -->
+    <div class="boiler-wrap">
+      <div class="boiler-title">ECO Boiler</div>
+      <div id="boiler-svg"></div>
+      <div id="pump-badge" class="pump-badge pump-uit">
+        <div class="pump-dot"></div>
+        Pomp uit
+      </div>
+    </div>
+
+    <!-- STATS KOLOM -->
+    <div class="stats-col">
+
+      <!-- Energie totaal -->
+      <div class="energy-card">
+        <div class="ec-label">Energie inhoud</div>
+        <div>
+          <span class="ec-val" id="eq-val">—</span>
+          <span class="ec-unit">kWh</span>
+        </div>
+        <div class="ebar-wrap">
+          <div class="ebar-fill" id="eq-bar" style="width:0%"></div>
+        </div>
+        <div class="ec-sub" id="eq-sub">Max ~25 kWh</div>
+      </div>
+
+      <!-- Collector -->
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="ic-label">☀️ Collector</div>
+          <div class="ic-val" id="tsun-val">—</div>
+          <div class="ic-sub">Tsun °C</div>
+        </div>
+        <div class="info-card">
+          <div class="ic-label">ΔT Tsun–Tboil</div>
+          <div id="dt-badge-wrap" style="margin-top:2px"></div>
+          <div class="ic-sub" id="dt-sub" style="margin-top:4px">—</div>
+        </div>
+      </div>
+
+      <!-- PWM -->
+      <div class="info-card">
+        <div class="ic-label">Pomp PWM</div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div class="ic-val" id="pwm-val">0</div>
+          <div class="ic-sub">/ 255</div>
+        </div>
+        <div class="pwm-wrap">
+          <div class="pwm-fill" id="pwm-bar" style="width:0%"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- LAAG TABEL -->
+  <div class="lagen-card" id="lagen-card">
+    <div class="lagen-row" style="background:var(--card2); border-bottom:1px solid var(--bdr);">
+      <div style="font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;">Boilerlagen — temperatuur</div>
+    </div>
+    <div id="lagen-body"></div>
+  </div>
+
+  <div class="refresh" id="refresh-txt">Vernieuwen elke 5s</div>
+
+</div>
+
+<!-- SVG DEFS voor animatie -->
+<svg width="0" height="0" style="position:absolute">
+<defs>
+  <linearGradient id="FreshWaterCoil" x1="0" x2="0" y1="0" y2="1">
+    <stop offset="15%" stop-color="rgb(255,0,0)"/>
+    <stop offset="85%" stop-color="rgb(20,20,255)"/>
+  </linearGradient>
+  <linearGradient id="SolarCoil" x1="0" x2="0" y1="0" y2="1">
+    <stop offset="10%" stop-color="rgb(220,90,128)"/>
+    <stop offset="90%" stop-color="rgb(50,100,255)"/>
+  </linearGradient>
+</defs>
+</svg>
+
+<script>
+'use strict';
+
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const EQ_MAX   = 25;   // kWh max boilerinhoud (indicatief)
+const LAYER_NAMEN = ['TopH (bovenkant)', 'TopL', 'MidH', 'MidL', 'BotH', 'BotL (onderkant)'];
+const LAYER_KEYS  = ['b','c','d','e','f','g'];
+
+// ─── KLEURHELPER (identiek aan Filip's origineel) ─────────────────────────────
+function tempColor(t) {
+  const min=20, max=80;
+  const x = Math.max(0, Math.min(1, (t-min)/(max-min)));
+  const hue = (1-x) * 200;
+  return `hsl(${hue},90%,50%)`;
+}
+
+function tempKleurCSS(t) {
+  if (t < 30) return '#4da6ff';
+  if (t < 45) return '#00d18c';
+  if (t < 60) return '#ffb030';
+  if (t < 70) return '#ff8030';
+  return '#ff4555';
+}
+
+// ─── BOILER SVG (gebaseerd op Filip's origineel, RPi-stijl) ──────────────────
+function drawCoil(outerWidth, outerHeight, borderWidth, borderHeight, nCoils, direction) {
+  const deltaHeight = (outerHeight - borderHeight*2) / (nCoils*2);
+  let coilLines;
+  if (direction === 1) {
+    coilLines = `M 10 ${borderHeight} L ${borderWidth} ${borderHeight} `;
+    for (let i=0; i<nCoils; i++) {
+      coilLines += `L ${outerWidth-borderWidth} ${borderHeight+deltaHeight*(i*2+1)} `;
+      coilLines += `L ${borderWidth} ${borderHeight+deltaHeight*(i*2+2)} `;
+    }
+    coilLines += `L 10 ${outerHeight-borderHeight}`;
+  } else {
+    coilLines = `M ${outerWidth-10} ${borderHeight} L ${outerWidth-borderWidth} ${borderHeight} `;
+    for (let i=0; i<nCoils; i++) {
+      coilLines += `L ${borderWidth} ${borderHeight+deltaHeight*(i*2+1)} `;
+      coilLines += `L ${outerWidth-borderWidth} ${borderHeight+deltaHeight*(i*2+2)} `;
+    }
+    coilLines += `L ${outerWidth-10} ${outerHeight-borderHeight}`;
+  }
+  return coilLines;
+}
+
+function tekenBoiler(temps, pumpAan) {
+  const W = 200, H = 480;
+  const bwBorder = 20, bhBorder = 40;
+  const usableH = H - 2*bhBorder;
+  const layerH  = usableH / 6;
+
+  const tankPath = `M 20 ${bhBorder} C ${bwBorder} 0, ${W-bwBorder} 0, ${W-bwBorder} ${bhBorder}
+    V ${H-bhBorder} C ${W-bwBorder} ${H}, ${bwBorder} ${H}, ${bwBorder} ${H-bhBorder} Z`;
+
+  let defs = `<clipPath id="tankClip"><path d="${tankPath}"/></clipPath>`;
+  let layers = '';
+
+  for (let i=0; i<6; i++) {
+    const t  = temps[i];
+    const c1 = tempColor(t+2);
+    const c2 = tempColor(t-2);
+    const gid = `g${i}`;
+    defs += `<linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="${c1}"/>
+      <stop offset="100%" stop-color="${c2}"/>
+    </linearGradient>`;
+    const y = bhBorder + i*layerH;
+    layers += `<rect x="0" y="${y}" width="${W}" height="${layerH}" fill="url(#${gid})" opacity="0.72"/>`;
+  }
+
+  // Scheidingslijnen tussen lagen
+  let dividers = '';
+  for (let i=1; i<6; i++) {
+    const y = bhBorder + i*layerH;
+    dividers += `<line x1="20" y1="${y}" x2="${W-20}" y2="${y}" stroke="rgba(0,0,0,0.25)" stroke-width="1"/>`;
+  }
+
+  // Temperatuurlabels rechts van boiler
+  let labels = '';
+  for (let i=0; i<6; i++) {
+    const y = bhBorder + i*layerH + layerH/2;
+    const klr = tempKleurCSS(temps[i]);
+    labels += `<text x="${W+8}" y="${y}" fill="${klr}" font-size="13" font-family="DM Mono, monospace" font-weight="500" dominant-baseline="middle">${temps[i].toFixed(1)}°</text>`;
+  }
+
+  const solarPath  = drawCoil(W, H*1.45, 30, 334, 7, 0);
+  const freshPath  = drawCoil(W, H, 45, 70, 14, 1);
+  const pumpClass  = pumpAan ? 'freshwater' : 'freshwater-off';
+
+  return `<svg width="${W+60}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+    <defs>${defs}</defs>
+    <path d="${tankPath}" stroke="rgba(255,255,255,0.15)" stroke-width="2" fill="rgba(255,255,255,0.04)"/>
+    <g clip-path="url(#tankClip)">${layers}</g>
+    ${dividers}
+    <path d="${tankPath}" stroke="rgba(255,255,255,0.1)" stroke-width="1" fill="none"/>
+    <path stroke="url(#SolarCoil)" stroke-width="10" fill="none" d="${solarPath}"/>
+    <path class="${pumpClass}" d="${freshPath}"/>
+    ${labels}
+  </svg>`;
+}
+
+// ─── UI UPDATEN ───────────────────────────────────────────────────────────────
+function updateUI(data) {
+  const temps  = LAYER_KEYS.map(k => parseFloat(data[k]) || 0);
+  const eq     = parseFloat(data.i) || 0;
+  const tsun   = parseFloat(data.l) || 0;
+  const dT     = parseFloat(data.m) || 0;
+  const pwm    = parseInt(data.n)   || 0;
+  const pump   = parseInt(data.o)   === 1;
+  const rssi   = parseInt(data.r)   || 0;
+
+  // Boiler SVG
+  document.getElementById('boiler-svg').innerHTML = tekenBoiler(temps, pump);
+
+  // Pomp badge
+  const pb = document.getElementById('pump-badge');
+  pb.className = `pump-badge ${pump ? 'pump-aan' : 'pump-uit'}`;
+  pb.innerHTML = `<div class="pump-dot"></div>${pump ? 'Pomp actief' : 'Pomp uit'}`;
+
+  // Energie
+  document.getElementById('eq-val').textContent = eq.toFixed(2);
+  document.getElementById('eq-val').style.color = eq > 15 ? '#00d18c' : eq > 8 ? '#ffb030' : '#ff4555';
+  const pct = Math.min(100, (eq / EQ_MAX) * 100);
+  document.getElementById('eq-bar').style.width = pct + '%';
+  document.getElementById('eq-sub').textContent = `${pct.toFixed(0)}% van max ~${EQ_MAX} kWh`;
+
+  // Collector
+  const tsunEl = document.getElementById('tsun-val');
+  tsunEl.textContent = tsun.toFixed(1) + '°C';
+  tsunEl.style.color = tsun > 60 ? '#ff4555' : tsun > 40 ? '#ffb030' : '#4da6ff';
+
+  // ΔT
+  const dtW = document.getElementById('dt-badge-wrap');
+  dtW.innerHTML = `<span class="dt-badge ${dT > 0 ? 'dt-pos' : 'dt-neg'}">${dT > 0 ? '+' : ''}${dT.toFixed(1)}°C</span>`;
+  document.getElementById('dt-sub').textContent = dT > 5 ? 'Pomp mag draaien' : dT > 0 ? 'Net positief' : 'Boiler warmer dan zon';
+
+  // PWM
+  document.getElementById('pwm-val').textContent = pwm;
+  document.getElementById('pwm-bar').style.width = ((pwm/255)*100) + '%';
+  document.getElementById('pwm-bar').style.background = pump ? 'var(--green)' : 'var(--dim)';
+
+  // Lagenkaart
+  const body = document.getElementById('lagen-body');
+  body.innerHTML = temps.map((t, i) => {
+    const klr  = tempKleurCSS(t);
+    const bPct = Math.min(100, Math.max(0, ((t-20)/60)*100));
+    return `<div class="lagen-row">
+      <div class="laag-dot" style="background:${klr}"></div>
+      <div class="laag-naam">${LAYER_NAMEN[i]}</div>
+      <div class="laag-bar-wrap"><div class="laag-bar-fill" style="width:${bPct}%;background:${klr}"></div></div>
+      <div class="laag-temp" style="color:${klr}">${t.toFixed(1)}°C</div>
+    </div>`;
+  }).join('');
+
+  // Status
+  document.getElementById('sdot').style.cssText = `background:var(--green);box-shadow:0 0 5px var(--green)`;
+  document.getElementById('status-txt').textContent = `online · ${rssi} dBm`;
+
+  // Tijdstip
+  const nu = new Date().toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  document.getElementById('refresh-txt').textContent = `Laatste update: ${nu}`;
+}
+
+// ─── DATA LADEN via RPi /api/poll ─────────────────────────────────────────────
+async function laad() {
+  try {
+    const r = await fetch('/api/poll/eco');
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    updateUI(data);
+  } catch(e) {
+    // Demo data als server niet bereikbaar
+    const demo = {b:78,c:72,d:65,e:58,f:46,g:34, i:18.4, l:94, m:16, n:180, o:1, r:-68};
+    updateUI(demo);
+    document.getElementById('sdot').style.cssText = 'background:var(--amber)';
+    document.getElementById('status-txt').textContent = 'demo data';
+  }
+}
+
+laad();
+setInterval(laad, 5000);
+</script>
+</body>
+</html>
