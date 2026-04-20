@@ -1,1 +1,0 @@
-cd ~/Zarlardinge_Dashboards/ESP32_Zarlar/zarlar-rpi && git add . && git commit -m "wat je hier wil schrijven" && git push && zarlar-update}

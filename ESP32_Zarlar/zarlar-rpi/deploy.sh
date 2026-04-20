@@ -71,7 +71,14 @@ if ! $GEVONDEN; then
   exit 0
 fi
 
-# 2. Git commit en push
+# 2. Rommel opruimen (bestanden die niet in repo horen)
+git rm -f "zarlar-update commands" 2>/dev/null || true
+
+# 3. Git pull --rebase (voorkomt conflict als GitHub verder staat)
+echo "→ git pull (rebase)..."
+git pull --rebase
+
+# 4. Git commit + push
 echo "→ git add + commit..."
 git add .
 git commit -m "$BERICHT"
