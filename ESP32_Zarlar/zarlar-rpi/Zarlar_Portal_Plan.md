@@ -430,7 +430,8 @@ public/
 | 8 | Lichten tab verfijnen (pixel nicknames via NVS) | ⬜ Open |
 | 9 | Maarten + Céline uitnodigen op Tailscale | ⬜ Open |
 | 10 | `/capabilities` endpoint op ESP32 controllers | ⬜ Later |
-| 11 | Smart Energy controller + S0 meting | ⬜ Later |
+| 11 | Smart Energy controller — sketch v0.1 schrijven | ⬜ Later |
+| 12 | Smart Energy — P1 dongle integratie (na digitale meter ~2028) | ⬜ Toekomst |
 
 ---
 
@@ -446,6 +447,84 @@ public/
 | AP6 | `/capabilities` endpoint op Room sketch |
 | AP7 | `/capabilities` endpoint op HVAC sketch |
 | AP8 | `/capabilities` endpoint op ECO sketch |
+| AP9 | S-ENERGY: GPIO-pinnen toewijzen via OPTION RJ45 connector |
+| AP10 | S-ENERGY: interface printje met pull-up + serieweerstanden bouwen |
+| AP11 | S-ENERGY: sketch v0.1 schrijven (S0 pulstelling + LED matrix 12×4) |
+
+---
+
+## 11. Smart Energy Controller (S-ENERGY) — Hardware
+
+> **Status: in ontwikkeling — sketch nog te schrijven.**
+> IP: `192.168.0.73` · Board: ESP32-C6 32-pin
+
+### 11.1 Energiemeters
+
+| Meter | Label | Type | Locatie kast |
+|---|---|---|---|
+| Zonnepanelen | A14 | Inepro PRO380-S | Kast bij Maarten |
+| Schuur | A5 | Inepro PRO380-S | Kast bij Maarten |
+
+**S0 pulsrate:** `R_L = 0,1 Wh/imp` → **10.000 pulsen per kWh**
+```cpp
+#define PULSEN_PER_KWH 10000
+// 1 puls = 0,1 Wh
+float wh = (float)pulsTeller / PULSEN_PER_KWH * 1000.0;
+// Vermogen (W) via interval tussen pulsen (ms):
+float watt = 0.1 / (intervalMs / 3600000.0);
+```
+
+### 11.2 S0 kanalen
+
+| Kanaal | Meter | Klemmen | Richting | GPIO |
+|---|---|---|---|---|
+| S0-1 | Zonnepanelen (A14) | 18/19 | Forward (productie) | nader te bepalen |
+| S0-2 | Schuur (A5) | 18/19 | Forward (afname) | nader te bepalen |
+| S0-3 | Schuur (A5) | 20/21 | Reverse (injectie) | nader te bepalen |
+
+**WON-verbruik:** niet gemeten in fase 1 (nog analoge meter, uitzondering exclusief nachttarief).
+JSON key `b` = 0 tot digitale meter beschikbaar (~2028). Dan via P1-dongle.
+
+### 11.3 S0 interfaceschema (per kanaal, 3×)
+
+```
+3,3V
+ |
+[4,7kΩ pull-up]
+ |
+ +──────────── GPIO (INPUT, interne pull-up uit)
+ |
+[1kΩ serie]
+ |
+Klem 18 of 20 (S0+) ←── 5V extern (gedeeld met ESP32 voeding)
+Klem 19 of 21 (S0−) ──── GND (gedeeld met ESP32 GND)
+```
+
+Geen optocoupler — S0-uitgang van PRO380-S is zelf al optisch geïsoleerd.
+Verbinding via **OPTION RJ45** connector op het Zarlar shield.
+
+### 11.4 LED matrix
+
+**Hardware:** 12×4 WS2812B matrix = **48 pixels**, serpentine datavolgorde.
+Connector: JST SM 3-pin (wit=DI, rood=+5V, blauw=GND).
+Voeding: aparte 5V (niet via shield PTC).
+
+| Pixel | Functie | Kleurlogica |
+|---|---|---|
+| 1 | ☀️ Solar vermogen | Uit→geel dim→groen helder |
+| 2 | 💰 EPEX prijs | Groen=goedkoop / geel=normaal / rood=duur |
+| 3 | ⚖️ Netto balans | Groen=injectie / rood=afname |
+| 4 | 🔋 Batterij (toekomst) | SOC kleurschaal |
+| 5 | ♨️ ECO boiler | Groen=aan / zwart=uit |
+| 6 | 🚙 EV WON | Groen gradient op laadvermogen |
+| 7 | 🚗 EV SCH | Idem |
+| 8 | 🏠 WP WON | Groen=aan / zwart=uit |
+| 9 | 🏚️ WP SCH | Groen=aan / zwart=uit |
+| 10 | 🍳 Koken? | Groen=goed moment / rood=duur of piek |
+| 11 | 👕 Wassen? | Zelfde logica |
+| 12 | 📊 Piek | Groen→geel→oranje→rood vs MAX_PIEK |
+
+*Pixels 10–11 voor Céline en Mireille: groen = goed moment om te koken/wassen.*
 
 ---
 
