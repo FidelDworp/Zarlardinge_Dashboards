@@ -87,9 +87,9 @@ git pull --rebase
 echo "→ git push..."
 git push
 
-# 3. RPi bijwerken
+# 3. RPi bijwerken via Tailscale (werkt overal)
 echo "→ RPi updaten..."
-ssh fidel@192.168.0.50 'bash /home/fidel/update.sh'
+ssh -o ConnectTimeout=15 fidel@100.123.74.113 'bash /home/fidel/update.sh'
 
 # 4. Downloads opruimen
 echo "→ Downloads opruimen..."
