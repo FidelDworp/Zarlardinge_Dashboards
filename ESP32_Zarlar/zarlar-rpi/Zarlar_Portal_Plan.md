@@ -89,6 +89,28 @@ cp ~/Downloads/deploy.sh ~/deploy.sh && chmod +x ~/deploy.sh && bash ~/deploy.sh
 192.168.0.75–.81 → Toekomstige Room controllers
 ```
 
+### 2.1 Architectuurprincipes
+
+**Dashboard controller (192.168.0.60) = bron van waarheid**
+- Registreert alle controllers in het systeem
+- Pollt alle controllers elke 15 seconden
+- Stuurt data naar Google Sheets — BLIJFT ZO, RPi neemt dit NOOIT over
+- Serveert /json met volledige systeemstatus
+- Bestuurt 16×16 RGB pixel matrix
+
+**RPi = display + controle laag**
+- Leest /json van Dashboard controller (lijst van alle controllers)
+- Haalt /json en /capabilities op van elke controller
+- Toont rijke UI zonder heap beperkingen
+- Leest Google Sheets (read-only) voor historiek
+- Voert scenes en automatisaties uit via /api/set/
+- Neemt GEEN dataverzameling of logging taken over
+
+**Gouden regels:**
+- /json endpoint op elke controller wordt nooit gewijzigd
+- RPi neemt nooit Google Sheets logging over
+- Elke fase levert direct tastbaar voordeel op
+
 **Gouden regel:** Browser gebruikt NOOIT lokale IPs — alles via `/api/` op RPi.
 ```javascript
 // FOUT — werkt niet extern
@@ -112,6 +134,52 @@ fetch('/api/poll/eco')
 | `/api/scenes` | GET/POST/DELETE | Scènes beheren |
 | `/api/scenes/:naam/run` | POST | Scène uitvoeren |
 | `/api/controllers` | GET | Lijst van controllers |
+| `/api/history/:naam` | GET | Google Sheets historiek (read-only) |
+
+---
+
+## 3b. Self-describing API — /capabilities
+
+Elke controller beschrijft zichzelf volledig. De RPi bouwt de UI automatisch
+op basis hiervan — geen hardcoded kennis nodig.
+
+```json
+{
+  "controller": "ROOM1",
+  "naam": "Woonkamer",
+  "versie": "2.10",
+  "sensoren": [
+    { "key": "t",  "naam": "Temperatuur", "eenheid": "C",   "type": "float" },
+    { "key": "h",  "naam": "Vochtigheid", "eenheid": "%",   "type": "float" },
+    { "key": "co", "naam": "CO2",         "eenheid": "ppm", "type": "int"   }
+  ],
+  "bedieningen": [
+    { "key": "p0", "naam": "Salon links", "type": "toggle",
+      "endpoint": "/set", "body_aan": {"p0": 1}, "body_uit": {"p0": 0} },
+    { "key": "dim", "naam": "Dimmer salon", "type": "slider",
+      "min": 0, "max": 100, "eenheid": "%",
+      "endpoint": "/set", "body": {"dim": "{waarde}"} }
+  ],
+  "instellingen": [
+    { "key": "naam",   "naam": "Kamer naam",     "type": "text" },
+    { "key": "pixels", "naam": "Actieve pixels", "type": "int", "min": 0, "max": 16 }
+  ]
+}
+```
+
+UI types die de portal automatisch genereert:
+
+| Type | UI element |
+|---|---|
+| `toggle` | Aan/uit schakelaar |
+| `slider` | Schuifbalk met min/max |
+| `float` / `int` | Getal met eenheid |
+| `text` | Tekstveld |
+| `color` | Kleurpicker |
+
+**Cachen op RPi:** in `controller-configs.json`
+Opgehaald bij: RPi opstart, elke 6u, manuele refresh, bij scene aanmaken.
+Op de controller: statische JSON string in PROGMEM of NVS — minimale heap impact.
 
 ---
 
@@ -205,6 +273,79 @@ Beschikbaar als `-ALL-Icons-nightstyle.html` en `-ALL-Icons.html` in project.
 - Goed/normaal: `#00d18c` (groen)
 - Warm/let op: `#ffb030` (amber)
 - Heet/alarm: `#ff4555` (rood)
+
+---
+
+## 5b. Room controllers & scenes
+
+**Room controllers:** alle rooms hebben dezelfde sketch.
+NVS variabelen bepalen: hoeveel pixels actief, nickname per pixel, kamer naam.
+RPi haalt config op via /capabilities — geen hardcoded configuratie nodig.
+
+**Scenes combineren lampen van meerdere room controllers:**
+```json
+{
+  "naam": "Filmavond",
+  "icoon": "TV",
+  "acties": [
+    { "controller": "room1", "key": "p0",      "waarde": 1  },
+    { "controller": "room1", "key": "dim",      "waarde": 30 },
+    { "controller": "room2", "key": "p0",       "waarde": 0  },
+    { "controller": "hvac",  "key": "setpoint", "waarde": 20 }
+  ]
+}
+```
+
+**Voorbeeldscènes:**
+
+| Scene | Wat er gebeurt |
+|---|---|
+| Filmavond | Salon 30% dim, TV licht aan, gang uit, slaapkamer uit |
+| Diner | Tafel vol, salon 50%, keuken aan, rest uit |
+| Ochtend | Slaapkamer aan, badkamer aan, rest uit |
+| Nacht | Alles uit |
+| Welkom | Gang aan, salon aan, rest uit |
+| Lezen | Salon 80%, leeslamp aan, rest uit |
+
+**Energiebeheer (ECO boiler, EVs, WPs, batterij)** wordt volledig beheerd door de
+SENRG controller — het portal interfereert NOOIT met energieautomatisering.
+
+**Automatisaties — enkel voor verlichting:**
+
+| Trigger | Actie |
+|---|---|
+| Zonsondergang | Scene Avond |
+| 23:00 | Scene Nacht |
+| 07:00 weekdag | Scene Ochtend |
+| Bewegingsdetectie | Scene Welkom |
+
+**Geplande portal pagina's:**
+1. Systeem overzicht (index.html) — alle controllers, online/offline status ✅
+2. ECO Boiler detail (eco.html) ✅
+3. EPEX energie grafiek (epex-grafiek.html) ✅
+4. Matrix pagina — exacte replica 16×16 RGB matrix, live via /json van .60
+5. Per controller rijke UI — automatisch gegenereerd vanuit /capabilities
+6. Verlichting pagina — alle room controllers gecombineerd, scenes knoppen
+7. Scenes en Automatisaties — visuele editor, log van uitvoeringen
+
+**Publieke mapstructuur (doel):**
+```
+public/
+├── index.html          ← Systeem overzicht ✅
+├── eco.html            ← ECO Boiler detail ✅
+├── epex-grafiek.html   ← Energie grafiek ✅
+├── hvac.html           ← HVAC detail ⬜
+├── room.html           ← Room detail ⬜
+├── matrix/
+│   └── index.html      ← 16×16 matrix replica ⬜
+├── verlichting/
+│   └── index.html      ← Gecombineerde verlichting ⬜
+├── scenes/
+│   └── index.html      ← Scenes en automatisaties ⬜
+└── assets/
+    ├── zarlar.css
+    └── zarlar.js
+```
 
 ---
 
