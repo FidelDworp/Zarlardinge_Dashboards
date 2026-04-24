@@ -1,76 +1,105 @@
 # Zarlar Portal — Projectdocument
-*April 2026 — Filip Delannoy (FiDel)*
+*Bijgewerkt april 2026 — Filip Delannoy (FiDel)*
 
 ---
 
-## 1. Wat is gerealiseerd (april 2026)
+## 1. Infrastructuur & toegang
 
-### 1.1 Infrastructuur RPi
+### 1.1 RPi server
 
 | Component | Detail |
 |---|---|
 | Hardware | Raspberry Pi, vaste IP `192.168.0.50` |
-| Software | Node.js + Express, poort 3000 |
-| Autostart | systemd `zarlar.service` |
-| SSH toegang | `ssh fidel@192.168.0.50` (wachtwoord: zarlar) |
-| Remote toegang | Tailscale VPN — `http://100.123.74.113:3000` |
+| Software | Node.js v18 + Express, poort 3000 |
+| Repo lokaal | `/home/fidel/repo/ESP32_Zarlar/zarlar-rpi/` |
+| Public map | `/home/fidel/repo/ESP32_Zarlar/zarlar-rpi/public/` |
+| Autostart | systemd `zarlar.service` ✅ |
+| SSH lokaal | `ssh fidel@192.168.0.50` (wachtwoord: zarlar) |
+| SSH overal | `ssh fidel@100.123.74.113` (via Tailscale) |
 
-### 1.2 GitHub workflow
+### 1.2 GitHub repository
 
-**Repository:** `FidelDworp/Zarlardinge_Dashboards/ESP32_Zarlar/zarlar-rpi/`
+**Repo:** `FidelDworp/Zarlardinge_Dashboards/ESP32_Zarlar/zarlar-rpi/`
 
-**Mapstructuur op GitHub:**
 ```
 zarlar-rpi/
-├── server.js          ← Node.js server
-├── update.sh          ← RPi sync script
-├── deploy.sh          ← Mac deploy script (lokaal op Mac, niet in repo)
+├── server.js               ← Node.js server v2.0
+├── update.sh               ← RPi sync script
+├── deploy.sh               ← Deploy script (ook actief op Mac als ~/deploy.sh)
 ├── README.md
+├── Zarlar_Portal_Plan.md   ← Dit document
 └── public/
-    ├── index.html     ← Portal overzicht (NIVO 1)
-    ├── zarlar.css     ← Gedeelde stijl
-    ├── zarlar.js      ← Gedeelde functies
-    └── epex-grafiek.html
+    ├── index.html          ← Portal NIVO 1 (synoptisch overzicht)
+    ├── eco.html            ← ECO Boiler NIVO 2 detail pagina
+    ├── epex-grafiek.html   ← EPEX energie grafiek
+    ├── zarlar.css          ← Gedeelde stijl
+    └── zarlar.js           ← Gedeelde functies
 ```
 
-**Deploy workflow (alles in één commando vanuit Mac Terminal):**
+### 1.3 Deploy workflow
+
+**Alles in één commando op Mac:**
 ```bash
 bash ~/deploy.sh "omschrijving van wijziging"
 ```
 
-`deploy.sh` detecteert bestanden in Downloads, kopieert naar juiste map
-(`.html/.css/.js` → `public/`, `.sh/.js` rootbestanden → root),
-doet git commit + push, triggert RPi update, ruimt Downloads op.
+`deploy.sh` doet automatisch:
+1. Detecteert bestanden in `~/Downloads`
+   - `.html/.css/.js` → `public/`
+   - `.sh/.md` → root van zarlar-rpi/
+2. `git add + commit`
+3. `git pull --rebase` (voorkomt conflicten)
+4. `git push`
+5. SSH naar RPi via Tailscale → `bash ~/update.sh`
+6. Ruimt Downloads op
 
-**RPi update:**
+**Werkt van overal** — thuis én buitenshuis via Tailscale.
+
+**`deploy.sh` zelf updaten op Mac:**
 ```bash
-# Automatisch via deploy.sh, of manueel:
-ssh fidel@192.168.0.50 'bash /home/fidel/update.sh'
-# Of via alias op Mac:
-zarlar-update
+cp ~/Downloads/deploy.sh ~/deploy.sh && chmod +x ~/deploy.sh && bash ~/deploy.sh "..."
 ```
 
-### 1.3 Remote toegang via Tailscale
+### 1.4 Remote toegang via Tailscale
 
 | Apparaat | Tailscale IP | Status |
 |---|---|---|
 | RPi | `100.123.74.113` | ✅ Online, autostart |
 | MacBook | `100.89.205.22` | ✅ Online |
-| iPhone (Filip + Mireille) | `100.104.215.18` | ✅ Online |
+| iPhone Filip + Mireille | `100.104.215.18` | ✅ Online |
 | Maarten | — | ⬜ Nog uit te nodigen |
 | Céline | — | ⬜ Nog uit te nodigen |
 
-**Uitnodigen:** Tailscale dashboard → Add device → Share → e-mailadres
-**Gratis plan:** 3 gebruikers (Filip/Mireille = 1 account, Maarten, Céline)
+- **Gratis plan:** 3 gebruikers (Filip/Mireille = 1 Apple account, Maarten, Céline)
+- **Filip + Mireille** delen Apple account → beide iPhones automatisch verbonden
+- **Uitnodigen:** Tailscale dashboard → Add device → Share → e-mailadres
+- **Portal bereikbaar overal:** `http://100.123.74.113:3000`
 
-### 1.4 Werkende pagina's
+---
 
-| URL | Pagina | Status |
-|---|---|---|
-| `http://100.123.74.113:3000/` | Portal overzicht | ✅ Werkend |
-| `http://100.123.74.113:3000/epex-grafiek.html` | EPEX energie grafiek | ✅ Werkend |
+## 2. Netwerk controllers
 
-### 1.5 server.js v2.0 — API endpoints
+```
+192.168.0.50  → RPi Zarlar Portal (Node.js poort 3000)
+192.168.0.60  → ESP32 Dashboard v5.7 (bron van waarheid, matrix 16×16)
+192.168.0.70  → ESP32 HVAC v1.19
+192.168.0.71  → ESP32 ECO Boiler v1.23
+192.168.0.73  → ESP32 Smart Energy (in ontwikkeling)
+192.168.0.80  → ESP32 Room v2.21 (Eetplaats/Testroom)
+192.168.0.75–.81 → Toekomstige Room controllers
+```
+
+**Gouden regel:** Browser gebruikt NOOIT lokale IPs — alles via `/api/` op RPi.
+```javascript
+// FOUT — werkt niet extern
+fetch('http://192.168.0.71/json')
+// CORRECT — werkt overal
+fetch('/api/poll/eco')
+```
+
+---
+
+## 3. server.js v2.0 — API endpoints
 
 | Endpoint | Methode | Functie |
 |---|---|---|
@@ -84,228 +113,198 @@ zarlar-update
 | `/api/scenes/:naam/run` | POST | Scène uitvoeren |
 | `/api/controllers` | GET | Lijst van controllers |
 
-### 1.6 EPEX grafiek — fixes april 2026
-
-- **NU lijn:** filter op vandaag 00:00 verwijderd — data intact doorgeven
-- **Solar grafiek:** volledige dag tonen, toekomst 30% alpha
-- **Morgen label:** alleen tonen als morgen data beschikbaar is
-- **Cache:** 3 vernieuwingscondities:
-  1. Ouder dan 26 uur
-  2. Na 13:00 én morgen data nog niet beschikbaar
-  3. Dag gewisseld (cache van gisteren)
-- **NU prijs indicator:** totale reële prijs bij NU lijn onderaan grafiek
-- **Tariefvergelijking:** Dynamisch (Geert/Imewo/feb.2026) vs Vast (Filip/West/nov.2025)
-  in instellingen tab — vast contract auto-berekend uit componenten
-
 ---
 
-## 2. Architectuur — controllers & data
+## 4. Portal architectuur & visie
 
-### 2.1 Netwerk
-
-```
-192.168.0.50  → RPi Zarlar Portal (Node.js)
-192.168.0.60  → ESP32 Dashboard (bron van waarheid, matrix 16×16)
-192.168.0.70  → ESP32 HVAC
-192.168.0.71  → ESP32 ECO Boiler
-192.168.0.73  → ESP32 Smart Energy (in ontwikkeling)
-192.168.0.80  → ESP32 Room (Testroom/Eetplaats)
-192.168.0.75–.81 → Toekomstige Room controllers
-Photon controllers → via Cloudflare Worker (legacy, transitie)
-```
-
-### 2.2 Dataflow
-
-```
-Browser (overal via Tailscale)
-       ↓ /api/...
-RPi 192.168.0.50
-       ↓ lokaal HTTP
-ESP32 controllers (192.168.0.xx)
-```
-
-**Gouden regel:** Browser gebruikt NOOIT lokale IPs — alles via `/api/` op RPi.
-
-### 2.3 JSON schemas (samenvatting)
-
-Zie Zarlar_Master_Overnamedocument.md §4–§8 voor volledige schemas.
-
----
-
-## 3. Portal visie & architectuur
-
-### 3.1 Filosofie
+### 4.1 Filosofie
 
 **Apple-like · KISS · Grafisch-eerst**
 
 - Zo weinig mogelijk tekst, zo veel mogelijk visuele beelden
 - Werkt perfect op telefoon én desktop
 - Intuïtief voor iedereen in het gezin zonder uitleg
-- Donker thema (consistent met bestaande EPEX pagina)
+- Donker thema
 - SVG symbolen als visuele taal
 
-### 3.2 Drie lagen
+### 4.2 Prioriteit van informatie
+
+**Niveau A — Alarmen (altijd bovenaan):**
+Vocht/dauwpunt alert, temperatuuralarm, onverwachte beweging, controller offline
+
+**Niveau B — Actuele toestand (standaard):**
+Per controller type: de meest relevante data in de concrete situatie
+
+**Niveau C — Details op aanvraag:**
+Via klik naar NIVO 2 pagina
+
+### 4.3 Drie lagen
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  NIVO 1 — Synoptisch overzicht                       │
-│  Donker canvas · SVG cirkels per controller          │
-│  [💡 Lichten] [🌡️ HVAC] [🔒 Security] tabs          │
-└──────────────┬──────────────────────────────────────┘
-               │ klik op cirkel of tab
-┌──────────────▼──────────────────────────────────────┐
-│  NIVO 2a — Controller detail                         │
-│  Grote SVG visualisatie + cijfers + instellingen     │
-├─────────────────────────────────────────────────────┤
-│  NIVO 2b — Bedieningen (tabs)                        │
-│  💡 Lichten  🌡️ HVAC  🔒 Security                   │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│  NIVO 1 — Synoptisch overzicht (index.html) │
+│  Donker canvas · SVG cirkels per controller │
+│  [Overzicht] [💡 Lichten] [🌡️ HVAC] [🔒 Sec]│
+└──────────────┬──────────────────────────────┘
+               │ klik op cirkel
+┌──────────────▼──────────────────────────────┐
+│  NIVO 2a — Controller detail                │
+│  Grote SVG visualisatie + cijfers           │
+│  Instellingen onderaan                      │
+├─────────────────────────────────────────────┤
+│  NIVO 2b — Bedieningen tabs                 │
+│  💡 Lichten  🌡️ HVAC  🔒 Security           │
+└─────────────────────────────────────────────┘
 ```
 
-### 3.3 NIVO 1 — Synoptisch overzicht
+### 4.4 NIVO 1 — Synoptisch overzicht
 
-Vervangt de huidige `index.html` volledig.
+**Huidige implementatie (index.html):**
+- 6 klikbare controller-cirkels met Filip's SVG iconen
+- Tab navigatie: Overzicht / Lichten / HVAC / Security
+- Live data via `/api/status` — auto-refresh 15s
+- Demodata als server niet bereikbaar
 
-**Layout:** Donker canvas met per controller een **klikbare cirkel** met SVG symbool.
-
-| Controller | SVG symbool | Dynamische kleurlogica |
+| Controller | SVG icoon | Link |
 |---|---|---|
-| HVAC | `heating` (radiator) | Blauw→rood op gem. boilertemp |
-| ECO Boiler | Boiler SVG (6 lagen) | Elke laag blauw→rood op temp |
-| Room (per kamer) | `home` + `temp` | Kleur = kamertemperatuur |
-| Smart Energy | `electricenergy` + `SolarPV` | Groen=overschot, rood=afname |
-| Dashboard | Miniatuur 4×4 matrix | Live kleuren van echte matrix |
-| WiFi/status | `wifi` | Groen/oranje/rood op RSSI |
+| HVAC | `drawheating` | ⬜ /hvac.html |
+| ECO Boiler | Custom boiler SVG (6 lagen) | ✅ /eco.html |
+| Energie | `drawelectricenergy` | ✅ /epex-grafiek.html |
+| Eetplaats | `drawhome` | ⬜ /room.html |
+| Zon | `drawSunlight` | ⬜ later |
+| Dashboard | `drawwifi` | ⬜ later |
 
-**Bovenaan:** drie horizontale tab-knoppen voor NIVO 2b:
-- 💡 **Lichten** — verlichting per kamer + scènes
-- 🌡️ **HVAC** — verwarmingsoverzicht
-- 🔒 **Security** — beweging, aanwezigheid, Home/Weg
+### 4.5 NIVO 2a — ECO Boiler (eco.html) ✅
 
-**Onderaan elke cirkel:** naam van de controller, klein en subtiel.
-
-**Statusindicator:** kleine gekleurde stip (groen/geel/rood) per cirkel.
-
-### 3.4 NIVO 2a — Controller detail pagina's
-
-Per controller een eigen pagina met:
-
-**ECO Boiler (`/controllers/eco/`):**
-- Grote SVG boilertekening met 6 benoemde lagen
-- Elke laag kleurt van blauw (#4a9eff) → groen (#00c896) → oranje (#ffb830) → rood (#ff4558)
-- Collector temperatuur (Tsun) als apart element
-- Pomppijl/indicator — animatie als pomp draait
-- Cijfers subtiel erbij: °C per laag, EQtot kWh, PWM%
-- Onderaan: instellingen (drempelwaarden, tijden)
-
-**HVAC (`/controllers/hvac/`):**
-- Plattegrond-stijl: 7 verwarmingskringen als rechthoeken
-- Per kring: kleur = aan/uit, balk = duty 4u%
-- Ventilatiepijl met snelheid
-- 2 pompindicatoren (SCH/WON)
-- Boilertemperatuur als horizontale gelaagde balk
-
-**Room (`/controllers/room/`):**
-- Kameroverzicht met pixels als gekleurde bolletjes
-- Temperatuur + vochtigheid + CO2 als grote getallen
-- Bewegingsindicatoren (MOV1/MOV2) — pulseren bij beweging
-- Dag/nacht indicator (`nightmoon` / `Sunlight`)
-- Dauwpuntalert (`dewpoint`)
-
-**Smart Energy (`/controllers/senrg/`):**
-- Huidige EPEX grafiek (`epex-grafiek.html`) verhuist hierheen
-- Aangevuld met live S0 metingen (later)
-
-### 3.5 NIVO 2b — Bedieningen tabs
-
-**Tab 💡 Lichten:**
-- Bovenaan: scène-knoppen (Filmavond, Diner, Nacht, Welkom, Lezen...)
-- Daaronder: kamers als groepen (Apple Home stijl)
-- Per kamer: klikbare lichtpunten (cirkels met naam)
-- Kleur van lichtpunt = actuele RGB kleur van de pixel
-- Klik = toggle aan/uit
-
-**Tab 🌡️ HVAC:**
-- Setpoint per kamer instelbaar (slider)
-- Home/Weg per kamer of globaal
-- Ventilatie slider
-- Override per circuit (aan/uit/auto)
-
-**Tab 🔒 Security:**
-- Bewegingssensoren per kamer — `man/woman` icoon pulseert bij beweging
-- Dag/nacht status per kamer
-- Globale Home/Weg schakelaar (broadcast naar alle rooms)
-- `home` icoon toont HOME/UIT status
-
-### 3.6 SVG strategie
-
-**Bibliotheek:** Bestaande collectie van Filip (nightstyle + backup versies)
-
-**Beschikbare iconen:**
-`alertsign` · `Breathingair` (ventilatie) · `dust` · `electricenergy` · `heating` (radiator)
-`home` · `lighting` (lamp) · `man` · `woman` · `memory` (gelaagd, 5 niveaus)
-`nightmoon` · `raindrop` (vochtigheid) · `shower` · `Solarheat` · `SolarPV`
-`Sunlight` · `tapwater` · `wifi` · `woodfire` · `bedtime` · `roomlight`
-`vapour` · `dewpoint` · `temp` (thermometer) · `chestalert` · `chestlight`
-`tstat` (thermostaat) · `waterpump` · `raintank` (gelaagd, 5 niveaus)
-
-**Gelaagde iconen (dynamisch inkleuren per niveau):**
-- `memory` — 5 niveaus → heap visualisatie
-- `raintank` — 5 niveaus → regenwaterreservoir of boilerlaag indicatie
-
-**Technische aanpak:**
-- SVG inline in HTML plaatsen (niet als `<img>`)
-- Elk inkleurbaal onderdeel krijgt een uniek `id`
-- JavaScript past `fill` aan op basis van sensordata
-- Kleurschaal universeel:
-  - Koud/laag: `#4a9eff` (blauw)
-  - Goed/normaal: `#00c896` (groen)
-  - Warm/let op: `#ffb830` (amber)
-  - Heet/alarm: `#ff4558` (rood)
-- SVG schaalt via `width` en `height` parameters — geen kwaliteitsverlies
+- Boiler SVG van Filip: 6 gekleurde lagen (HSL kleurschaal)
+- Zonnecollector slang (rood→blauw gradient)
+- Warmwaterslang — geanimeerd als pomp draait
+- Temperatuurlabels rechts per laag
+- Energie inhoud met voortgangsbalk (0→25 kWh)
+- Collector temperatuur (Tsun) + ΔT badge
+- PWM balk voor pompdebiet
+- Laag tabel: kleurbolletje + mini-balk + °C
+- Live via `/api/poll/eco` — demodata als offline
 
 ---
 
-## 4. Fasering
+## 5. SVG iconen collectie (Filip Delannoy)
 
-| Fase | Wat | Prioriteit |
-|---|---|---|
-| **1** | NIVO 1 redesign: SVG cirkels, synoptisch | Hoog |
-| **2** | ECO Boiler detail pagina met gelaagde boiler SVG | Hoog |
-| **3** | Room detail pagina | Hoog |
-| **4** | Tab Lichten (Apple Home stijl) | Hoog |
-| **5** | HVAC detail pagina | Middel |
-| **6** | Tab HVAC bedieningen | Middel |
-| **7** | Tab Security | Middel |
-| **8** | Smart Energy detail (EPEX verhuizen) | Laag |
-| **9** | Maarten + Céline uitnodigen op Tailscale | Laag |
-| **10** | /capabilities endpoint op ESP32 controllers | Later |
+Beschikbaar als `-ALL-Icons-nightstyle.html` en `-ALL-Icons.html` in project.
 
----
+**Alle functies:**
+`drawalertsign` · `drawBreathingair` · `drawdust` · `drawelectricenergy` · `drawheating`
+`drawhome` · `drawlighting` · `drawman` · `drawwoman` · `drawmemory` (5 niveaus)
+`drawnightmoon` · `drawraindrop` · `drawshower` · `drawSolarheat` · `drawSolarPV`
+`drawSunlight` · `drawtapwater` · `drawwifi` · `drawwoodfire` · `drawbedtime`
+`drawLDR` · `drawHUMI` · `drawDEW` · `drawTEMP` · `drawCHESTALERT` · `drawCHESTLIGHT`
+`drawTSTAT` · `drawWATERPUMP` · `drawRAINTANK` (5 niveaus)
 
-## 5. Openstaande actiepunten
-
-| # | Actie | Status |
-|---|---|---|
-| AP1 | SVG boilertekening aanmaken (6 inkleurbale lagen) | ⬜ Open |
-| AP2 | NIVO 1 redesign uitwerken | ⬜ Open |
-| AP3 | Maarten uitnodigen op Tailscale | ⬜ Open |
-| AP4 | Céline uitnodigen op Tailscale | ⬜ Open |
-| AP5 | `/capabilities` endpoint op Room sketch | ⬜ Later |
-| AP6 | `/capabilities` endpoint op HVAC sketch | ⬜ Later |
-| AP7 | `/capabilities` endpoint op ECO sketch | ⬜ Later |
+**Kleurschaal universeel:**
+- Koud/laag: `#4da6ff` (blauw)
+- Goed/normaal: `#00d18c` (groen)
+- Warm/let op: `#ffb030` (amber)
+- Heet/alarm: `#ff4555` (rood)
 
 ---
 
-## 6. Technische context
+## 6. EPEX grafiek
+
+**Werkend in epex-grafiek.html:**
+- EPEX spotprijzen + alle vaste kosten gestapeld
+- Solar productie gesimuleerd (later S0 meting)
+- Batterij laden/ontladen gesimuleerd
+- NU lijn met actuele reële prijs
+- Morgen label: alleen zichtbaar als morgen data beschikbaar
+- Solar: volledige dag, toekomst 30% alpha
+
+**Tariefvergelijking (instellingen tab):**
+- Dynamisch: Geert Van Leuven, Fluvius Imewo, feb. 2026
+- Vast: Filip Delannoy, Fluvius West, nov. 2025
+- Vast totaal auto-berekend → voedt witte stippellijn
+
+**Tarieven Fluvius Imewo (gebruikt voor beide):**
+
+| Component | ct/kWh |
+|---|---|
+| Afnametarief | 5.23 |
+| GSC | 1.10 |
+| WKK | 0.39 |
+| Heffingen | 4.94 |
+| Energieprijs vast | 12.80 (instelbaar) |
+| BTW | 6% |
+| Abo + Cap | berekend op maandpiek |
+
+**GitHub Pages testversie:**
+`https://fideldworp.github.io/Zarlardinge_Dashboards/TEST_epex-grafiek.html`
+
+---
+
+## 7. ECO Boiler JSON keys
+
+| Key | Naam | Eenheid |
+|---|---|---|
+| `b` | ETopH (bovenste sensor hoog) | °C |
+| `c` | ETopL | °C |
+| `d` | EMidH | °C |
+| `e` | EMidL | °C |
+| `f` | EBotH | °C |
+| `g` | EBotL (onderste sensor laag) | °C |
+| `h` | EAv (gemiddelde) | °C |
+| `i` | EQtot (energie inhoud) | kWh |
+| `j` | dEQ (delta energie) | kWh |
+| `k` | yield_today | kWh |
+| `l` | Tsun (collector) | °C |
+| `m` | dT (Tsun - Tboil) | °C |
+| `n` | PWM | 0-255 |
+| `o` | Pomp aan/uit | 0/1 |
+| `p` | RSSI | dBm |
+
+---
+
+## 8. Technische context
 
 - **RPi:** Node.js v18 + Express + node-fetch@2
-- **ESP32:** C6, Arduino IDE, ESPAsyncWebServer
-- **Fonts portal:** Syne (UI) + IBM Plex Mono (data)
-- **Kleurthema:** zie `zarlar.css` CSS variabelen
-- **SVG iconen:** collectie Filip Delannoy (nightstyle versie)
-- **EPEX data:** energy-charts.info via RPi server (geen CORS probleem)
-- **Tailscale:** gratis plan, 3 accounts, onbeperkt apparaten per account
+- **ESP32:** C6, Arduino IDE, `#define Serial Serial0` verplicht
+- **ESPAsyncWebServer** — geen MQTT, geen Home Assistant
+- **Nooit** `huge_app` partitie — gebruik `partitions_16mb.csv`
+- **ECO gebruikt RSSI key** `p`, andere controllers `ac`
+- **Dashboard gebruikt** `WebServer` (blocking), niet AsyncWebServer
+- **Fonts portal:** DM Sans + DM Mono
+- **Kleurthema:** donker, `--bg:#0a0d12`, `--card:#111620`
+
+---
+
+## 9. Fasering
+
+| Fase | Wat | Status |
+|---|---|---|
+| 1 | RPi server + GitHub workflow + deploy automation | ✅ Klaar |
+| 2 | EPEX grafiek + tariefvergelijking | ✅ Klaar |
+| 3 | Tailscale remote toegang (overal) | ✅ Klaar |
+| 4 | Portal NIVO 1: SVG cirkels, alle tabs | ✅ Klaar |
+| 5 | ECO Boiler NIVO 2 pagina | ✅ Klaar |
+| 6 | HVAC NIVO 2 pagina | ⬜ Open |
+| 7 | Room NIVO 2 pagina | ⬜ Open |
+| 8 | Lichten tab verfijnen (pixel nicknames via NVS) | ⬜ Open |
+| 9 | Maarten + Céline uitnodigen op Tailscale | ⬜ Open |
+| 10 | `/capabilities` endpoint op ESP32 controllers | ⬜ Later |
+| 11 | Smart Energy controller + S0 meting | ⬜ Later |
+
+---
+
+## 10. Openstaande actiepunten
+
+| # | Actie |
+|---|---|
+| AP1 | HVAC NIVO 2 pagina bouwen |
+| AP2 | Room NIVO 2 pagina bouwen |
+| AP3 | NIVO 1: alarmen tonen als prioriteit |
+| AP4 | Maarten uitnodigen op Tailscale |
+| AP5 | Céline uitnodigen op Tailscale |
+| AP6 | `/capabilities` endpoint op Room sketch |
+| AP7 | `/capabilities` endpoint op HVAC sketch |
+| AP8 | `/capabilities` endpoint op ECO sketch |
 
 ---
 
