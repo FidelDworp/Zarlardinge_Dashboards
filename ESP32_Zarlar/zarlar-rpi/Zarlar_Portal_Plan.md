@@ -1,5 +1,5 @@
 # Zarlar Portal — Projectdocument
-*Bijgewerkt april 2026 — Filip Delannoy (FiDel)*
+*Bijgewerkt 25 april 2026 — Filip Delannoy (FiDel)*
 
 ---
 
@@ -376,8 +376,31 @@ public/
 | BTW | 6% |
 | Abo + Cap | berekend op maandpiek |
 
-**GitHub Pages testversie:**
-`https://fideldworp.github.io/Zarlardinge_Dashboards/TEST_epex-grafiek.html`
+**Injectietarief (teruglevering aan het net):**
+
+Bij het **dynamisch Ecopower-tarief** wordt injectie vergoed aan de EPEX-marktprijs
+minus een onbalanstoeslag ≈ **5,25 ct/kWh gemiddeld** (feb. 2026). Injectie aan 0% BTW.
+Bij negatieve EPEX-prijzen wordt er géén vergoeding betaald — dan kost injectie zelfs geld.
+
+Bij het **vast Ecopower-tarief** geldt een vaste injectievergoeding van ca. **5,0 ct/kWh**,
+ongeacht het uur of de marktprijs.
+
+> ⚠️ In beide gevallen is de injectievergoeding veel lager dan de afnameprijs.
+> Een thuisbatterij is pas financieel interessant na de komst van de digitale meter (~2028),
+> omdat daarna de saldering stopt en injectie niet langer 1-op-1 verrekend wordt.
+
+**Injectieteller (nieuw v2.0 epex-grafiek.html):**
+- Derde info-kaart: "☀️ Injectie vandaag" — toont kWh + € opbrengst
+- Prefereert live S-ENERGY data (`/api/poll/senrg`, key `k`) als beschikbaar en < 90s oud
+- Valt terug op simulatieberekening — toont badge `LIVE` of `SIM`
+- € berekend per EPEX-slot: injectieprijs = EPEX − onbalansafslag (instelbaar, standaard 0,67 ct/kWh)
+
+**Tarieftabel (nieuw derde kolom "INJECTIE"):**
+- Energieprijs: EPEX spotprijs (zelfde als dynamisch)
+- Afnametarief, GSC, WKK, heffingen: niet van toepassing (0%)
+- BTW: 0% (conform factuur — tegenover 6% op afname)
+- Onbalansafslag: instelbaar via nieuw veld (standaard 0,67 ct/kWh)
+- Totaal: EPEX − onbalansafslag ct/kWh aan 0% BTW
 
 ---
 
@@ -430,8 +453,12 @@ public/
 | 8 | Lichten tab verfijnen (pixel nicknames via NVS) | ⬜ Open |
 | 9 | Maarten + Céline uitnodigen op Tailscale | ⬜ Open |
 | 10 | `/capabilities` endpoint op ESP32 controllers | ⬜ Later |
-| 11 | Smart Energy controller — sketch v0.1 schrijven | ⬜ Later |
-| 12 | Smart Energy — P1 dongle integratie (na digitale meter ~2028) | ⬜ Toekomst |
+| 11 | Smart Energy controller — sketch v0.1 schrijven | ✅ Klaar (v1.25 SIM) |
+| 12 | S-ENERGY: maandelijkse pieken loggen naar stats bestand op RPi | ⬜ Later |
+| 13 | Afrekenpagina WON/SCH zichtbaar op portal voor Maarten en Céline | ⬜ Later |
+| 14 | S-ENERGY: echte S0 bekabeling + overschakelen van SIM naar LIVE | ⬜ Later |
+| 15 | Smart Energy — P1 dongle integratie (na digitale meter ~2028) | ⬜ Toekomst |
+| 16 | Thuisbatterij(en) — beslissing + integratie in sturing (~2028) | ⬜ Toekomst |
 
 ---
 
@@ -450,13 +477,27 @@ public/
 | AP9 | S-ENERGY: GPIO-pinnen toewijzen via OPTION RJ45 connector |
 | AP10 | S-ENERGY: interface printje met pull-up + serieweerstanden bouwen |
 | AP11 | S-ENERGY: sketch v0.1 schrijven (S0 pulstelling + LED matrix 12×4) |
+| AP11 | S-ENERGY: sketch v1.26 flashen op ESP32-C6 (192.168.0.73) |
+| AP12 | S-ENERGY: SIM_S0 + SIM_P1 valideren via /json badges op epex-pagina |
+| AP13 | S-ENERGY: maandpiek per huis loggen (ps, pw, pt) naar stats-bestand RPi |
+| AP14 | Portal: afrekenpagina WON/SCH bouwen (zie §13) |
+| AP15 | S-ENERGY: S0 bekabeling aansluiten → sim_mode uitschakelen → v1.26 LIVE |
+| AP16 | S-ENERGY: WON afname + injectie toevoegen via P1-dongle (~2028) |
 
 ---
 
 ## 11. Smart Energy Controller (S-ENERGY) — Hardware
 
-> **Status: in ontwikkeling — sketch nog te schrijven.**
+> **Status: sketch v1.25 SIM beschikbaar — klaar om te flashen.**
 > IP: `192.168.0.73` · Board: ESP32-C6 32-pin
+
+### 11.0 Versiehistorie sketch
+
+| Versie | Status | Wijziging |
+|---|---|---|
+| v1.24 | Archief | Eerste productieversie — live S0 ISR |
+| v1.25 SIM | Archief | Enkelvoudige SIMULATION_MODE — vervangen door v1.26 |
+| **v1.26** | **Actief** | Twee onafhankelijke simulatievlaggen SIM_S0 + SIM_P1 · HomeWizard P1 integratie |
 
 ### 11.1 Energiemeters
 
@@ -476,16 +517,100 @@ float watt = 0.1 / (intervalMs / 3600000.0);
 
 ### 11.2 S0 kanalen
 
-| Kanaal | Meter | Klemmen | Richting | GPIO |
-|---|---|---|---|---|
-| S0-1 | Zonnepanelen (A14) | 18/19 | Forward (productie) | nader te bepalen |
-| S0-2 | Schuur (A5) | 18/19 | Forward (afname) | nader te bepalen |
-| S0-3 | Schuur (A5) | 20/21 | Reverse (injectie) | nader te bepalen |
+| Kanaal | Meter | Klemmen | Richting | GPIO | Inhoud |
+|---|---|---|---|---|---|
+| S0-1 | Zonnepanelen (A14) | 18/19 | Forward | IO3 | Solar productie |
+| S0-2 | Schuur (A5) | 18/19 | Forward | IO5 | SCH afname van net |
+| S0-3 | Schuur (A5) | 20/21 | Reverse | IO6 | SCH injectie naar net (incl. batterij later) |
 
-**WON-verbruik:** niet gemeten in fase 1 (nog analoge meter, uitzondering exclusief nachttarief).
-JSON key `b` = 0 tot digitale meter beschikbaar (~2028). Dan via P1-dongle.
+> ⚠️ **S0-3 toekomstige uitbreiding:** zodra SCH een thuisbatterij plaatst,
+> registreert S0-3 niet alleen zonnepaneeloverschot maar ook batterijontlading
+> richting het net. Dit kanaal moet dan als gecombineerde "export SCH" beschouwd
+> worden — de opsplitsing solar vs. batterij gebeurt op basis van vermogensvergelijking.
 
-### 11.3 S0 interfaceschema (per kanaal, 3×)
+**WON-verbruik:** niet gemeten in fase 1 (nog analoge meter).
+JSON key `b` = 0 tot digitale meter beschikbaar (~2028). Dan via P1-dongle op het netwerk.
+
+**WON toekomstige meting via P1-dongle (~2028):**
+Wanneer WON een digitale meter krijgt, plaatst een P1-dongle de verbruiksdata op het
+lokale netwerk. De RPi leest deze data en registreert:
+- WON afname van net (kWh en momentaan vermogen)
+- WON injectie naar net (kWh — incl. eventuele thuisbatterij)
+
+### 11.3 Simulatiemodi — twee onafhankelijke vlaggen (v1.26)
+
+De sketch bevat twee **volledig onafhankelijke** simulatievlaggen, elk apart instelbaar via `/settings` of serieel commando. **Nooit automatisch omschakelen** — elke overgang is een bewuste handeling om valse data in de logs te voorkomen.
+
+| Vlag | Default | Betekenis | Omschakelen naar LIVE |
+|---|---|---|---|
+| `SIM_S0` | `true` | Simuleert 3× S0-kanalen (solar, SCH afname, SCH injectie) | Na S0-bekabeling: checkbox uit → reboot |
+| `SIM_P1` | `true` | Simuleert P1-dongle (WON afname + injectie) | Na HomeWizard plaatsing (~2028): checkbox uit + P1-IP invullen → reboot |
+
+**Serieel commando's:** `sim s0 on/off` · `sim p1 on/off` · `status` · `help`
+
+**In `/json`:** `"sim_s0":1` en `"sim_p1":1` als aparte indicatoren — de RPi en epex-pagina tonen per bron de status (badge `S0:SIM · P1:SIM`, `S0:LIVE · P1:SIM`, enz.)
+
+**Simulatieprofiel S0 (april, België):**
+- Solar: sinus-curve 07:00–19:00, piek 4000 W, ±10% ruis (bewolking)
+- SCH afname: 500 W basis + ochtendspits (+1800 W), middag (+600 W), avondspits (+2200 W), nacht (+800 W)
+- SCH injectie: max(0, solar − afname) → overschot zonne-energie
+
+**Simulatieprofiel P1 (april, België):**
+- WON afname: 400 W basis + ochtend-/avondspits, geen eigen productie in fase 1
+- WON injectie: 0 Wh (geen solar bij WON in simulatie)
+
+**Matrix-indicator:** col 0 rij 0 knippert rood als SIM_S0 actief · col 1 rij 0 als SIM_P1 actief · groen sweep bij boot als beide LIVE
+
+### 11.4 HomeWizard P1 Meter — HWE-P1-RJ12
+
+**Hardware:**
+- Model: HomeWizard P1 Meter HWE-P1-RJ12
+- Aansluiting: RJ12 op P1-poort digitale slimme meter (WON, na ~2028)
+- Voeding: 5V 500mA via P1-poort zelf (geen externe voeding nodig)
+- WiFi: 2.4 GHz, verbindt via HomeWizard Energy app
+
+**Activatie lokale API:**
+1. Installeer de HomeWizard Energy app
+2. Koppel de P1 Meter aan je WiFi-netwerk
+3. Ga naar: Settings → Meters → jouw meter → **Local API: AAN**
+4. Noteer het IP-adres en vul dit in bij S-ENERGY `/settings` → P1 IP-adres
+
+**API endpoint:**
+```
+GET http://<P1_IP>/api/v1/data
+```
+Plain HTTP, geen authenticatie, geen cloud vereist. Documentatie: https://api-documentation.homewizard.com/docs/introduction/
+
+**JSON response (relevante velden voor S-ENERGY):**
+```json
+{
+  "smr_version": 50,
+  "active_power_w": 997,
+  "total_power_import_t1_kwh": 19055.287,
+  "total_power_import_t2_kwh": 19505.815,
+  "total_power_export_t1_kwh": 0.002,
+  "total_power_export_t2_kwh": 0.007
+}
+```
+
+| P1 JSON key | Betekenis | → S-ENERGY /json key |
+|---|---|---|
+| `active_power_w` | Momentaan vermogen WON (+ = afname, − = injectie) | `b` (W) |
+| `total_power_import_t1_kwh + t2_kwh` | Cumulatieve afname (dag via delta midnight) | `i` (Wh) |
+| `total_power_export_t1_kwh + t2_kwh` | Cumulatieve injectie (dag via delta midnight) | `vw` (Wh) |
+
+**Update-frequentie:** elke seconde bij DSMR 5.0, elke 10s bij oudere meters. S-ENERGY pollt elke 5s — ruim voldoende.
+
+**GitHub library (referentie, niet gebruikt in sketch):**
+https://github.com/jvandenaardweg/homewizard-energy-api
+(Node.js, type-safe, toont volledige JSON structuur en polling aanpak)
+
+**Artikel integratie energiemanagementsysteem:**
+https://engineering360.nl/homewizard-p1-meter-koppelen-aan-je-energiemanagement
+
+> 💡 **Nota:** `total_power_import/export_kwh` zijn **cumulatieve tellers** die nooit resetten. De sketch berekent dagcumulatieven via een delta tov een midnight-snapshot — identiek aan hoe een klassieke teller werkt.
+
+### 11.5 S0 interfaceschema (per kanaal, 3×)
 
 ```
 3,3V
@@ -528,4 +653,174 @@ Voeding: aparte 5V (niet via shield PTC).
 
 ---
 
-*Zarlar Portal Projectdocument — Filip Delannoy — april 2026*
+## 12. Energiemeting & Statistieken — Overzicht
+
+### 12.1 Wat er gemeten en bijgehouden wordt
+
+| Grootheid | Bron | Fase | JSON key |
+|---|---|---|---|
+| Solar productie | S0-1 | Nu | `a` (W), `h` (Wh dag) |
+| SCH afname van net | S0-2 | Nu | `c` (W), `j` (Wh dag) |
+| SCH injectie naar net | S0-3 | Nu | `d` (W), `k` (Wh dag) |
+| SCH batterij ontlading naar net | S0-3 (zelfde kanaal) | Na batterijplaatsing | idem |
+| WON afname van net | P1-dongle HomeWizard | ~2028 | `b` (W), `i` (Wh dag) |
+| WON injectie naar net | P1-dongle HomeWizard | ~2028 | `vw` (Wh dag) |
+| Gecombineerde maandpiek | berekend | Nu | `pt` (W) |
+| Maandpiek SCH individueel | berekend | Nu | `ps` (W) — TODO v1.27 |
+| Maandpiek WON individueel | P1-dongle | ~2028 | `pw` (W) — TODO v1.27 |
+| S0 simulatie actief | vlag | Nu | `sim_s0` (0/1) |
+| P1 simulatie actief | vlag | Nu | `sim_p1` (0/1) |
+
+### 12.2 Statistieken opslaan op RPi
+
+De RPi slaat maandelijks de hoogste pieken op in een lokaal JSON-bestand
+(`stats-energie.json`). Dit is de basis voor de onderlinge afrekening (zie §13).
+
+```json
+{
+  "2026-04": {
+    "piek_gecombineerd_kw": 12.4,
+    "piek_sch_kw": 9.1,
+    "piek_won_kw": 6.2,
+    "kwh_solar": 420,
+    "kwh_sch_afname": 310,
+    "kwh_sch_injectie": 185,
+    "kwh_won_afname": 0,
+    "kwh_won_injectie": 0
+  }
+}
+```
+
+---
+
+## 13. Onderlinge Afrekening WON / SCH
+
+> **Voor Maarten en Céline — hoe werkt dit?**
+
+### 13.1 De situatie uitgelegd
+
+WON (Maarten & Céline) en SCH (Filip & Mireille) gebruiken **één gezamenlijke
+elektriciteitsaansluiting en één factuur** bij Ecopower. De kosten worden achteraf
+intern verrekend op basis van gemeten verbruik en een eerlijke verdeelsleutel.
+
+### 13.2 Wat er op de factuur staat
+
+Elke maand betaalt één persoon de volledige Ecopower-factuur. Die factuur bestaat uit:
+
+1. **Energiekost** — afhankelijk van hoeveel kWh jullie samen afgenomen hebben,
+   tegen de dynamische EPEX-prijs (of vaste prijs).
+2. **Injectievergoeding** — wat jullie terugkrijgen voor zonnepanelen die terugleveren
+   aan het net. Dit verlaagt de factuur.
+3. **Capaciteitstarief** — een maandelijks bedrag per kW gebaseerd op de **hoogste
+   gecombineerde piek** van die maand (minimum 2,5 kW).
+4. **Abonnement + databeheer** — vaste kosten: ~€6,49/maand.
+
+### 13.3 Hoe de kosten verdeeld worden
+
+**Energiekost en injectievergoeding:**
+Elk huis betaalt naar verbruik. De S-ENERGY controller meet dit continu:
+- SCH afname en injectie: via S0-kanalen op de Inepro-meter
+- WON afname en injectie: via P1-dongle (beschikbaar na digitale meter ~2028)
+
+**Abonnement + databeheer:**
+Wordt 50/50 gedeeld — dit is een vaste kost ongeacht verbruik.
+
+**Capaciteitstarief — de eerlijke verdeelsleutel:**
+
+Het capaciteitstarief is gebaseerd op de hoogste piek van de maand.
+De RPi houdt bij welk huis welke piek veroorzaakte, en verdeelt de kost proportioneel:
+
+```
+Aandeel SCH = Piek SCH ÷ (Piek SCH + Piek WON)
+Aandeel WON = Piek WON ÷ (Piek SCH + Piek WON)
+```
+
+**Voorbeeld voor april 2026:**
+
+| | SCH | WON |
+|---|---|---|
+| Individuele maandpiek | 9,1 kW | 6,2 kW |
+| Aandeel capaciteitskost | 59% | 41% |
+| Capaciteitskost totaal (bv. €55,78) | €32,91 | €22,87 |
+
+> 💡 **Waarom is dit eerlijk?** Wie zijn verbruik beter spreidt (bijv. door
+> slim laden van de EV of batterijsturing), heeft een lagere individuele piek
+> en betaalt dus minder capaciteitskosten. Goed gedrag wordt beloond.
+
+### 13.4 Maandelijkse afrekeningsrapport op de portal
+
+De RPi genereert automatisch een overzichtspagina (`/afrekening`) met:
+
+- Gemeten kWh per huis (afname en injectie)
+- Berekende energiekost per huis
+- Hoogste individuele piek per huis die maand
+- Capaciteitskost verdeling (met % per huis)
+- **Totaalbedrag WON** en **totaalbedrag SCH**
+- Saldo: wie betaalt wie, hoeveel
+
+Deze pagina is zichtbaar voor iedereen op het Tailscale-netwerk
+(Filip, Mireille, Maarten, Céline) via `http://100.123.74.113:3000/afrekening`.
+
+### 13.5 Tijdlijn
+
+| Periode | Wat beschikbaar |
+|---|---|
+| Nu → ~2028 | SCH volledig gemeten · WON nog schatten of manueel ingeven |
+| Na digitale meter WON (~2028) | Alles automatisch en volledig gemeten |
+| Na thuisbatterij(en) | Batterijbijdrage zichtbaar in statistieken |
+
+> 📌 **Nota voor de periode vóór 2028:** Zolang WON nog een analoge meter heeft,
+> kan het WON-verbruik geschat worden op basis van de gecombineerde meting minus
+> het gemeten SCH-verbruik. Dit geeft een goede benadering maar is geen exacte meting.
+> Beide partijen stemmen in met deze benadering tot de digitale meter beschikbaar is.
+
+---
+
+## 14. Thuisbatterij — Strategie & Timing
+
+### 14.1 Waarom nu nog niet
+
+Zolang SCH en WON een **analoge terugdraaiende teller** hebben, geldt
+volledige **saldering**: elke kWh die teruggeleverd wordt, vermindert de
+afname 1-op-1 tegen het volledige retailtarief. Het net is dan een gratis
+virtuele batterij met 100% rendement en zonder investering.
+
+Een fysieke thuisbatterij voegt in die situatie weinig financieel voordeel toe
+— de terugverdientijd (€6.000–€10.000 investering) is te lang.
+
+### 14.2 Wanneer wél zinvol (~2028)
+
+Zodra de analoge meter vervangen wordt door een **digitale meter** stopt de
+saldering. Injectie wordt dan vergoed aan slechts ~5 ct/kWh i.p.v. het volle
+retailtarief. Dan is een thuisbatterij wél interessant:
+- Zelfverbruik verhogen (solar opslaan en 's avonds gebruiken)
+- EPEX-arbitrage: goedkoop laden, duur ontladen
+- Piekafvlakking voor lager capaciteitstarief
+
+### 14.3 Gedeelde batterij vs. aparte batterijen
+
+**Twee aparte batterijen (één per huis):**
+- Elk huis optimaliseert onafhankelijk
+- Eenvoudiger interne afrekening
+- Geen discussie over wie wanneer laadt
+
+**Één gedeelde batterij (op de gemeenschappelijke teller):**
+- Schaalvoordeel: grotere batterij = goedkoper per kWh
+- Hogere benutting door gecombineerd verbruiksprofiel
+- Piekbeheersing op de gedeelde teller is efficiënter
+- Maar: complexere regeling en interne verrekening
+
+> 💡 **Aanbeveling:** beslissing te nemen rond 2028 op basis van de dan
+> beschikbare meetdata en tarieven. De S-ENERGY controller en het portal
+> zijn al ontworpen om beide scenario's te ondersteunen.
+
+### 14.4 Infrastructuur al klaar
+
+- S0-3 kanaal (IO6) registreert al reverse-pulsen van SCH
+- JSON keys `pw`, `ps`, `pt` voor individuele en gecombineerde pieken bestaan al
+- EPEX-arbitrage simulatie draait al in de grafiekpagina
+- Piekbeheer-algoritme in de EPEX-pagina houdt al rekening met batterij
+
+---
+
+*Zarlar Portal Projectdocument — Filip Delannoy — 25 april 2026*

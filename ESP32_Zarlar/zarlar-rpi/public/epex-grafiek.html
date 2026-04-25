@@ -315,6 +315,11 @@ window.addEventListener('load', function() {
     <div class="info-waarde" id="info-vergelijk">—</div>
     <div class="info-sub" id="info-vergelijk-sub">besparing vandaag met dynamisch</div>
   </div>
+  <div class="info-card">
+    <div class="info-label">☀️ Injectie vandaag</div>
+    <div class="info-waarde" id="info-injectie-kwh">—</div>
+    <div class="info-sub" id="info-injectie-eur">— · <span id="info-injectie-bron" style="font-size:.65rem;opacity:.7">SIM</span></div>
+  </div>
 </div>
 
 
@@ -595,7 +600,7 @@ window.addEventListener('load', function() {
   <span class="inst-title">💶 Tariefvergelijking — Ecopower</span>
 
   <!-- Contract headers -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin:8px 0 4px;font-size:.68rem;font-family:var(--mono)">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;margin:8px 0 4px;font-size:.68rem;font-family:var(--mono)">
     <div></div>
     <div style="background:rgba(88,166,255,0.1);border:1px solid rgba(88,166,255,0.3);border-radius:6px 6px 0 0;padding:8px;text-align:center">
       <div style="color:var(--blue);font-weight:700;font-size:.72rem">DYNAMISCH</div>
@@ -608,6 +613,12 @@ window.addEventListener('load', function() {
       <div style="color:var(--muted);margin-top:2px">Groene burgerstroom</div>
       <div style="color:var(--muted)">Filip Delannoy · Zarlardinge</div>
       <div style="color:var(--muted)">Fluvius West · nov. 2025</div>
+    </div>
+    <div style="background:rgba(42,138,62,0.12);border:1px solid rgba(42,138,62,0.4);border-radius:6px 6px 0 0;padding:8px;text-align:center">
+      <div style="color:#4ec96e;font-weight:700;font-size:.72rem">INJECTIE</div>
+      <div style="color:var(--muted);margin-top:2px">Teruglevering aan net</div>
+      <div style="color:var(--muted)">Beide contracten</div>
+      <div style="color:var(--muted)">Ecopower · Fluvius</div>
     </div>
   </div>
 
@@ -624,6 +635,7 @@ window.addEventListener('load', function() {
             <span class="inst-unit">ct/kWh</span>
           </span>
         </td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(42,138,62,0.3);color:#4ec96e;font-family:var(--mono);font-size:.75rem">EPEX spotprijs</td>
       </tr>
       <!-- Afnametarief -->
       <tr>
@@ -635,6 +647,7 @@ window.addEventListener('load', function() {
           </span>
         </td>
         <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="vast-fluvius-val">5.23 ct</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(42,138,62,0.3);color:var(--muted);font-family:var(--mono);font-size:.75rem">— <span style="font-size:.65rem;opacity:.6">(niet v.t.)</span></td>
       </tr>
       <!-- GSC -->
       <tr style="background:rgba(255,255,255,0.03)">
@@ -646,6 +659,7 @@ window.addEventListener('load', function() {
           </span>
         </td>
         <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="vast-gsc-val">1.10 ct</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(42,138,62,0.3);color:var(--muted);font-family:var(--mono);font-size:.75rem">— <span style="font-size:.65rem;opacity:.6">(niet v.t.)</span></td>
       </tr>
       <!-- WKK -->
       <tr>
@@ -657,6 +671,7 @@ window.addEventListener('load', function() {
           </span>
         </td>
         <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="vast-wkk-val">0.39 ct</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(42,138,62,0.3);color:var(--muted);font-family:var(--mono);font-size:.75rem">— <span style="font-size:.65rem;opacity:.6">(niet v.t.)</span></td>
       </tr>
       <!-- Heffingen -->
       <tr style="background:rgba(255,255,255,0.03)">
@@ -668,6 +683,7 @@ window.addEventListener('load', function() {
           </span>
         </td>
         <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="vast-heff-val">4.94 ct</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(42,138,62,0.3);color:var(--muted);font-family:var(--mono);font-size:.75rem">— <span style="font-size:.65rem;opacity:.6">(niet v.t.)</span></td>
       </tr>
       <!-- BTW -->
       <tr>
@@ -679,22 +695,41 @@ window.addEventListener('load', function() {
           </span>
         </td>
         <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="vast-btw-val">6%</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(42,138,62,0.3);color:#4ec96e;font-family:var(--mono);font-size:.75rem">0% <span style="font-size:.65rem;opacity:.7">(conform factuur)</span></td>
+      </tr>
+      <!-- Onbalansafslag — alleen injectie -->
+      <tr style="background:rgba(255,255,255,0.03)">
+        <td style="padding:7px 8px;border-bottom:1px solid rgba(255,255,255,0.05)">Onbalansafslag</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-left:1px solid rgba(88,166,255,0.2);border-right:1px solid rgba(88,166,255,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem">— <span style="font-size:.65rem;opacity:.6">(toeslag bij afname)</span></td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem">— <span style="font-size:.65rem;opacity:.6">(toeslag bij afname)</span></td>
+        <td style="padding:7px 4px;border-bottom:1px solid rgba(255,255,255,0.05);border-right:1px solid rgba(42,138,62,0.3)">
+          <span class="inst-input-wrap" style="justify-content:center">
+            <span style="color:#4ec96e;font-family:var(--mono);font-size:.8rem;margin-right:3px">−</span>
+            <input id="inp-onbalans" type="number" value="0.67" step="0.01" min="0" max="5" style="width:50px;text-align:center">
+            <span class="inst-unit">ct/kWh</span>
+          </span>
+        </td>
       </tr>
       <!-- Abo + Cap -->
       <tr style="background:rgba(255,255,255,0.03)">
         <td style="padding:7px 8px;border-bottom:2px solid rgba(255,255,255,0.1)"><span style="display:inline-block;width:8px;height:8px;background:rgba(255,167,38,0.7);border-radius:2px;margin-right:5px;vertical-align:middle"></span>Abo + Cap.</td>
         <td style="padding:7px 8px;text-align:center;border-bottom:2px solid rgba(88,166,255,0.3);border-left:1px solid rgba(88,166,255,0.2);border-right:1px solid rgba(88,166,255,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="dyn-abo-val">—</td>
         <td style="padding:7px 8px;text-align:center;border-bottom:2px solid rgba(168,255,62,0.3);border-right:1px solid rgba(168,255,62,0.2);color:var(--muted);font-family:var(--mono);font-size:.75rem" id="vast-abo-val">—</td>
+        <td style="padding:7px 8px;text-align:center;border-bottom:2px solid rgba(42,138,62,0.4);border-right:1px solid rgba(42,138,62,0.3);color:var(--muted);font-family:var(--mono);font-size:.75rem">— <span style="font-size:.65rem;opacity:.6">(niet v.t.)</span></td>
       </tr>
       <!-- Totaal -->
       <tr>
         <td style="padding:8px 8px;font-weight:700">Totaal</td>
-        <td style="padding:8px 8px;text-align:center;border-left:1px solid rgba(88,166,255,0.2);border-right:1px solid rgba(88,166,255,0.2);border-bottom:1px solid rgba(88,166,255,0.3);background:rgba(88,166,255,0.08);border-radius:0 0 0 0">
+        <td style="padding:8px 8px;text-align:center;border-left:1px solid rgba(88,166,255,0.2);border-right:1px solid rgba(88,166,255,0.2);border-bottom:1px solid rgba(88,166,255,0.3);background:rgba(88,166,255,0.08)">
           <span style="color:var(--blue);font-family:var(--mono);font-weight:700;font-size:.82rem">EPEX + <span id="opslag-totaal">—</span> ct</span>
         </td>
         <td style="padding:8px 8px;text-align:center;border-right:1px solid rgba(168,255,62,0.2);border-bottom:1px solid rgba(168,255,62,0.3);background:rgba(168,255,62,0.08)">
           <span style="color:var(--lime);font-family:var(--mono);font-weight:700;font-size:.82rem" id="vast-totaal">—</span>
           <span style="color:var(--muted);font-size:.68rem;margin-left:4px">ct/kWh</span>
+        </td>
+        <td style="padding:8px 8px;text-align:center;border-right:1px solid rgba(42,138,62,0.3);border-bottom:1px solid rgba(42,138,62,0.4);background:rgba(42,138,62,0.1)">
+          <span style="color:#4ec96e;font-family:var(--mono);font-weight:700;font-size:.82rem">EPEX − <span id="inj-onbalans-totaal">0.67</span> ct</span>
+          <div style="color:var(--muted);font-size:.65rem;margin-top:2px">aan 0% BTW</div>
         </td>
       </tr>
     </tbody>
@@ -761,7 +796,17 @@ window.addEventListener('load', function() {
       Capaciteitstarief Fluvius: €4,52/kW/maand (op maandpiek, min. 2,5 kW)
     </span>
     <br><br>
-    <b>Injectietarief:</b> Ecopower vergoedt injectie aan EPEX-prijs − onbalanstoeslag ≈ <b>5,25 ct/kWh</b> (feb. 2026 gemiddeld). Injectie aan 0% BTW.
+    <b>Injectietarief (teruglevering aan net) — conform Ecopower factuur feb. 2026:</b><br>
+    <div style="background:rgba(42,138,62,0.1);border:1px solid rgba(42,138,62,0.3);border-radius:6px;padding:10px 12px;margin:6px 0;font-size:.78rem">
+      <code style="background:rgba(255,255,255,0.08);padding:4px 8px;border-radius:4px">
+        Injectieprijs = EPEX spotprijs − onbalansafslag (instelbaar, standaard 0,67 ct/kWh)
+      </code><br><br>
+      <b>Wat er NIET vergoed wordt bij injectie:</b> afnametarief, GSC, WKK, heffingen, accijnzen.<br>
+      <b>BTW:</b> 0% op injectie (tegenover 6% op afname).<br>
+      <b>Resultaat feb. 2026:</b> gem. 5,25 ct/kWh ontvangen (EPEX gem. ~5,92 − afslag 0,67).<br>
+      <b>Bij negatieve EPEX:</b> injectieprijs = 0 ct/kWh (vloer, je krijgt niets).<br>
+      <span style="color:#4ec96e">→ Injecteren loont veel minder dan zelf verbruiken of opslaan in batterij!</span>
+    </div>
     <br><br>
     <span style="color:#8b949e;font-size:.7rem">
       Bron: Ecopower erkende cv — Afrekeningsfactuur feb. 2026 — Product: Dynamische burgerstroom — Fluvius Imewo
@@ -825,6 +870,9 @@ let simSlot       = 0;   // huidig geselecteerd slot in de slider
 let BAT_KWH   = parseFloat(localStorage.getItem('bat_kwh'))    || 10;
 let vast       = parseFloat(localStorage.getItem('vast_prijs'))  || VAST_DEFAULT;
 // Tariefcomponenten (ct/kWh) — Ecopower Dynamische burgerstroom feb. 2026
+// Onbalansafslag injectie: EPEX - ONBALANS_CT → vergoeding injectie (0% BTW)
+// Bron: Afrekeningsfactuur Geert Van Leuven feb. 2026 (gem. 5,25 ct → afslag ≈ 0,67 ct)
+let ONBALANS_CT = 0.67;  // ct/kWh afslag op EPEX bij injectie (instelbaar)
 // Volgorde = zelfde als op de factuur
 let T_FLUVIUS     = parseFloat(localStorage.getItem('t_fluvius'))     || 5.23; // Afnametarief Fluvius
 let T_ELIA        = parseFloat(localStorage.getItem('t_elia'))        || 1.10; // GSC groenestroomcertificaten
@@ -2282,76 +2330,93 @@ function renderNetChart() {
 function updateDagkost() {
   if (!_simSlots.length || !allTimes.length) return;
 
-  const nu    = new Date();
+  const nu      = new Date();
   const vandaag = new Date(); vandaag.setHours(0,0,0,0);
-  const ivl   = detecteerInterval(allTimes) / 3600000; // uren per slot
+  const ivl     = detecteerInterval(allTimes) / 3600000; // uren per slot
 
-  const INJECTIE_CT = 5.0; // ct/kWh injectietarief na 2028
-
-  let kostDyn  = 0; // dynamisch contract kost
-  let kostVast = 0; // vast contract kost
+  let kostDyn  = 0;
+  let kostVast = 0;
+  let injKwh   = 0; // kWh geïnjecteerd vandaag (simulatie)
+  let injEur   = 0; // € opbrengst injectie (per EPEX-slot, 0% BTW)
   let heeftData = false;
 
   allTimes.forEach((t, i) => {
     const d = new Date(t);
-    // Alleen vandaag, alleen verleden
     if (d < vandaag || d > nu) return;
     const s = _simSlots[i];
     if (!s) return;
     heeftData = true;
 
-    const epexCt  = allPrices[i] / 10;
-    const reeel   = reelePrijs(epexCt);          // ct/kWh reële prijs
-    const vastCt  = vast;                         // ct/kWh vast contract
+    const epexCt = allPrices[i] / 10;          // ct/kWh EPEX spotprijs
+    const reeel  = reelePrijs(epexCt);         // all-in ct/kWh afname dynamisch
+    const vastCt = vast;
+    // Injectieprijs: EPEX − onbalansafslag (min 0), aan 0% BTW — conform factuur feb.2026
+    const injCt  = Math.max(0, epexCt - ONBALANS_CT);
 
-    // Netto per slot: positief = afname (kost), negatief = injectie (opbrengst)
-    const afname   = Math.max(0,  -s.netto) * ivl; // kWh afgenomen
-    const injectie = Math.max(0,   s.netto) * ivl; // kWh geïnjecteerd
+    const afname   = Math.max(0,  -s.netto) * ivl;
+    const injectie = Math.max(0,   s.netto) * ivl;
 
-    // Kost dynamisch
-    kostDyn  += afname   * reeel    / 100;
-    kostDyn  -= injectie * INJECTIE_CT / 100;
+    kostDyn  += afname   * reeel  / 100;
+    kostDyn  -= injectie * injCt  / 100;
+    kostVast += afname   * vastCt / 100;
+    kostVast -= injectie * injCt  / 100;
 
-    // Kost vast
-    kostVast += afname   * vastCt   / 100;
-    kostVast -= injectie * INJECTIE_CT / 100;
+    injKwh += injectie;
+    injEur += injectie * injCt / 100;
   });
 
   if (!heeftData) return;
 
-  // Vaste dagkost (pro-rata van maand naar dag)
   const dagenInMaand = new Date(nu.getFullYear(), nu.getMonth()+1, 0).getDate();
   const capMaand     = CAP_TAR * Math.max(2.5, liveMapndpiek);
   const vasteDagEur  = (ABO_EUR + DATABEHEER + capMaand) / dagenInMaand;
-  // Pro-rata tot huidig uur
   const dagFractie   = (nu.getHours() * 60 + nu.getMinutes()) / (24 * 60);
   const vasteDeelEur = vasteDagEur * dagFractie;
-
-  // Totale kost incl. vaste deel
   const kostDynTotaal  = kostDyn  + vasteDeelEur;
   const kostVastTotaal = kostVast + vasteDeelEur;
-  const besparing      = kostVast - kostDyn; // verschil blijft zelfde
+  const besparing      = kostVast - kostDyn;
 
+  // ── Dagkost kaart ────────────────────────────────────────────
   const dagkostEl = document.getElementById('info-dagkost');
   dagkostEl.textContent = `€ ${kostDynTotaal.toFixed(2)}`;
   dagkostEl.style.color = kostDynTotaal >= 0 ? 'var(--yellow)' : 'var(--green)';
-
-  const capStr = `cap. €${(capMaand/dagenInMaand*dagFractie).toFixed(2)} · abo €${(vasteDeelEur-(capMaand/dagenInMaand*dagFractie)).toFixed(2)}`;
   document.getElementById('info-dagkost-sub').textContent =
     `t/m ${String(nu.getHours()).padStart(2,'0')}:${String(nu.getMinutes()).padStart(2,'0')} · energie €${kostDyn.toFixed(2)} + vaste €${vasteDeelEur.toFixed(2)}`;
 
+  // ── Vergelijking kaart ───────────────────────────────────────
   const vergelijkEl = document.getElementById('info-vergelijk');
-  const klr = besparing >= 0 ? 'var(--green)' : 'var(--red)';
-  vergelijkEl.style.color = klr;
-  if (besparing >= 0) {
-    vergelijkEl.textContent = `€ ${besparing.toFixed(2)} goedkoper`;
-    document.getElementById('info-vergelijk-sub').textContent =
-      `Dyn energie € ${kostDyn.toFixed(2)} vs vast € ${kostVast.toFixed(2)} · vaste kosten gelijk voor beide`;
-  } else {
-    vergelijkEl.textContent = `€ ${Math.abs(besparing).toFixed(2)} duurder`;
-    document.getElementById('info-vergelijk-sub').textContent =
-      `Dyn energie € ${kostDyn.toFixed(2)} vs vast € ${kostVast.toFixed(2)} · vaste kosten gelijk voor beide`;
+  vergelijkEl.style.color = besparing >= 0 ? 'var(--green)' : 'var(--red)';
+  vergelijkEl.textContent = besparing >= 0
+    ? `€ ${besparing.toFixed(2)} goedkoper`
+    : `€ ${Math.abs(besparing).toFixed(2)} duurder`;
+  document.getElementById('info-vergelijk-sub').textContent =
+    `Dyn energie € ${kostDyn.toFixed(2)} vs vast € ${kostVast.toFixed(2)} · vaste kosten gelijk voor beide`;
+
+  // ── Injectie kaart ───────────────────────────────────────────
+  // Prefereer live S-ENERGY data als beschikbaar en recent (< 90s)
+  let toonKwh = injKwh;
+  let badge   = { tekst: 'SIM', kleur: 'var(--muted)' };
+
+  if (typeof _senrgData !== 'undefined' && _senrgData && _senrgData.k !== undefined
+      && typeof _senrgDataAge !== 'undefined' && _senrgDataAge < 90000) {
+    toonKwh = _senrgData.k / 1000; // Wh → kWh
+    badge   = senrgBadge(_senrgData);
   }
+  const injKwhEl = document.getElementById('info-injectie-kwh');
+  if (injKwhEl) {
+    injKwhEl.textContent = `${toonKwh.toFixed(2)} kWh`;
+    injKwhEl.style.color = toonKwh > 0.01 ? '#4ec96e' : 'var(--muted)';
+  }
+  const gemInjCt = injKwh > 0.001
+    ? (injEur / injKwh * 100)
+    : Math.max(0, (allPrices[0] || 0) / 10 - ONBALANS_CT);
+  const injEurEl = document.getElementById('info-injectie-eur');
+  if (injEurEl) {
+    injEurEl.innerHTML = `€ ${injEur.toFixed(3)} (gem. ${gemInjCt.toFixed(2)} ct/kWh) ` +
+      `· <span style="font-size:.65rem;opacity:.85;color:${badge.kleur}">${badge.tekst}</span>`;
+  }
+  const injOnbEl = document.getElementById('inj-onbalans-totaal');
+  if (injOnbEl) injOnbEl.textContent = ONBALANS_CT.toFixed(2);
 }
 
 
@@ -2557,6 +2622,14 @@ document.getElementById('inp-btw').addEventListener('change', e => {
   T_BTW_PCT = parseFloat(e.target.value)||6;
   slaSettingsOp('t_btw_pct', T_BTW_PCT); updateTariefComponent(); });
 
+document.getElementById('inp-onbalans').addEventListener('change', e => {
+  ONBALANS_CT = parseFloat(e.target.value) || 0.67;
+  slaSettingsOp('onbalans_ct', ONBALANS_CT);
+  const injOnbEl = document.getElementById('inj-onbalans-totaal');
+  if (injOnbEl) injOnbEl.textContent = ONBALANS_CT.toFixed(2);
+  updateDagkost();
+});
+
 document.getElementById('sim-slider').addEventListener('input',e=>{
   simSlot=parseInt(e.target.value);
   const nuIdx=huidigSlot(allTimes);
@@ -2566,29 +2639,64 @@ document.getElementById('sim-slider').addEventListener('input',e=>{
   if(chartBat) chartBat.update('none');
 });
 
+// ─── S-ENERGY LIVE DATA ───────────────────────────────────────────────────────
+// Pollt /api/poll/senrg elke 30s — gebruikt door injectieteller in updateDagkost()
+// _senrgData.sim_s0 = 1 → S0 kanalen zijn gesimuleerd op de controller
+// _senrgData.sim_p1 = 1 → P1 dongle is gesimuleerd op de controller
+// Beide vlaggen zijn onafhankelijk — badge toont per bron de status
+let _senrgData    = null;
+let _senrgDataAge = Infinity;
+let _senrgFetchTs = 0;
+
+// Bepaal badge tekst op basis van sim_s0/sim_p1 vlaggen uit de controller
+function senrgBadge(data) {
+  if (!data) return { tekst: 'OFFLINE', kleur: 'var(--muted)' };
+  const s0 = data.sim_s0 === 1 ? 'S0:SIM' : 'S0:LIVE';
+  const p1 = data.sim_p1 === 1 ? 'P1:SIM' : 'P1:LIVE';
+  const allesSim = data.sim_s0 === 1 && data.sim_p1 === 1;
+  const alleesLive = data.sim_s0 === 0 && data.sim_p1 === 0;
+  return {
+    tekst: `${s0} · ${p1}`,
+    kleur: alleesLive ? '#4ec96e' : allesSim ? 'var(--muted)' : 'var(--yellow)'
+  };
+}
+
+async function pollSenrg() {
+  try {
+    const r = await fetch('/api/poll/senrg');
+    if (!r.ok) throw new Error('senrg poll fout');
+    _senrgData    = await r.json();
+    _senrgFetchTs = Date.now();
+    _senrgDataAge = 0;
+    updateDagkost();
+  } catch(e) {
+    _senrgDataAge = Date.now() - _senrgFetchTs;
+  }
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 function pasInstellingenToe(s) {
   if (!s) return;
-  if (s.vast_prijs    !== undefined) { vast           = s.vast_prijs;     document.getElementById('inp-vast').value        = vast; }
-  if (s.bat_kwh       !== undefined) { BAT_KWH        = s.bat_kwh;        document.getElementById('inp-bat').value         = BAT_KWH; }
-  if (s.soc_start     !== undefined) { SOC_START      = s.soc_start;      document.getElementById('inp-soc').value         = SOC_START; }
-  if (s.solar_max_kw  !== undefined) { SOLAR_MAX_KW   = s.solar_max_kw;   document.getElementById('inp-solar-max').value   = SOLAR_MAX_KW; }
-  if (s.max_piek      !== undefined) { MAX_PIEK       = s.max_piek;       document.getElementById('inp-piek').value        = MAX_PIEK; }
-  if (s.cap_tar       !== undefined) { CAP_TAR        = s.cap_tar;        document.getElementById('inp-cap').value         = CAP_TAR; }
-  if (s.abo_eur       !== undefined) { ABO_EUR        = s.abo_eur;        document.getElementById('inp-abo').value         = ABO_EUR; }
-  if (s.databeheer    !== undefined) { DATABEHEER     = s.databeheer;     document.getElementById('inp-databeheer').value  = DATABEHEER; }
-  if (s.maand_kwh     !== undefined) { MAAND_KWH      = s.maand_kwh;      document.getElementById('inp-maandkwh').value    = MAAND_KWH; }
-  if (s.t_fluvius     !== undefined) { T_FLUVIUS      = s.t_fluvius;      document.getElementById('inp-fluvius').value     = T_FLUVIUS; }
-  if (s.t_elia        !== undefined) { T_ELIA         = s.t_elia;         document.getElementById('inp-elia').value        = T_ELIA; }
-  if (s.t_hernieuwbaar!== undefined) { T_HERNIEUWBAAR = s.t_hernieuwbaar; document.getElementById('inp-hernieuwbaar').value= T_HERNIEUWBAAR; }
-  if (s.t_heffingen   !== undefined) { T_HEFFINGEN    = s.t_heffingen;    document.getElementById('inp-heffingen').value   = T_HEFFINGEN; }
-  if (s.t_btw_pct        !== undefined) { T_BTW_PCT      = s.t_btw_pct;      document.getElementById('inp-btw').value              = T_BTW_PCT; }
+  if (s.vast_prijs      !== undefined) { vast           = s.vast_prijs;     document.getElementById('inp-vast').value        = vast; }
+  if (s.bat_kwh         !== undefined) { BAT_KWH        = s.bat_kwh;        document.getElementById('inp-bat').value         = BAT_KWH; }
+  if (s.soc_start       !== undefined) { SOC_START      = s.soc_start;      document.getElementById('inp-soc').value         = SOC_START; }
+  if (s.solar_max_kw    !== undefined) { SOLAR_MAX_KW   = s.solar_max_kw;   document.getElementById('inp-solar-max').value   = SOLAR_MAX_KW; }
+  if (s.max_piek        !== undefined) { MAX_PIEK       = s.max_piek;       document.getElementById('inp-piek').value        = MAX_PIEK; }
+  if (s.cap_tar         !== undefined) { CAP_TAR        = s.cap_tar;        document.getElementById('inp-cap').value         = CAP_TAR; }
+  if (s.abo_eur         !== undefined) { ABO_EUR        = s.abo_eur;        document.getElementById('inp-abo').value         = ABO_EUR; }
+  if (s.databeheer      !== undefined) { DATABEHEER     = s.databeheer;     document.getElementById('inp-databeheer').value  = DATABEHEER; }
+  if (s.maand_kwh       !== undefined) { MAAND_KWH      = s.maand_kwh;      document.getElementById('inp-maandkwh').value    = MAAND_KWH; }
+  if (s.t_fluvius       !== undefined) { T_FLUVIUS      = s.t_fluvius;      document.getElementById('inp-fluvius').value     = T_FLUVIUS; }
+  if (s.t_elia          !== undefined) { T_ELIA         = s.t_elia;         document.getElementById('inp-elia').value        = T_ELIA; }
+  if (s.t_hernieuwbaar  !== undefined) { T_HERNIEUWBAAR = s.t_hernieuwbaar; document.getElementById('inp-hernieuwbaar').value= T_HERNIEUWBAAR; }
+  if (s.t_heffingen     !== undefined) { T_HEFFINGEN    = s.t_heffingen;    document.getElementById('inp-heffingen').value   = T_HEFFINGEN; }
+  if (s.t_btw_pct       !== undefined) { T_BTW_PCT      = s.t_btw_pct;      document.getElementById('inp-btw').value         = T_BTW_PCT; }
+  if (s.onbalans_ct     !== undefined) { ONBALANS_CT    = s.onbalans_ct;    document.getElementById('inp-onbalans').value    = ONBALANS_CT; }
   if (s.energieprijs_vast !== undefined) { document.getElementById('inp-energieprijs-vast').value = s.energieprijs_vast; }
   berekenVastTotaal();
 }
 
 async function slaSettingsOp(key, value) {
-  // Sla één instelling op naar /api/settings op de RPi
   try {
     await fetch('/api/settings', {
       method: 'POST',
@@ -2596,28 +2704,29 @@ async function slaSettingsOp(key, value) {
       body: JSON.stringify({ [key]: value })
     });
   } catch(e) {
-    // Fallback naar localStorage als server niet bereikbaar
     localStorage.setItem(key, value);
   }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Laad instellingen van RPi server (of localStorage als fallback)
   try {
     const r = await fetch('/api/settings');
     if (r.ok) { pasInstellingenToe(await r.json()); }
     else { throw new Error('settings niet bereikbaar'); }
   } catch {
-    // Fallback: localStorage
     pasInstellingenToe({
-      vast_prijs: parseFloat(localStorage.getItem('vast_prijs')) || vast,
-      bat_kwh:    parseFloat(localStorage.getItem('bat_kwh'))    || BAT_KWH,
+      vast_prijs:  parseFloat(localStorage.getItem('vast_prijs'))  || vast,
+      bat_kwh:     parseFloat(localStorage.getItem('bat_kwh'))     || BAT_KWH,
+      onbalans_ct: parseFloat(localStorage.getItem('onbalans_ct')) || ONBALANS_CT,
     });
   }
   try {
     const opgeslagen = localStorage.getItem('periode_keuzes');
     if (opgeslagen) periodeKeuzes = JSON.parse(opgeslagen);
   } catch(e) { periodeKeuzes = {}; }
+
+  // Start S-ENERGY polling (na 5s eerste keer, dan elke 30s)
+  setTimeout(() => { pollSenrg(); setInterval(() => { _senrgDataAge = Date.now() - _senrgFetchTs; pollSenrg(); }, 30000); }, 5000);
 });
 
 initLedStrip();
