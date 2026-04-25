@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zarlar Matrix</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #0a0d12;
+  --card:    #111620;
+  --border:  rgba(255,255,255,0.07);
+  --muted:   #4a5568;
+  --mono:    'DM Mono', monospace;
+  --sans:    'DM Sans', sans-serif;
+  --green:   #00d18c;
+  --amber:   #ffb030;
+  --red:     #ff4555;
+  --blue:    #58a6ff;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: #e2e8f0;
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.hdr-left { display:flex; align-items:center; gap:10px; }
+.hdr-left a {
+  color: var(--muted);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 5px;
+  transition: color 0.15s;
+}
+.hdr-left a:hover { color: #e2e8f0; }
+.hdr-title { font-size: .9rem; font-weight: 600; letter-spacing: .04em; }
+.hdr-sub   { font-size: .72rem; color: var(--muted); font-family: var(--mono); }
+
+.hdr-right { display:flex; align-items:center; gap:10px; }
+#refresh-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: .75rem;
+  font-family: var(--mono);
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+#refresh-btn:hover { background: rgba(255,255,255,0.12); }
+#ts {
+  font-size: .68rem;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+/* ── MATRIX WRAPPER ── */
+.matrix-wrap {
+  padding: 16px;
+  overflow-x: auto;
+}
+
+/* ── TABEL ── */
+.mtx {
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: .65rem;
+  margin: 0 auto;
+}
+
+/* Rijnaam kolom */
+.row-name {
+  padding: 0 10px 0 0;
+  text-align: right;
+  white-space: nowrap;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: .72rem;
+  letter-spacing: .02em;
+  vertical-align: middle;
+  min-width: 70px;
+}
+.row-name.sys    { color: #f0803a; }   /* S-xxx oranje */
+.row-name.room   { color: #58a6ff; }   /* R-xxx blauw  */
+.row-name.empty  { color: var(--muted); opacity:.4; }
+
+/* Pixel cel */
+.px {
+  width:  22px;
+  height: 22px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.4);
+  transition: background-color 0.4s;
+}
+tr.sep td { height: 6px; }
+
+/* Label rij */
+.lbl-row td {
+  padding: 4px 1px 0;
+  text-align: center;
+  vertical-align: top;
+}
+.lbl-main {
+  font-size: .6rem;
+  color: #8899aa;
+  font-family: var(--mono);
+  white-space: nowrap;
+  display: block;
+}
+.lbl-unit {
+  font-size: .52rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  display: block;
+}
+
+/* Status badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: .65rem;
+  font-family: var(--mono);
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+}
+.badge-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+}
+
+/* Legenda */
+.legenda {
+  padding: 14px 16px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: .68rem;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+.leg-item { display:flex; align-items:center; gap:5px; }
+.leg-dot  { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hdr-left">
+    <a href="/">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <path d="M19 12H5M12 5l-7 7 7 7"/>
+      </svg>
+    </a>
+    <div>
+      <div class="hdr-title">ZARLAR MATRIX</div>
+      <div class="hdr-sub">16 × 16 · live</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <button id="refresh-btn" onclick="laadMatrix()">↻ Refresh</button>
+    <span id="ts">—</span>
+  </div>
+</header>
+
+<div class="matrix-wrap">
+  <table class="mtx" id="mtx-tbl">
+    <tbody id="mtx-body"></tbody>
+  </table>
+</div>
+
+<div class="legenda" id="legenda"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// ZARLAR MATRIX — Live replica van de 16×16 fysieke matrix
+// Conformeert exact aan Dashboard v5.8 MROW + render logica
+// ════════════════════════════════════════════════════════════
+
+// ── MROW definitie (conform Dashboard v5.8) ─────────────────
+// esp: controller-key in data object | pho: Photon naam | sys: systeem-key
+// esp heeft voorrang op pho — automatische fallback bij ESP32 vervanging
+const MROW = [
+  { sys:'hvac',                          naam:'S-HVAC',  type:'sys'   }, // rij 0
+  { sys:'eco',                           naam:'S-ECO',   type:'sys'   }, // rij 1
+  { sys:'senrg',                         naam:'S-ENERGY',type:'sys'   }, // rij 2
+  { sys:null,                            naam:'S-ACCESS',type:'empty' }, // rij 3 gereserveerd
+  { sep:true                                                           }, // rij 4 separator
+  { esp:'room75', pho:'P-BandB',    naam:'R-BandB',  type:'room'  }, // rij 5
+  { esp:'room76', pho:'P-Badkamer', naam:'R-BADK',   type:'room'  }, // rij 6
+  { esp:'room77', pho:'P-Inkom',    naam:'R-INKOM',  type:'room'  }, // rij 7
+  { esp:'room78', pho:'P-Keuken',   naam:'R-KEUKEN', type:'room'  }, // rij 8
+  { esp:'room79', pho:'P-Waspl',    naam:'R-WASPL',  type:'room'  }, // rij 9
+  { esp:'room80', pho:'P-Eetpl',    naam:'R-EETPL',  type:'room'  }, // rij 10
+  { esp:'room81', pho:'P-Zitpl',    naam:'R-ZITPL',  type:'room'  }, // rij 11
+  { sys:null, naam:'',type:'empty' },  // rij 12 leeg
+  { sys:null, naam:'',type:'empty' },  // rij 13 leeg
+  { sys:null, naam:'',type:'empty' },  // rij 14 leeg
+  { sys:null, naam:'',type:'empty' },  // rij 15 leeg
+];
+
+// ── Kolomlabels per rij-type ─────────────────────────────────
+const LABELS = {
+  hvac: [
+    ['●','stat'],['BB','C1'],['WP','C2'],['BK','C3'],['ZP','C4'],
+    ['EP','C5'],['KK','C6'],['IK','C7'],['SCH','pmp'],['WON','pmp'],
+    ['Vent','%'],['KSAv','°C'],['kW','tot'],['kWh','SCH'],['Heap','KB'],['RSSI','dBm']
+  ],
+  eco: [
+    ['●','stat'],['Tsun','°C'],['dT','°C'],['TopH','°C'],['TopL','°C'],
+    ['MidH','°C'],['MidL','°C'],['BotH','°C'],['BotL','°C'],['Av','°C'],
+    ['PWM','255'],['Yld','kWh'],['EQtot','kWh'],['dEQ','kWh'],['Heap','%'],['RSSI','dBm']
+  ],
+  energy: [
+    ['●','stat'],['Sol','W'],['SCHaf','W'],['SCHinj','W'],['Netto','W'],
+    ['WON','W'],['Sol','kWh'],['SCHaf','kWh'],['SCHinj','kWh'],['EPEX','ct'],
+    ['EPEX+1','ct'],['Piek','%'],['SimS0','0/1'],['SimP1','0/1'],['Heap','KB'],['RSSI','dBm']
+  ],
+  room: [
+    ['●','stat'],['HOME','sw'],['Heat','0/1'],['Temp','°C'],['Humi','%'],
+    ['CO2','ppm'],['MOV1','/min'],['MOV2','/min'],['TSTAT','sw'],['Dauw!','alt'],
+    ['Kleur','rgb'],['Dag/N','zon'],['Licht','ldr'],['Pxls','aan'],['Heap','KB'],['RSSI','dBm']
+  ],
+  photon: [
+    ['●','stat'],['—',''],['TSTAT','sw'],['Temp','°C'],['Humi','%'],
+    ['CO2','ppm'],['MOV1','/min'],['MOV2','/min'],['—',''],['Dauw!','alt'],
+    ['Kleur','rgb'],['Dag/N','zon'],['Licht','ldr'],['—',''],['Heap','%'],['—','']
+  ],
+  empty: Array(16).fill(['',''])
+};
+
+// ── Kleur helpers (identiek aan Arduino render functies) ─────
+const C = (r,g,b) => `rgb(${r},${g},${b})`;
+const BLK = C(10,10,10);
+const DIM = C(20,0,0);
+
+function statusKleur(online, pending) {
+  if (pending) return C(200,140,0);
+  if (online)  return C(0,200,0);
+  return C(200,0,0);
+}
+function rssiKleur(rssi) {
+  if (rssi >= -60) return C(0,200,0);
+  if (rssi >= -70) return C(150,200,0);
+  if (rssi >= -80) return C(200,80,0);
+  return C(200,0,0);
+}
+function heapKleur(kb) {
+  if (kb > 35) return C(0,200,0);
+  if (kb > 25) return C(180,150,0);
+  return C(200,0,0);
+}
+function tempKleur(t, cold=18, warm=22, hot=26) {
+  if (t < 1 || t > 80) return C(20,0,20);
+  if (t < cold) return C(0,0,200);
+  if (t < warm) { const f=(t-cold)/(warm-cold); return C(0,Math.round(200*f),Math.round(200*(1-f))); }
+  if (t < hot)  { const f=(t-warm)/(hot-warm);  return C(Math.round(200*f),200,0); }
+  return C(200,0,0);
+}
+function boilerKleur(t) { return tempKleur(t,40,60,75); }
+function epexKleur(ct) {
+  if (ct < 0)  return C(0,80,80);
+  if (ct < 15) return C(0,160,0);
+  if (ct < 25) return C(160,140,0);
+  if (ct < 35) return C(180,50,0);
+  return C(200,0,0);
+}
+function cyanLevel(pct) {
+  if (pct <= 0) return C(8,8,8);
+  const v = Math.round(40 + pct * 1.6);
+  return C(0, Math.round(v/2), v);
+}
+function gradG(w, max) {
+  const v = Math.min(200, Math.round((w/max)*200));
+  return C(0,v,0);
+}
+function gradR(w, max) {
+  const v = Math.min(200, Math.round((w/max)*200));
+  return C(v,0,0);
+}
+
+// ── jV: veilige JSON key getter ──────────────────────────────
+function jV(d, k, def=0) {
+  if (!d || d[k] === undefined || d[k] === null) return def;
+  return parseFloat(d[k]) || def;
+}
+function jI(d, k, def=0) {
+  if (!d || d[k] === undefined || d[k] === null) return def;
+  return parseInt(d[k]) || def;
+}
+
+// ── RENDER FUNCTIES ──────────────────────────────────────────
+
+function renderHvac(d) {
+  const on = d && d.online;
+  const px = Array(16).fill(BLK);
+  px[0] = statusKleur(on, !d);
+  if (!on) { for(let i=1;i<16;i++) px[i]=DIM; return px; }
+  // Circuits 1-7 (keys p,q,r,s,t,u,v)
+  ['p','q','r','s','t','u','v'].forEach((k,i) => {
+    const v = jI(d,k); px[1+i] = v ? C(20,200,20) : C(8,8,8);
+  });
+  const psch = jI(d,'y'); px[8] = C(0, psch?40:10, psch?200:10);
+  const pwon = jI(d,'aa'); px[9] = C(0, pwon?40:10, pwon?200:10);
+  px[10] = cyanLevel(jI(d,'x'));
+  px[11] = boilerKleur(jV(d,'h'));
+  px[12] = C(8,8,8); px[13] = C(8,8,8);
+  px[14] = heapKleur(jV(d,'ae')/1024);
+  px[15] = rssiKleur(jI(d,'ac',-100));
+  return px;
+}
+
+function renderEco(d) {
+  const on = d && d.online;
+  const px = Array(16).fill(BLK);
+  px[0] = statusKleur(on, !d);
+  if (!on) { for(let i=1;i<16;i++) px[i]=DIM; return px; }
+  const tsun = jV(d,'l');
+  px[1] = tsun<1?C(15,15,15):tsun<20?C(0,0,200):tsun<50?C(0,200,100):tsun<80?C(200,120,0):C(200,0,0);
+  const dt = jV(d,'m');
+  px[2] = dt>10?C(0,200,0):dt>5?C(150,180,0):dt>2?C(100,60,0):C(10,10,10);
+  px[3]=boilerKleur(jV(d,'b')); px[4]=boilerKleur(jV(d,'c'));
+  px[5]=boilerKleur(jV(d,'d')); px[6]=boilerKleur(jV(d,'e'));
+  px[7]=boilerKleur(jV(d,'f')); px[8]=boilerKleur(jV(d,'g'));
+  px[9]=boilerKleur(jV(d,'h'));
+  px[10]=cyanLevel(Math.round(jI(d,'n')*100/255));
+  const yt=jV(d,'k'); px[11]=yt<=0?C(10,10,10):(() => { const v=Math.min(200,Math.round(yt*20)); return C(Math.round(v*2/3),v,0); })();
+  const qt=jV(d,'i'); px[12]=qt<=0?C(10,10,10):(() => { const v=Math.min(200,Math.round(qt*10)); return C(v,Math.round(v*3/4),0); })();
+  const deq=jV(d,'j'); px[13]=deq>0.5?C(0,200,0):deq>0?C(0,80,0):C(10,10,10);
+  const hp=jI(d,'q'); px[14]=hp>35?C(0,180,0):hp>20?C(180,180,0):C(200,0,0);
+  px[15]=rssiKleur(jI(d,'p',-100));
+  return px;
+}
+
+function renderEnergy(d) {
+  const on = d && d.online;
+  const px = Array(16).fill(BLK);
+  px[0] = statusKleur(on, !d);
+  if (!on) { for(let i=1;i<16;i++) px[i]=DIM; return px; }
+  px[1]  = gradG(jI(d,'a'), 6000);
+  px[2]  = gradR(jI(d,'c'), 10000);
+  const si=jI(d,'d'); { const v=Math.min(200,Math.round((si/6000)*200)); px[3]=C(0,Math.round(v/2),v); }
+  const ne=jI(d,'e'); px[4]=ne>0?(() => { const v=Math.min(200,Math.round((ne/5000)*200)); return C(0,v,0); })():ne<0?(() => { const v=Math.min(200,Math.round((-ne/5000)*200)); return C(v,0,0); })():C(12,12,12);
+  const wo=Math.abs(jI(d,'b')); { const v=Math.min(200,Math.round((wo/5000)*200)); px[5]=C(v,Math.round(v*3/4),0); }
+  const sh=jI(d,'h'); { const v=Math.min(200,Math.round((sh/30000)*200)); px[6]=C(Math.round(v/3),v,0); }
+  const sj=jI(d,'j'); { const v=Math.min(160,Math.round((sj/30000)*160)); px[7]=C(v,0,0); }
+  const sk=jI(d,'k'); { const v=Math.min(160,Math.round((sk/15000)*160)); px[8]=C(0,Math.round(v/2),v); }
+  px[9]  = epexKleur(jV(d,'n')/100);
+  px[10] = epexKleur(jV(d,'n2')/100);
+  const pt=jI(d,'pt'), pct=Math.min(100,Math.round((pt/10000)*100));
+  px[11] = pct<60?C(0,160,0):pct<85?C(160,120,0):C(200,0,0);
+  px[12] = jI(d,'sim_s0') ? C(180,80,0) : C(0,120,0);
+  px[13] = jI(d,'sim_p1') ? C(180,80,0) : C(0,120,0);
+  px[14] = heapKleur(jV(d,'ae')/1024);
+  px[15] = rssiKleur(jI(d,'ac',-100));
+  return px;
+}
+
+function renderRoom(d) {
+  const on = d && d.online;
+  const px = Array(16).fill(BLK);
+  px[0] = statusKleur(on, !d);
+  if (!on) { for(let i=1;i<16;i++) px[i]=DIM; return px; }
+  const home=jI(d,'v'); px[1]=C(home?0:15,home?30:15,home?180:15);
+  const heat=jI(d,'b'); px[2]=C(heat?200:10,heat?30:10,10);
+  px[3]=tempKleur(jV(d,'e'));
+  const h=jI(d,'h'); px[4]=h<10?C(20,0,20):h<50?C(0,200,0):h<70?C(180,180,0):h<85?C(200,60,0):C(200,0,0);
+  const co=jI(d,'k'); px[5]=co===0?C(15,15,15):co<800?C(0,200,0):co<1200?C(180,180,0):co<1500?C(200,80,0):C(200,0,0);
+  const m1=jI(d,'y'); px[6]=C(m1?200:12,m1?180:12,m1?120:12);
+  const m2=jI(d,'z'); px[7]=C(m2?200:12,m2?180:12,m2?120:12);
+  const ts=jI(d,'d'); px[8]=C(ts?200:10,ts?60:10,10);
+  const dw=jI(d,'j'); px[9]=C(dw?200:0,0,dw?0:20);
+  const pr=jI(d,'q'),pg=jI(d,'r'),pb=jI(d,'s');
+  px[10]=(pr+pg+pb>0)?C(Math.round(pr/2),Math.round(pg/2),Math.round(pb/2)):C(10,10,10);
+  const ni=jI(d,'o'); px[11]=ni?C(40,0,60):C(180,150,0);
+  const ldr=jI(d,'m'),br=Math.min(200,(100-Math.min(ldr,100))*2); px[12]=C(br,Math.round(br*0.75),0);
+  // Pixels aan (key t = "P=00111")
+  let pxbr=0;
+  if (d.t && typeof d.t === 'string') {
+    const sep=d.t.indexOf('=');
+    if (sep>=0) {
+      const bits=d.t.slice(sep+1);
+      const ones=bits.split('').filter(c=>c==='1').length;
+      if (bits.length>0) pxbr=Math.round((ones/bits.length)*220);
+    }
+  }
+  px[13]=C(pxbr,pxbr,pxbr);
+  px[14]=heapKleur(jV(d,'ae')/1024);
+  px[15]=rssiKleur(jI(d,'ac',-100));
+  return px;
+}
+
+function renderPhoton(d) {
+  const on = d && d.online;
+  const px = Array(16).fill(BLK);
+  px[0] = statusKleur(on, !d);
+  if (!on) { for(let i=1;i<16;i++) px[i]=DIM; return px; }
+  px[1]=BLK;
+  const ts=jI(d,'l'); px[2]=C(ts?200:10,ts?60:10,10);
+  px[3]=tempKleur(jV(d,'g'));
+  const h=jI(d,'d'); px[4]=h<10?C(20,0,20):h<50?C(0,200,0):h<70?C(180,180,0):h<85?C(200,60,0):C(200,0,0);
+  const co=jI(d,'a'); px[5]=co===0?C(15,15,15):co<800?C(0,200,0):co<1200?C(180,180,0):co<1500?C(200,80,0):C(200,0,0);
+  const m1=jI(d,'i'); px[6]=C(m1?200:12,m1?180:12,m1?120:12);
+  const m2=jI(d,'j'); px[7]=C(m2?200:12,m2?180:12,m2?120:12);
+  px[8]=BLK;
+  const dw=jI(d,'k'); px[9]=C(dw?200:0,0,dw?0:20);
+  const pr=jI(d,'s'),pg=jI(d,'t'),pb=jI(d,'u');
+  px[10]=(pr+pg+pb>0)?C(Math.round(pr/2),Math.round(pg/2),Math.round(pb/2)):C(10,10,10);
+  const ni=jI(d,'q'); px[11]=ni?C(40,0,60):C(180,150,0);
+  const ldr=jI(d,'e'),br2=Math.min(200,(100-Math.min(ldr,100))*2); px[12]=C(br2,Math.round(br2*0.75),0);
+  px[13]=BLK;
+  const fm=jI(d,'x'); px[14]=fm>35?C(0,180,0):fm>20?C(180,180,0):C(200,0,0);
+  px[15]=BLK;
+  return px;
+}
+
+function renderEmpty() {
+  return Array(16).fill(C(6,0,8)); // dim paars voor gereserveerde rijen
+}
+
+// ── MATRIX OPBOUWEN ──────────────────────────────────────────
+function bepaalPixels(rd, data) {
+  if (rd.sep) return null;
+
+  // Systeem controllers (HVAC, ECO, ENERGY)
+  if (rd.sys) {
+    const d = data[rd.sys];
+    if (rd.sys === 'hvac')   return renderHvac(d);
+    if (rd.sys === 'eco')    return renderEco(d);
+    if (rd.sys === 'senrg')  return renderEnergy(d);
+    return Array(16).fill(BLK);
+  }
+
+  // Gereserveerde/lege rijen
+  if (!rd.esp && !rd.pho) return renderEmpty();
+
+  // ESP32 heeft voorrang — Photon als fallback
+  const espData = rd.esp ? data[rd.esp] : null;
+  if (espData && espData.online) return renderRoom(espData);
+
+  const phoData = rd.pho ? data[rd.pho] : null;
+  if (phoData && phoData.online) return renderPhoton(phoData);
+
+  // Beide offline — toon status van ESP32 als die actief is
+  if (espData) return renderRoom(espData);
+  return renderEmpty();
+}
+
+function bepaalLabels(rd, data) {
+  if (rd.sep || (!rd.sys && !rd.esp && !rd.pho)) return LABELS.empty;
+  if (rd.sys === 'hvac')  return LABELS.hvac;
+  if (rd.sys === 'eco')   return LABELS.eco;
+  if (rd.sys === 'senrg') return LABELS.energy;
+
+  const espData = rd.esp ? data[rd.esp] : null;
+  if (espData && espData.online) return LABELS.room;
+  const phoData = rd.pho ? data[rd.pho] : null;
+  if (phoData && phoData.online) return LABELS.photon;
+  return LABELS.room; // default
+}
+
+function bouwMatrix(data) {
+  const tbody = document.getElementById('mtx-body');
+  tbody.innerHTML = '';
+
+  MROW.forEach((rd, rowIdx) => {
+    if (rd.sep) {
+      // Amber separator
+      const tr = document.createElement('tr');
+      tr.className = 'sep';
+      const tdName = document.createElement('td');
+      tdName.style.cssText = 'border-bottom:1px solid rgba(255,176,48,0.3)';
+      tr.appendChild(tdName);
+      for (let c = 0; c < 16; c++) {
+        const td = document.createElement('td');
+        td.style.cssText = 'height:6px;background:rgba(255,176,48,0.15);border-radius:0';
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+      return;
+    }
+
+    const pixels = bepaalPixels(rd, data);
+    const labels = bepaalLabels(rd, data);
+
+    // Pixelrij
+    const tr = document.createElement('tr');
+    tr.id = `mrow-${rowIdx}`;
+
+    const tdName = document.createElement('td');
+    tdName.className = `row-name ${rd.type || 'empty'}`;
+    tdName.textContent = rd.naam || '';
+    tr.appendChild(tdName);
+
+    for (let c = 0; c < 16; c++) {
+      const td = document.createElement('td');
+      td.style.padding = '1px';
+      const div = document.createElement('div');
+      div.className = 'px';
+      div.id = `px-${rowIdx}-${c}`;
+      div.style.backgroundColor = pixels ? pixels[c] : BLK;
+      div.title = `${rd.naam||'—'} col ${c}: ${labels[c]?labels[c][0]:''}`;
+      td.appendChild(div);
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+
+    // Labelrij (alleen tonen als het een actieve rij is)
+    if (rd.naam && !rd.sep && rd.type !== 'empty') {
+      const trLbl = document.createElement('tr');
+      trLbl.className = 'lbl-row';
+      trLbl.appendChild(document.createElement('td')); // lege naam-kolom
+      for (let c = 0; c < 16; c++) {
+        const td = document.createElement('td');
+        const main = labels[c] ? labels[c][0] : '';
+        const unit = labels[c] ? labels[c][1] : '';
+        td.innerHTML = `<span class="lbl-main">${main}</span><span class="lbl-unit">${unit}</span>`;
+        trLbl.appendChild(td);
+      }
+      tbody.appendChild(trLbl);
+    }
+  });
+}
+
+// ── MATRIX UPDATE (live) ─────────────────────────────────────
+function updatePixels(data) {
+  MROW.forEach((rd, rowIdx) => {
+    if (rd.sep) return;
+    const pixels = bepaalPixels(rd, data);
+    if (!pixels) return;
+    for (let c = 0; c < 16; c++) {
+      const el = document.getElementById(`px-${rowIdx}-${c}`);
+      if (el) el.style.backgroundColor = pixels[c];
+    }
+  });
+}
+
+// ── DATA OPHALEN ─────────────────────────────────────────────
+let matrixData = {};
+let eersteKeer = true;
+
+async function laadMatrix() {
+  document.getElementById('ts').textContent = 'laden…';
+  try {
+    const r = await fetch('/api/matrix');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    matrixData = await r.json();
+
+    if (eersteKeer) {
+      bouwMatrix(matrixData);
+      bouwLegenda();
+      eersteKeer = false;
+    } else {
+      updatePixels(matrixData);
+    }
+
+    const nu = new Date();
+    document.getElementById('ts').textContent =
+      nu.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  } catch(e) {
+    document.getElementById('ts').textContent = '⚠ fout';
+    console.error('[Matrix]', e);
+  }
+}
+
+// ── LEGENDA ──────────────────────────────────────────────────
+function bouwLegenda() {
+  const items = [
+    { kleur:'rgb(0,200,0)',   label:'Online' },
+    { kleur:'rgb(200,140,0)', label:'Pending' },
+    { kleur:'rgb(200,0,0)',   label:'Offline' },
+    { kleur:'rgb(0,160,0)',   label:'EPEX goedkoop (<15 ct)' },
+    { kleur:'rgb(160,140,0)', label:'EPEX gemiddeld (15–25 ct)' },
+    { kleur:'rgb(200,0,0)',   label:'EPEX duur (>25 ct)' },
+    { kleur:'rgb(180,80,0)',  label:'Simulatie actief ⚠️' },
+    { kleur:'rgb(0,120,0)',   label:'Live hardware ✅' },
+    { kleur:'rgb(40,0,60)',   label:'Gereserveerd/leeg' },
+  ];
+  const leg = document.getElementById('legenda');
+  leg.innerHTML = items.map(i =>
+    `<div class="leg-item">
+      <div class="leg-dot" style="background:${i.kleur}"></div>
+      <span>${i.label}</span>
+    </div>`
+  ).join('');
+}
+
+// ── START ────────────────────────────────────────────────────
+laadMatrix();
+setInterval(laadMatrix, 15000); // refresh elke 15s
+</script>
+</body>
+</html>

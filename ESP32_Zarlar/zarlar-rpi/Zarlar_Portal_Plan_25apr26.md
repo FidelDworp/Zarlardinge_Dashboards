@@ -389,8 +389,18 @@ ongeacht het uur of de marktprijs.
 > Een thuisbatterij is pas financieel interessant na de komst van de digitale meter (~2028),
 > omdat daarna de saldering stopt en injectie niet langer 1-op-1 verrekend wordt.
 
-**GitHub Pages testversie:**
-`https://fideldworp.github.io/Zarlardinge_Dashboards/TEST_epex-grafiek.html`
+**Injectieteller (nieuw v2.0 epex-grafiek.html):**
+- Derde info-kaart: "☀️ Injectie vandaag" — toont kWh + € opbrengst
+- Prefereert live S-ENERGY data (`/api/poll/senrg`, key `k`) als beschikbaar en < 90s oud
+- Valt terug op simulatieberekening — toont badge `LIVE` of `SIM`
+- € berekend per EPEX-slot: injectieprijs = EPEX − onbalansafslag (instelbaar, standaard 0,67 ct/kWh)
+
+**Tarieftabel (nieuw derde kolom "INJECTIE"):**
+- Energieprijs: EPEX spotprijs (zelfde als dynamisch)
+- Afnametarief, GSC, WKK, heffingen: niet van toepassing (0%)
+- BTW: 0% (conform factuur — tegenover 6% op afname)
+- Onbalansafslag: instelbaar via nieuw veld (standaard 0,67 ct/kWh)
+- Totaal: EPEX − onbalansafslag ct/kWh aan 0% BTW
 
 ---
 
@@ -418,7 +428,11 @@ ongeacht het uur of de marktprijs.
 
 ## 8. Technische context
 
-- **RPi:** Node.js v18 + Express + node-fetch@2
+**server.js v2.0:**
+- Alle room controllers toegevoegd (room75–room81, 192.168.0.75–.81)
+- Dashboard controller toegevoegd (192.168.0.60)
+- `/api/photon/:id` proxy endpoint — Cloudflare Worker via RPi (geen CORS issues)
+- `/api/matrix` endpoint — haalt alle ESP32 + Photon data parallel op in één call
 - **ESP32:** C6, Arduino IDE, `#define Serial Serial0` verplicht
 - **ESPAsyncWebServer** — geen MQTT, geen Home Assistant
 - **Nooit** `huge_app` partitie — gebruik `partitions_16mb.csv`
@@ -443,11 +457,12 @@ ongeacht het uur of de marktprijs.
 | 8 | Lichten tab verfijnen (pixel nicknames via NVS) | ⬜ Open |
 | 9 | Maarten + Céline uitnodigen op Tailscale | ⬜ Open |
 | 10 | `/capabilities` endpoint op ESP32 controllers | ⬜ Later |
-| 11 | Smart Energy controller — sketch v0.1 schrijven | ⬜ Later |
+| 11 | Smart Energy controller — sketch v0.1 schrijven | ✅ Klaar (v1.25 SIM) |
 | 12 | S-ENERGY: maandelijkse pieken loggen naar stats bestand op RPi | ⬜ Later |
 | 13 | Afrekenpagina WON/SCH zichtbaar op portal voor Maarten en Céline | ⬜ Later |
-| 14 | Smart Energy — P1 dongle integratie (na digitale meter ~2028) | ⬜ Toekomst |
-| 15 | Thuisbatterij(en) — beslissing + integratie in sturing (~2028) | ⬜ Toekomst |
+| 14 | S-ENERGY: echte S0 bekabeling + overschakelen van SIM naar LIVE | ⬜ Later |
+| 15 | Smart Energy — P1 dongle integratie (na digitale meter ~2028) | ⬜ Toekomst |
+| 16 | Thuisbatterij(en) — beslissing + integratie in sturing (~2028) | ⬜ Toekomst |
 
 ---
 
@@ -466,17 +481,27 @@ ongeacht het uur of de marktprijs.
 | AP9 | S-ENERGY: GPIO-pinnen toewijzen via OPTION RJ45 connector |
 | AP10 | S-ENERGY: interface printje met pull-up + serieweerstanden bouwen |
 | AP11 | S-ENERGY: sketch v0.1 schrijven (S0 pulstelling + LED matrix 12×4) |
-| AP12 | S-ENERGY: maandpiek per huis loggen (pw, ps, pt) naar stats-bestand RPi |
-| AP13 | Portal: afrekenpagina WON/SCH bouwen (zie §13) |
-| AP14 | S-ENERGY: S0-3 uitbreiden voor SCH batterijontlading zodra batterij geplaatst |
-| AP15 | S-ENERGY: WON afname + injectie toevoegen via P1-dongle (~2028) |
+| AP11 | S-ENERGY: sketch v1.26 flashen op ESP32-C6 (192.168.0.73) |
+| AP12 | S-ENERGY: SIM_S0 + SIM_P1 valideren via /json badges op epex-pagina |
+| AP13 | S-ENERGY: maandpiek per huis loggen (ps, pw, pt) naar stats-bestand RPi |
+| AP14 | Portal: afrekenpagina WON/SCH bouwen (zie §13) |
+| AP15 | S-ENERGY: S0 bekabeling aansluiten → sim_mode uitschakelen → v1.26 LIVE |
+| AP16 | S-ENERGY: WON afname + injectie toevoegen via P1-dongle (~2028) |
 
 ---
 
 ## 11. Smart Energy Controller (S-ENERGY) — Hardware
 
-> **Status: in ontwikkeling — sketch nog te schrijven.**
+> **Status: sketch v1.25 SIM beschikbaar — klaar om te flashen.**
 > IP: `192.168.0.73` · Board: ESP32-C6 32-pin
+
+### 11.0 Versiehistorie sketch
+
+| Versie | Status | Wijziging |
+|---|---|---|
+| v1.24 | Archief | Eerste productieversie — live S0 ISR |
+| v1.25 SIM | Archief | Enkelvoudige SIMULATION_MODE — vervangen door v1.26 |
+| **v1.26** | **Actief** | Twee onafhankelijke simulatievlaggen SIM_S0 + SIM_P1 · HomeWizard P1 integratie |
 
 ### 11.1 Energiemeters
 
@@ -516,7 +541,80 @@ lokale netwerk. De RPi leest deze data en registreert:
 - WON afname van net (kWh en momentaan vermogen)
 - WON injectie naar net (kWh — incl. eventuele thuisbatterij)
 
-### 11.3 S0 interfaceschema (per kanaal, 3×)
+### 11.3 Simulatiemodi — twee onafhankelijke vlaggen (v1.26)
+
+De sketch bevat twee **volledig onafhankelijke** simulatievlaggen, elk apart instelbaar via `/settings` of serieel commando. **Nooit automatisch omschakelen** — elke overgang is een bewuste handeling om valse data in de logs te voorkomen.
+
+| Vlag | Default | Betekenis | Omschakelen naar LIVE |
+|---|---|---|---|
+| `SIM_S0` | `true` | Simuleert 3× S0-kanalen (solar, SCH afname, SCH injectie) | Na S0-bekabeling: checkbox uit → reboot |
+| `SIM_P1` | `true` | Simuleert P1-dongle (WON afname + injectie) | Na HomeWizard plaatsing (~2028): checkbox uit + P1-IP invullen → reboot |
+
+**Serieel commando's:** `sim s0 on/off` · `sim p1 on/off` · `status` · `help`
+
+**In `/json`:** `"sim_s0":1` en `"sim_p1":1` als aparte indicatoren — de RPi en epex-pagina tonen per bron de status (badge `S0:SIM · P1:SIM`, `S0:LIVE · P1:SIM`, enz.)
+
+**Simulatieprofiel S0 (april, België):**
+- Solar: sinus-curve 07:00–19:00, piek 4000 W, ±10% ruis (bewolking)
+- SCH afname: 500 W basis + ochtendspits (+1800 W), middag (+600 W), avondspits (+2200 W), nacht (+800 W)
+- SCH injectie: max(0, solar − afname) → overschot zonne-energie
+
+**Simulatieprofiel P1 (april, België):**
+- WON afname: 400 W basis + ochtend-/avondspits, geen eigen productie in fase 1
+- WON injectie: 0 Wh (geen solar bij WON in simulatie)
+
+**Matrix-indicator:** col 0 rij 0 knippert rood als SIM_S0 actief · col 1 rij 0 als SIM_P1 actief · groen sweep bij boot als beide LIVE
+
+### 11.4 HomeWizard P1 Meter — HWE-P1-RJ12
+
+**Hardware:**
+- Model: HomeWizard P1 Meter HWE-P1-RJ12
+- Aansluiting: RJ12 op P1-poort digitale slimme meter (WON, na ~2028)
+- Voeding: 5V 500mA via P1-poort zelf (geen externe voeding nodig)
+- WiFi: 2.4 GHz, verbindt via HomeWizard Energy app
+
+**Activatie lokale API:**
+1. Installeer de HomeWizard Energy app
+2. Koppel de P1 Meter aan je WiFi-netwerk
+3. Ga naar: Settings → Meters → jouw meter → **Local API: AAN**
+4. Noteer het IP-adres en vul dit in bij S-ENERGY `/settings` → P1 IP-adres
+
+**API endpoint:**
+```
+GET http://<P1_IP>/api/v1/data
+```
+Plain HTTP, geen authenticatie, geen cloud vereist. Documentatie: https://api-documentation.homewizard.com/docs/introduction/
+
+**JSON response (relevante velden voor S-ENERGY):**
+```json
+{
+  "smr_version": 50,
+  "active_power_w": 997,
+  "total_power_import_t1_kwh": 19055.287,
+  "total_power_import_t2_kwh": 19505.815,
+  "total_power_export_t1_kwh": 0.002,
+  "total_power_export_t2_kwh": 0.007
+}
+```
+
+| P1 JSON key | Betekenis | → S-ENERGY /json key |
+|---|---|---|
+| `active_power_w` | Momentaan vermogen WON (+ = afname, − = injectie) | `b` (W) |
+| `total_power_import_t1_kwh + t2_kwh` | Cumulatieve afname (dag via delta midnight) | `i` (Wh) |
+| `total_power_export_t1_kwh + t2_kwh` | Cumulatieve injectie (dag via delta midnight) | `vw` (Wh) |
+
+**Update-frequentie:** elke seconde bij DSMR 5.0, elke 10s bij oudere meters. S-ENERGY pollt elke 5s — ruim voldoende.
+
+**GitHub library (referentie, niet gebruikt in sketch):**
+https://github.com/jvandenaardweg/homewizard-energy-api
+(Node.js, type-safe, toont volledige JSON structuur en polling aanpak)
+
+**Artikel integratie energiemanagementsysteem:**
+https://engineering360.nl/homewizard-p1-meter-koppelen-aan-je-energiemanagement
+
+> 💡 **Nota:** `total_power_import/export_kwh` zijn **cumulatieve tellers** die nooit resetten. De sketch berekent dagcumulatieven via een delta tov een midnight-snapshot — identiek aan hoe een klassieke teller werkt.
+
+### 11.5 S0 interfaceschema (per kanaal, 3×)
 
 ```
 3,3V
@@ -567,13 +665,15 @@ Voeding: aparte 5V (niet via shield PTC).
 |---|---|---|---|
 | Solar productie | S0-1 | Nu | `a` (W), `h` (Wh dag) |
 | SCH afname van net | S0-2 | Nu | `c` (W), `j` (Wh dag) |
-| SCH injectie naar net | S0-3 | Nu | `d` (W), `v` (Wh dag) |
+| SCH injectie naar net | S0-3 | Nu | `d` (W), `k` (Wh dag) |
 | SCH batterij ontlading naar net | S0-3 (zelfde kanaal) | Na batterijplaatsing | idem |
-| WON afname van net | P1-dongle | ~2028 | `b` (W), `i` (Wh dag) |
-| WON injectie naar net | P1-dongle | ~2028 | nieuw: `vw` (Wh dag) |
+| WON afname van net | P1-dongle HomeWizard | ~2028 | `b` (W), `i` (Wh dag) |
+| WON injectie naar net | P1-dongle HomeWizard | ~2028 | `vw` (Wh dag) |
 | Gecombineerde maandpiek | berekend | Nu | `pt` (W) |
-| Maandpiek SCH individueel | berekend | Nu | `ps` (W) |
-| Maandpiek WON individueel | P1-dongle | ~2028 | `pw` (W) |
+| Maandpiek SCH individueel | berekend | Nu | `ps` (W) — TODO v1.27 |
+| Maandpiek WON individueel | P1-dongle | ~2028 | `pw` (W) — TODO v1.27 |
+| S0 simulatie actief | vlag | Nu | `sim_s0` (0/1) |
+| P1 simulatie actief | vlag | Nu | `sim_p1` (0/1) |
 
 ### 12.2 Statistieken opslaan op RPi
 
