@@ -179,7 +179,7 @@ input[type=range].sim-slider::-webkit-slider-thumb {
 .inst-bron a { color:var(--muted); }
 
 #status-msg { font-size:.75rem; color:var(--muted); font-family:var(--mono); text-align:center; padding:40px; display:none; }
-.info-kaarten { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+.info-kaarten { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:16px; }
 .info-card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px 18px; }
 .info-label { font-family:var(--mono); font-size:.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
 .info-waarde { font-family:var(--mono); font-size:1.6rem; font-weight:700; line-height:1; margin-bottom:6px; }
@@ -594,31 +594,31 @@ window.addEventListener('load', function() {
 <div class="instellingen" style="margin-top:6px">
   <span class="inst-title">💶 Tariefvergelijking — Ecopower</span>
 
-  <!-- Contract headers -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;margin:8px 0 4px;font-size:.68rem;font-family:var(--mono)">
-    <div></div>
-    <div style="background:rgba(88,166,255,0.1);border:1px solid rgba(88,166,255,0.3);border-radius:6px 6px 0 0;padding:8px;text-align:center">
-      <div style="color:var(--blue);font-weight:700;font-size:.72rem">DYNAMISCH</div>
-      <div style="color:var(--muted);margin-top:2px">Dynamische burgerstroom</div>
-      <div style="color:var(--muted)">Geert Van Leuven · Lede</div>
-      <div style="color:var(--muted)">Fluvius Imewo · mrt. 2026</div>
-    </div>
-    <div style="background:rgba(168,255,62,0.08);border:1px solid rgba(168,255,62,0.3);border-radius:6px 6px 0 0;padding:8px;text-align:center">
-      <div style="color:var(--lime);font-weight:700;font-size:.72rem">VAST</div>
-      <div style="color:var(--muted);margin-top:2px">Groene burgerstroom</div>
-      <div style="color:var(--muted)">Filip Delannoy · Zarlardinge</div>
-      <div style="color:var(--muted)">Fluvius West · nov. 2025</div>
-    </div>
-    <div style="background:rgba(42,138,62,0.12);border:1px solid rgba(42,138,62,0.4);border-radius:6px 6px 0 0;padding:8px;text-align:center">
-      <div style="color:#4ec96e;font-weight:700;font-size:.72rem">INJECTIE</div>
-      <div style="color:var(--muted);margin-top:2px">Teruglevering aan net</div>
-      <div style="color:var(--muted)">Beide contracten</div>
-      <div style="color:var(--muted)">Ecopower · Fluvius</div>
-    </div>
-  </div>
-
-  <!-- Vergelijkingstabel -->
+  <!-- Vergelijkingstabel met geïntegreerde headers in thead -->
   <table style="width:100%;border-collapse:collapse;font-size:.78rem">
+    <thead>
+      <tr>
+        <td style="width:36%"></td>
+        <th style="padding:8px;text-align:center;background:rgba(88,166,255,0.1);border:1px solid rgba(88,166,255,0.3);border-bottom:none;border-radius:6px 6px 0 0">
+          <div style="color:var(--blue);font-weight:700;font-size:.72rem;font-family:var(--mono)">DYNAMISCH</div>
+          <div style="color:var(--muted);font-size:.65rem;font-weight:400;margin-top:2px">Dynamische burgerstroom</div>
+          <div style="color:var(--muted);font-size:.65rem;font-weight:400">Geert Van Leuven · Lede</div>
+          <div style="color:var(--muted);font-size:.65rem;font-weight:400">Fluvius Imewo · mrt. 2026</div>
+        </th>
+        <th style="padding:8px;text-align:center;background:rgba(168,255,62,0.08);border:1px solid rgba(168,255,62,0.3);border-bottom:none;border-radius:6px 6px 0 0">
+          <div style="color:var(--lime);font-weight:700;font-size:.72rem;font-family:var(--mono)">VAST</div>
+          <div style="color:var(--muted);font-size:.65rem;font-weight:400;margin-top:2px">Groene burgerstroom</div>
+          <div style="color:var(--muted);font-size:.65rem;font-weight:400">Filip Delannoy · Zarlardinge</div>
+          <div style="color:var(--muted);font-size:.65rem;font-weight:400">Fluvius West · nov. 2025</div>
+        </th>
+        <th style="padding:8px;text-align:center;background:rgba(42,138,62,0.12);border:1px solid rgba(42,138,62,0.4);border-bottom:none;border-radius:6px 6px 0 0">
+          <div style="color:#4ec96e;font-weight:700;font-size:.72rem;font-family:var(--mono)">INJECTIE</div>
+          <div style="color:var(--muted);font-size:.65rem;font-weight:400;margin-top:2px">Teruglevering aan net</div>
+          <div style="color:var(--muted);font-size:.65rem;font-weight:400">Beide contracten</div>
+          <div style="color:var(--muted);font-size:.65rem;font-weight:400">Ecopower · Fluvius</div>
+        </th>
+      </tr>
+    </thead>
     <tbody>
       <!-- Energieprijs -->
       <tr style="background:rgba(255,255,255,0.03)">
