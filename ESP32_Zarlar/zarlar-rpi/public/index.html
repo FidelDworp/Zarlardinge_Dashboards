@@ -1035,7 +1035,12 @@ function rssiKleur(r) {
 
 // ═══ SYNOPTISCH ═══════════════════════════════════════════════════════════════
 function bouwSyn(s) {
-  const hvac = s.hvac || {}, eco = s.eco || {}, room = s.room || {};
+  const hvac = s.hvac || {}, eco = s.eco || {}, room = s.room || {}, senrg = s.senrg || {};
+
+  // Injectie kleur helper voor S-ENERGY netto
+  const nettoKleur = (w) => w > 50 ? '#00d18c' : w < -50 ? '#ff4555' : '#ffb030';
+  // EPEX kleur
+  const epexKlr = (ct) => ct < 15 ? '#00d18c' : ct < 25 ? '#ffb030' : '#ff4555';
 
   const kaarten = [
     // HVAC
@@ -1068,12 +1073,54 @@ function bouwSyn(s) {
       val: () => eco.online ? (parseFloat(eco.i)||0).toFixed(1)+' kWh' : '—',
       sub: () => eco.online ? `${(parseFloat(eco.l)||0).toFixed(0)}°C collector` : 'offline'
     },
-    // Energie
+    // Energie — link naar EPEX grafiek
     {
       naam: 'Energie', link: '/epex-grafiek.html', kl: 'ok',
       icon: () => drawelectricenergy(38, '#ffb030', '#cc8800'),
       val: () => 'EPEX',
       sub: () => 'klik voor grafiek'
+    },
+    // S-ENERGY — live solar + netto + EPEX
+    {
+      naam: 'S-ENERGY', link: '/matrix.html', kl: senrg.online ? 'ok' : 'err',
+      icon: () => {
+        const sol  = parseInt(senrg.a) || 0;
+        const net  = parseInt(senrg.e) || 0;
+        const klr  = nettoKleur(net);
+        const solPct = Math.min(1, sol / 5000);
+        const s0sim = senrg.sim_s0 === 1 || senrg.sim_s0 === '1';
+        const p1sim = senrg.sim_p1 === 1 || senrg.sim_p1 === '1';
+        const simKlr = (s0sim || p1sim) ? '#ff8c00' : '#00d18c';
+        return `<svg viewBox="0 0 60 60" width="42" height="42" xmlns="http://www.w3.org/2000/svg">
+          <!-- Achtergrond cirkel -->
+          <circle cx="30" cy="30" r="27" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.1)" stroke-width="1.5"/>
+          <!-- Solar boog (blauw→geel→groen naargelang productie) -->
+          <circle cx="30" cy="30" r="22" fill="none" stroke="rgba(255,176,48,0.15)" stroke-width="4"/>
+          <circle cx="30" cy="30" r="22" fill="none" stroke="#ffb030" stroke-width="4"
+            stroke-dasharray="${solPct * 138} 138" stroke-dashoffset="35"
+            stroke-linecap="round" transform="rotate(-90 30 30)"/>
+          <!-- Netto pijl (groen=injectie / rood=afname) -->
+          <circle cx="30" cy="30" r="13" fill="rgba(255,255,255,0.04)" stroke="${klr}" stroke-width="1.5"/>
+          <!-- Bliksem icoon -->
+          <path d="M33 18l-6 12h5l-2 12 8-14h-5z" fill="${klr}" opacity="0.9"/>
+          <!-- Sim badge punt rechtsonder -->
+          <circle cx="46" cy="46" r="5" fill="${simKlr}" opacity="0.9"/>
+        </svg>`;
+      },
+      val: () => {
+        if (!senrg.online) return '—';
+        const net = parseInt(senrg.e) || 0;
+        return net >= 0 ? `+${net} W` : `${net} W`;
+      },
+      sub: () => {
+        if (!senrg.online) return 'offline';
+        const sol = parseInt(senrg.a) || 0;
+        const ct  = ((parseInt(senrg.n) || 0) / 100).toFixed(0);
+        const s0  = senrg.sim_s0 === 1 || senrg.sim_s0 === '1';
+        const p1  = senrg.sim_p1 === 1 || senrg.sim_p1 === '1';
+        const sim = (s0 || p1) ? ' · ⚠SIM' : '';
+        return `${sol}W zon · ${ct}ct${sim}`;
+      }
     },
     // Room
     {
@@ -1094,7 +1141,7 @@ function bouwSyn(s) {
     },
     // WiFi / Dashboard
     {
-      naam: 'Dashboard', link: '/matrix.html', kl: 'wt',
+      naam: 'Dashboard', link: '#', kl: 'wt',
       icon: () => {
         const r = parseInt(hvac.ac)||parseInt(eco.p)||-72;
         const klr = rssiKleur(r);
@@ -1294,9 +1341,10 @@ async function laad() {
   } catch(e) {
     // Gebruik demodata als server niet bereikbaar
     const demo = {
-      hvac: {online:true, w:3.2, p:1,q:1,r:0,s:1,t:0,u:0,v:1, i:65,j:72,k:0,l:55,m:0,n:0,o:38, x:40, ac:-68},
-      eco:  {online:true, b:82,c:75,d:68,e:55,f:42,g:30, i:18.4, l:92, p:-71},
-      room: {online:true, f:21.3, e:21.1, h:62, v:1, o:0, n:0, w:2, x:0, t:'P=1101110', q:255,r:180,s:80, ac:-65}
+      hvac:  {online:true, w:3.2, p:1,q:1,r:0,s:1,t:0,u:0,v:1, i:65,j:72,k:0,l:55,m:0,n:0,o:38, x:40, ac:-68},
+      eco:   {online:true, b:82,c:75,d:68,e:55,f:42,g:30, i:18.4, l:92, p:-71},
+      room:  {online:true, f:21.3, e:21.1, h:62, v:1, o:0, n:0, w:2, x:0, t:'P=1101110', q:255,r:180,s:80, ac:-65},
+      senrg: {online:true, a:2800, b:600, c:1100, d:350, e:350, n:1820, n2:2100, sim_s0:1, sim_p1:1, ac:-62}
     };
     bouwSyn(demo); bouwLichten(demo); bouwHVAC(demo); bouwSec(demo);
   }
