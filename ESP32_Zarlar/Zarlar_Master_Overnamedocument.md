@@ -1,7 +1,7 @@
 
 # Zarlar Thuisautomatisering — Master Overnamedocument
-**ESP32-C6 · Arduino IDE · Matter · Google Sheets**
-*Filip Delannoy — Zarlardinge (BE) — bijgewerkt april 2026*
+**ESP32-C6 · Arduino IDE · Matter · Google Sheets · Node.js · Tailscale**
+*Filip Delannoy — Zarlardinge (BE) — bijgewerkt 26 april 2026*
 
 ---
 
@@ -13,27 +13,39 @@ elk met een eigen webserver en Matter-integratie via WiFi. Het **Zarlar Dashboar
 fungeert als centrale dataverzamelaar: het ontvangt JSON van alle controllers en POST de data
 naar Google Sheets via Google Apps Script. Controllers doen nooit zelf HTTPS-calls naar Google.
 
+De **Raspberry Pi (192.168.0.50)** vormt de rijke portaallaag — bereikbaar van overal via Tailscale.
+
 ```
 [HVAC   192.168.0.70] ──┐
 [ECO    192.168.0.71] ──┤
 [SENRG  192.168.0.73] ──┼──→ Zarlar Dashboard 192.168.0.60 ──→ Google Sheets
-[ROOM   192.168.0.80] ──┤
-[Pi GW  192.168.0.50] ──┘         │
-                                   └──→ Apple Home (via Matter/WiFi)
+[ROOM   192.168.0.80] ──┤         │
+[Photons via Worker]  ──┘         └──→ Apple Home (via Matter/WiFi)
+                                  
+RPi 192.168.0.50 ←── pollt alle controllers ──→ Tailscale ──→ Overal
 ```
+
+**Drie lagen:**
+- **Laag 1 — ESP32 controllers:** sensoren, regelen, `/json` publiceren, Matter
+- **Laag 2 — Dashboard ESP32:** pollt alles, matrix 16×16, Google Sheets logging
+- **Laag 3 — RPi portal:** rijke UI, EPEX grafieken, matrix replica, overal bereikbaar
 
 **Kritisch leermoment:** HTTPS POST vanuit de ESP32 zelf mislukte structureel door heap-druk.
 Elke controller publiceert enkel zijn `/json` endpoint — het Dashboard doet de rest.
 
-### 1.2 Controllers — huidige staat
+### 1.2 Controllers — huidige staat (26 april 2026)
+
 | Controller | Naam | IP | MAC | Board | Versie | Status |
 |---|---|---|---|---|---|---|
-| **HVAC** | ESP32_HVAC | 192.168.0.70 | 58:8C:81:32:2B:90 | 32-pin clone | v1.19 | ✅ Productie, stabiel |
-| **ECO Boiler** | ESP32_ECO Boiler | 192.168.0.71 | 58:8C:81:32:2B:D4 | 32-pin clone | v1.23 | ✅ Productie, stabiel |
-| **Smart Energy** | ESP32_SMART_ENERGY | 192.168.0.73 | — | 32-pin clone | v0.0 | 🔄 In ontwikkeling |
+| **HVAC** | ESP32_HVAC | 192.168.0.70 | 58:8C:81:32:2B:90 | 32-pin clone | v1.19 | ✅ Productie stabiel |
+| **ECO Boiler** | ESP32_ECO Boiler | 192.168.0.71 | 58:8C:81:32:2B:D4 | 32-pin clone | v1.23 | ✅ Productie stabiel |
+| **Smart Energy** | ESP32_C6_ENERGY | 192.168.0.73 | — | 32-pin clone | v1.26 | ✅ Actief 26/04/2026 |
 | **ROOM / Eetplaats** | ESP32_EETPLAATS | 192.168.0.80 | 58:8C:81:32:2F:48 | 32-pin clone | v2.21 | ✅ Matter + heap stabiel |
-| **Zarlar Dashboard** | ESP32_ZARLAR | 192.168.0.60 | A8:42:E3:4B:FA:BC | 30-pin clone | v5.0 | ✅ Matter + Matrix 16×16 |
-| **Pi Gateway** | zarlar-gateway | 192.168.0.50 | — | Raspberry Pi | — | 🔄 Gepland |
+| **Zarlar Dashboard** | ESP32_ZARLAR | 192.168.0.60 | A8:42:E3:4B:FA:BC | 30-pin clone | v5.8 | ✅ Matter + Matrix 16×16 |
+| **RPi Portal** | zarlar-rpi | 192.168.0.50 | — | Raspberry Pi | Node.js v2.0 | ✅ Actief (Tailscale) |
+
+⚠️ **MAC-wissel HVAC:** experimenteerbord (MAC `58:8C:81:32:29:54`) is ook als HVAC gebruikt.
+Productie-HVAC draait op `58:8C:81:32:2B:90`. Bij twijfel: check MAC in serial boot-output.
 
 ⚠️ **MAC-wissel HVAC:** experimenteerbord (MAC `58:8C:81:32:29:54`) is ook als HVAC gebruikt.
 Productie-HVAC draait op `58:8C:81:32:2B:90`. Bij twijfel: check MAC in serial boot-output.
@@ -151,14 +163,18 @@ Gedetailleerde pinout per controller: zie §4.1 (HVAC), §5.1 (ECO), §6.1 (SENR
 | Pin | HVAC | ECO | SENRG | ROOM | Dashboard |
 |---|---|---|---|---|---|
 | IO1 | — | Pomprelais | — | LDR1 analog | — |
-| IO3 | DS18B20 | DS18B20 | S0 Solar | DS18B20 | — |
-| IO4 | — | — | S0 WON | NeoPixels | NeoPixels matrix |
-| IO5 | — | PWM pomp | S0 SCH | PIR MOV1 | — |
-| IO6 | — | — | S0 reserve | DHT22 | — |
-| IO10 | — | — | LED-strip | TSTAT | — |
+| IO3 | DS18B20 | DS18B20 | — | DS18B20 | — |
+| IO4 | — | — | **LED matrix DIN** | NeoPixels | NeoPixels matrix |
+| IO5 | — | PWM pomp | **S0 Solar** | PIR MOV1 | — |
+| IO6 | — | — | **S0 SCH afname** | DHT22 | — |
+| IO7 | — | — | **S0 SCH injectie** | — | — |
+| IO10 | — | — | — | TSTAT | — |
 | IO11 | I2C SCL | — | — | I2C SCL | — |
 | IO13 | I2C SDA | — | — | I2C SDA | — |
 | IO20 | PWM vent. | SPI CS | — | — | — |
+
+> ⚠️ **SENRG pinnen bevestigd 26/04/2026:** LED matrix op **IO4** (Pixel-line connector),
+> S0-kanalen op IO5/IO6/IO7 (Roomsense/Option RJ45). IO10 is vrij op SENRG.
 
 ---
 
@@ -851,12 +867,13 @@ server.onNotFound(cpRedirect);
 | Versie | Wijziging |
 |---|---|
 | v5.0 | Matter HOME/UIT + Matrix 16×16 + Photon fallback + push-architectuur stabiel |
+| v5.8 | S-ENERGY controller toegevoegd (idx 4, rij 2) · `renderEnergyRow()` 16 kolommen · sim_s0/sim_p1 oranje pixels |
 
 ### 8.10 Openstaande punten
-- **S-ENERGY rij** toevoegen aan matrix (rij 2)
+- ✅ **S-ENERGY rij** toegevoegd aan matrix (rij 2) — v5.8
+- **Matter verwijderen** uit HVAC, ECO en Dashboard sketches → heap besparing ~80–120 KB per controller (Matter enkel nodig op ROOM controllers voor Apple Home)
 - **OTA testen** op Dashboard
 - **Matrix kolommen 6/7 ROOM** aanpassen naar `w>0`/`x>0` (beweging ongeacht licht)
-- **Heap-baseline** meten na Matter-activatie + matrix
 
 ---
 
@@ -869,115 +886,337 @@ De volledige schimmelbeschermingslogica zit in de room controllers — de HVAC i
 
 ---
 
-## 10. Raspberry Pi Gateway
+## 10. Raspberry Pi Portal — Node.js v2.0
 
-### 10.1 Aanleiding
-Op 15 april 2026 werd duidelijk dat de ESP32-C6 fundamentele limieten heeft als
-"public relations"-laag: heap-fragmentatie door TLS-verbindingen (Photon polls via
-Cloudflare Worker, Sheets POST via HTTPS), blocking WebServer, trage pagina-opbouw.
+### 10.1 Aanleiding en architectuurkeuze
 
-De oplossing: een **drie-laags architectuur** waarbij de Pi de rijke interface-laag vormt.
+Op 15 april 2026 werd de drie-laags architectuur geïmplementeerd:
+- ESP32 controllers doen wat ze goed kunnen: meten, regelen, `/json` publiceren
+- Dashboard ESP32 blijft de bron van waarheid voor Google Sheets logging
+- RPi vormt de rijke portaallaag: geen heap-limieten, volledige UI vrijheid
 
-### 10.2 Drie-laags architectuur
-```
-┌─────────────────────────────────────────────────────┐
-│  Laag 1 — ESP32 controllers                          │
-│  • Sensoren lezen, regelen, JSON publiceren          │
-│  • Push elke 30s naar Dashboard (plain HTTP)         │
-│  • Bare-bones UI: dataweergave + klikbare endpoints  │
-└──────────────────────┬──────────────────────────────┘
-                       │ push JSON (plain HTTP, lokaal)
-┌──────────────────────▼──────────────────────────────┐
-│  Laag 2 — Dashboard-matrix controller (ESP32-C6)     │
-│  • Ontvangt pushes, toont statusmatrix 16×16         │
-│  • Logt naar Google Sheets (elke 5 min)              │
-└──────────────────────┬──────────────────────────────┘
-                       │ data ophalen (lokaal)
-┌──────────────────────▼──────────────────────────────┐
-│  Laag 3 — Raspberry Pi portaal (192.168.0.50)        │
-│  • Rijke UI: live grafieken, historiek, trends       │
-│  • Bediening alle controllers vanuit één scherm      │
-│  • Tunnel → bereikbaar van overal (zie §10.3)        │
-│  • Geen heap-limieten, geen TLS-fragmentatie         │
-└─────────────────────────────────────────────────────┘
-```
+**Technologiekeuze: Node.js + Express** (ipv Python/Flask of nginx/cloudflared)
+- Dezelfde taal als de browser-kant (JavaScript)
+- `node-fetch` voor controller polling
+- Eén process, lage overhead op RPi
+- Deploy via GitHub → `deploy.sh` → SSH → `update.sh`
 
-### 10.3 Tunnel-aanpak: Cloudflare vs Tailscale
-Twee valide aanpakken — keuze nog open:
+### 10.2 RPi infrastructuur
 
-| Aspect | Cloudflare Tunnel + nginx | Tailscale |
+| Component | Detail |
+|---|---|
+| Hardware | Raspberry Pi, vaste IP `192.168.0.50` |
+| Software | Node.js v18 + Express, poort 3000 |
+| Autostart | systemd `zarlar.service` |
+| Repo lokaal | `/home/fidel/repo/ESP32_Zarlar/zarlar-rpi/` |
+| Public map | `/home/fidel/repo/ESP32_Zarlar/zarlar-rpi/public/` |
+| SSH lokaal | `ssh fidel@192.168.0.50` (wachtwoord: zarlar) |
+| SSH overal | `ssh fidel@100.123.74.113` (via Tailscale) |
+
+### 10.3 Tunnel-aanpak: Tailscale gekozen (april 2026)
+
+> ✅ **Beslissing genomen:** Tailscale, niet Cloudflare nginx/cloudflared.
+
+| Aspect | ~~Cloudflare Tunnel + nginx~~ | **Tailscale (gekozen)** |
 |---|---|---|
-| Publieke URL | ✅ `controllers.zarlardinge.be/...` | ❌ Enkel privé VPN |
-| Toegang Maarten | ✅ Browser, geen app | ⚠️ Tailscale app vereist |
-| Setup | Eenmalig, cloudflared als systemd service | Eenmalig, Tailscale client |
+| Publieke URL | ✅ `controllers.zarlardinge.be` | Via Funnel: `https://raspberrypi.tail3c7f42.ts.net` |
+| Toegang externen | Browser, geen app | Tailscale app of Funnel voor gasten |
+| Setup | Complex (nginx + cloudflared) | Eén commando |
 | Beveiliging | Cloudflare Access policies | Tailscale authenticatie |
-| Open poorten router | ❌ Geen — outbound tunnel | ❌ Geen |
+| Status | ❌ Niet gerealiseerd | ✅ Actief |
 
-**Cloudflare aanpak (uitgewerkt in EMS §17):**
+**Vaste toegang (Tailscale members):**
 ```
-Telefoon → controllers.zarlardinge.be → cloudflared (Pi) → nginx → ESP32-controller
-```
-nginx routeert per pad: `/hvac/` → 192.168.0.70, `/eco/` → 192.168.0.71, enz.
-
-**Tailscale aanpak (eenvoudiger voor privégebruik):**
-```
-Telefoon (Tailscale app) ↔ Tailscale relay ↔ Pi (Tailscale) → controllers
+http://100.123.74.113:3000
 ```
 
-### 10.4 Taakverdeling
-| Taak | Nu (ESP32) | Toekomst (RPi) |
+**Tijdelijke publieke toegang (Tailscale Funnel):**
+```bash
+# Aanzetten (SSH naar RPi)
+sudo tailscale funnel 3000
+# → URL: https://raspberrypi.tail3c7f42.ts.net/
+
+# Op achtergrond (blijft actief na SSH afsluiten)
+sudo tailscale funnel --bg 3000
+
+# Uitzetten
+sudo tailscale funnel off
+```
+
+> ⚠️ Funnel maakt de portal publiek — stop altijd na gebruik!
+
+**Tailscale gebruikers:**
+
+| Gebruiker | Tailscale IP | Status |
 |---|---|---|
-| Sensordata tonen | ✅ bare-bones | ✅ RPi rijke UI |
-| Grafieken + historiek | ❌ te zwaar | ✅ RPi |
-| Toegang van buitenaf | ⚠️ via Worker | ✅ RPi tunnel |
-| Statusmatrix 16×16 | ✅ blijft ESP32 | — |
-| Google Sheets logging | ✅ blijft ESP32 | — |
-| Matter/HomeKit | ✅ blijft ESP32 | — |
+| RPi | `100.123.74.113` | ✅ Online, autostart |
+| MacBook Filip | `100.89.205.22` | ✅ Online |
+| iPhone Filip + Mireille | `100.104.215.18` | ✅ Online |
+| Maarten | — | ⬜ Nog uit te nodigen |
+| Céline | — | ⬜ Nog uit te nodigen |
 
-### 10.5 Volgende stappen
-1. ✅ Dashboard v6.0 push-architectuur stabiel
-2. ⬜ RPi OS Lite 64-bit op SD (RPi Imager, Mac, USB-C adapter) — AP12
-3. ⬜ Keuze tunneling definitief maken (Cloudflare vs Tailscale)
-4. ⬜ nginx + cloudflared/Tailscale instellen — AP13/AP14
-5. ⬜ nginx controller-routing configureren — AP14
-6. ⬜ RPi portaal ontwikkelen (Python/Flask of Node.js)
-7. ⬜ RPi pollt Dashboard `/json` of controllers rechtstreeks
+### 10.4 Deploy workflow
+
+```bash
+# Alles in één commando op Mac (bestanden eerst naar ~/Downloads)
+bash ~/deploy.sh "omschrijving van wijziging"
+```
+
+`deploy.sh` doet automatisch:
+1. `.html/.css/.js` → `public/` · `.sh/.md` → root
+2. `git add + commit + pull --rebase + push`
+3. SSH naar RPi → `update.sh` → rsync → herstart indien `server.js` gewijzigd
+
+**Server.js herstart nodig bij:**
+```bash
+sudo systemctl restart zarlar  # alleen na server.js wijziging
+```
+
+### 10.5 server.js v2.0 — API endpoints
+
+**Gouden regel:** browser gebruikt NOOIT lokale IPs — alles via `/api/` op RPi.
+
+| Endpoint | Functie |
+|---|---|
+| `GET /api/poll/:naam` | Poll ESP32 `/json` (senrg, eco, hvac, room, dashboard) |
+| `GET /api/poll/room:n` | Poll room controller (room75–room81) |
+| `GET /api/photon/:id` | Photon proxy via Cloudflare Worker |
+| `GET /api/matrix` | Alle controllers parallel (ESP32 + Photons) voor matrix.html |
+| `GET /api/epex` | EPEX België spotprijzen (gecached, elk uur bijgewerkt) |
+| `GET /api/status` | Status alle controllers |
+| `GET /api/settings` | Persistente instellingen laden |
+| `POST /api/settings` | Instelling opslaan |
+
+### 10.6 Portal pagina's
+
+| Pagina | URL | Status | Inhoud |
+|---|---|---|---|
+| Portal overzicht | `/` (index.html) | ✅ Actief | SVG-cirkels alle controllers, tabs |
+| ECO Boiler detail | `/eco.html` | ✅ Actief | Boiler SVG 6 lagen, temperaturen |
+| EPEX grafiek | `/epex-grafiek.html` | ✅ Actief | Spotprijzen, injectieteller, tariefvergelijking |
+| Live matrix | `/matrix.html` | ✅ Actief | 16×16 replica, ESP32 + Photon, auto-refresh |
+| HVAC detail | `/hvac.html` | ⬜ Gepland | — |
+| Afrekening WON/SCH | `/afrekening` | ⬜ Gepland | Capaciteitstarief verdeling |
+
+### 10.7 Taakverdeling ESP32 vs RPi
+
+| Taak | ESP32 | RPi |
+|---|---|---|
+| Sensordata | ✅ Meet + publiceert `/json` | Pollt en toont |
+| Google Sheets logging | ✅ Dashboard doet dit | ❌ Nooit overnemen |
+| Statusmatrix 16×16 | ✅ Blijft ESP32 | Replica in matrix.html |
+| Matter/HomeKit | ✅ Blijft ESP32 Room | — |
+| EPEX grafieken | ❌ Te zwaar | ✅ RPi |
+| Historiek + trends | ❌ Te zwaar | ✅ RPi (Google Sheets read-only) |
+| Toegang van buitenaf | Via Cloudflare Worker (Photons) | ✅ Tailscale + Funnel |
+
 
 ---
 
 ## 11. Bestanden
+
+### 11.1 ESP32 sketches
 | Bestand | Beschrijving |
 |---|---|
 | `ESP32_C6_MATTER_HVAC_v1.19.ino` | HVAC productieversie |
-| `HVAC_GoogleScript_v4.gs` | GAS HVAC — 31 kolommen A–AE |
-| `ESP32_C6_MATTER_ECO_v1.23.ino` | ECO productieversie |
-| `ECO_GoogleScript.gs` | GAS ECO — 20 kolommen A–T |
+| `ESP32_C6_MATTER_ECO-boiler_22mar_2200.ino` | ECO Boiler v1.23 productieversie |
 | `ESP32-C6_MATTER_ROOM_13apr_v221.ino` | ROOM v2.21 — productie |
-| `ROOM_GoogleScript_v1_4.gs` | GAS ROOM — 37 kolommen A–AK |
+| `ESP32_C6_Zarlar_Dashboard_MATTER_v5_8.ino` | Dashboard v5.8 — S-ENERGY rij toegevoegd |
+| `ESP32_C6_ENERGY_v1_26.ino` | Smart Energy v1.26 — actief 26/04/2026 |
 | `Oude_MATTER_ROOM_3mar.ino` | Referentie: werkende Matter endpoint-volgorde |
-| `ESP32_C6_Zarlar_Dashboard_MATTER_v5_0.ino` | Dashboard v5.0 |
-| `Zarlar_Matrix_Labels_v5.svg` | Matrix transparant — kleurlaser |
-| `worker-status.js` | Cloudflare Worker v2.0 — Photon proxy |
+
+### 11.2 Google Apps Scripts
+| Bestand | Beschrijving |
+|---|---|
+| `HVAC_GoogleScript_v4.gs` | GAS HVAC — 31 kolommen A–AE |
+| `ECO_GoogleScript_v2.gs` | GAS ECO — 20 kolommen A–T |
+| `ROOM_GoogleScript_v1_4.gs` | GAS ROOM — 37 kolommen A–AK |
+| `ENERGY_GoogleScript_v1.gs` | GAS ENERGY — 19 kolommen A–S, sim-vlaggen gelogd |
+
+### 11.3 RPi Portal bestanden
+| Bestand | Beschrijving |
+|---|---|
+| `server.js` | Node.js server v2.0 — alle endpoints + Photon proxy + matrix aggregator |
+| `public/index.html` | Portal NIVO 1 — SVG-cirkels, tabs, S-ENERGY tegel |
+| `public/eco.html` | ECO Boiler NIVO 2 — boiler SVG 6 lagen |
+| `public/epex-grafiek.html` | EPEX grafiek — spotprijzen, injectiekolom, tariefvergelijking |
+| `public/matrix.html` | Live 16×16 matrix replica — ESP32 + Photon fallback |
+| `deploy.sh` | Mac deploy script — git + SSH + rsync + herstart |
+| `update.sh` | RPi sync script |
+
+### 11.4 Documentatie
+| Bestand | Beschrijving |
+|---|---|
+| `Zarlar_Master_Overnamedocument.md` | Dit document — master referentie |
+| `Energy_Management_System_v1_7.md` | Smart Energy volledig technisch werkdocument |
+| `Zarlar_Portal_Plan_25apr26.md` | RPi portal projectdocument |
+
+### 11.5 Overige
+| Bestand | Beschrijving |
+|---|---|
 | `partitions_16mb.csv` | Custom partitietabel alle controllers |
-| `Energy_Management_System_v1_5.md` | Smart Energy volledig technisch werkdocument |
+| `Zarlar_Matrix_Labels_v5.svg` | Matrix transparant — kleurlaser opdruk |
+| `worker-status.js` | Cloudflare Worker v2.0 — Photon proxy |
 | `Smart_Energy_Zarlardinge_v1.1.docx` | Smart Energy promotiedocument (voor Maarten) |
-| `Zarlar_Master_Overnamedocument.md` | Dit document |
 
 ---
 
-## 12. Instructies nieuwe sessie
-1. **Upload dit document** + relevante sketch(es) + `Energy_Management_System_v1_5.md` bij Smart Energy sessies
+## 12. Smart Energy Controller — samenvatting
+
+> Volledig technisch werkdocument: `Energy_Management_System_v1_7.md`
+
+### 12.1 Controller v1.26 — kernfeatures
+
+**Twee onafhankelijke simulatievlaggen (kernprincipe):**
+
+| Vlag | Default | Omschakelen |
+|---|---|---|
+| `SIM_S0` | `true` | Na S0-bekabeling: uitvinken `/settings` → reboot |
+| `SIM_P1` | `true` | Na HomeWizard dongle (~2028): uitvinken + P1-IP invullen |
+
+⚠️ **Nooit automatisch omschakelen** — altijd bewuste handeling.
+
+**Eerste ingebruikname: 26 april 2026 — 21:05**
+- RSSI −49 dBm · Heap 256 KB · EPEX 22,9 ct/kWh live ontvangen
+- Matrix rij 2 ✅ · S-ENERGY tegel portal ✅ · Google Sheets logging ✅
+
+### 12.2 Pinnen (bevestigd 26/04/2026)
+
+| Pin | Functie |
+|---|---|
+| IO4 | WS2812B matrix DIN (via 330Ω, Pixel-line connector) |
+| IO5 | S0 Solar — Inepro PRO380-S A14 (klem 18/19) |
+| IO6 | S0 SCH afname — Inepro PRO380-S A5 (klem 18/19) |
+| IO7 | S0 SCH injectie — Inepro PRO380-S A5 (klem 20/21) |
+
+> ⚠️ IO4 = LED matrix — NIET IO10 (was fout in originele sketch, gecorrigeerd 26/04/2026)
+
+### 12.3 /json keys (v1.26)
+
+| Key | Inhoud | Eenheid |
+|---|---|---|
+| `a` | Solar W | W |
+| `b` | WON W (P1, + = afname) | W |
+| `c` / `d` | SCH afname / injectie W | W |
+| `e` | Netto SCH (+ = injectie) | W |
+| `h` / `j` / `k` | Solar / SCH afname / injectie dag | Wh |
+| `i` / `vw` | WON afname / injectie dag | Wh |
+| `n` / `n2` | EPEX nu / +1u all-in | ct/kWh × 100 |
+| `pt` | Maandpiek gecombineerd | W |
+| `sim_s0` / `sim_p1` | Simulatievlaggen | 0/1 |
+| `ac` / `ae` | RSSI / Heap | dBm / bytes |
+
+### 12.4 HomeWizard P1 Meter (~2028)
+
+**Model:** HWE-P1-RJ12 · **Activatie:** HomeWizard app → Settings → Local API AAN
+**Endpoint:** `GET http://<P1_IP>/api/v1/data` (plain HTTP, geen auth)
+**Docs:** https://api-documentation.homewizard.com/docs/introduction/
+
+### 12.5 LED matrix 12×4 (48 pixels)
+
+Kolomlabels voor behuizing: `SOL W · SOL kWh · SCH AF · SCH INJ · NETTO · WON W · EPEX · EPEX+1 · PIEK% · KOKEN? · WASSEN? · HEAP`
+
+---
+
+## 13. EPEX & Energietarieven
+
+### 13.1 Leverancier
+
+**Ecopower — Dynamische burgerstroom** (Geert Van Leuven, Lede, Fluvius Imewo)
+**Vergelijking:** Groene burgerstroom vast (Filip Delannoy, Zarlardinge, Fluvius West)
+
+### 13.2 Afnameprijsopbouw (dynamisch, mrt. 2026)
+
+| Component | ct/kWh |
+|---|---|
+| EPEX spotprijs | variabel per kwartier |
+| Afnametarief Fluvius | 5,23 |
+| GSC | 1,10 |
+| WKK | 0,39 |
+| Heffingen + accijnzen | 4,94 |
+| BTW | 6% |
+| **Vaste opslag totaal** | **~14,32 ct/kWh** |
+
+### 13.3 Injectietarief (conform factuur feb. 2026)
+
+```
+Injectieprijs = max(0, EPEX − 0,67 ct/kWh onbalansafslag)
+BTW op injectie = 0%
+```
+
+Gemeten feb. 2026: gem. 5,25 ct/kWh ontvangen.
+**Geen** afnametarief, GSC, WKK of heffingen bij injectie.
+
+> 💡 Injecteren levert ~5 ct/kWh vs ~28 ct/kWh afnameprijs.
+> **Zelf verbruiken of opslaan is altijd beter dan injecteren.**
+
+### 13.4 Capaciteitstarief
+
+Gebaseerd op **hoogste gecombineerde piek** van de maand (minimum 2,5 kW).
+WON en SCH delen één meter → verdeling proportioneel naar individuele piek (zie §14).
+
+---
+
+## 14. Onderlinge Afrekening WON / SCH
+
+WON (Maarten & Céline) en SCH (Filip & Mireille) delen één Fluvius-aansluiting en één factuur.
+
+**Verdeling capaciteitstarief:**
+```
+Aandeel SCH = Piek SCH ÷ (Piek SCH + Piek WON)
+Aandeel WON = Piek WON ÷ (Piek SCH + Piek WON)
+```
+
+**Tijdlijn:**
+
+| Periode | WON meting | Status |
+|---|---|---|
+| Nu → ~2028 | Analoge teller — schatting via (totaal − SCH) | ⚠️ Benadering |
+| Na digitale meter (~2028) | P1-dongle HomeWizard — exacte meting | ⬜ Gepland |
+
+**Afrekenpagina portal:** `/afrekening` — gepland, nog niet gebouwd.
+
+---
+
+## 15. Thuisbatterij — Strategie
+
+**Nu:** analoge teller → saldering actief → batterij loont financieel niet.
+**Na 2028:** digitale meter → saldering stopt → batterij wordt interessant.
+
+**Keuze ~2028:** twee aparte (eenvoudiger) of één gedeelde (financieel optimaler).
+De S-ENERGY controller en portal zijn al ontworpen voor beide scenario's.
+
+---
+
+## 16. Matter — Beleid
+
+| Controller | Matter | Reden |
+|---|---|---|
+| ROOM controllers | ✅ **Verplicht behouden** | Apple Home, scenes Mireille, multi-merk |
+| HVAC | ⬜ Verwijderen | Enkel via portal/dashboard |
+| ECO Boiler | ⬜ Verwijderen | Enkel via portal/dashboard |
+| S-ENERGY | ❌ Nooit toegevoegd | Meetcontroller |
+| Dashboard | ⬜ Verwijderen | Infrastructuur |
+
+**Heap winst:** ~80–120 KB per controller na Matter verwijdering.
+
+---
+
+## 17. Instructies nieuwe sessie
+
+1. **Upload dit document** + relevante sketch(es) + `Energy_Management_System_v1_7.md` bij Smart Energy sessies
 2. **Vraag Claude het document samen te vatten** vóór hij iets aanpast
 3. **Eerst een plan** — Claude mag pas beginnen coderen na expliciete goedkeuring
-4. **Heap-baseline** meten als eerste stap bij elke nieuwe functie
+4. **Pin-mapping altijd vragen** voor een nieuwe sketch — Claude kent de hardware niet
 
 **Kritische herinneringen:**
-- `* /` met spatie in commentaar (nooit `*/` in tekst)
+- `#define Serial Serial0` bovenaan — verplicht voor ESP32-C6 RISC-V
 - Versieheader aanpassen bij elke wijziging
-- Bij JSON-structuurwijziging: alle consumers nalopen (§3.10)
+- Bij JSON-structuurwijziging: GAS-script + Dashboard + RPi portal nalopen (§3.10)
 - IO-pins altijd onmiddellijk aansturen (§3.6)
-- `#define Serial Serial0` alleen aanwezig als Matter effectief geïntegreerd is (§3.1)
-- ECO gebruikt RSSI key `p`, alle andere controllers `ac` (§5.3 + §8.4)
+- `* /` met spatie in commentaar (nooit `*/` in tekst — compileerfout)
+- Nooit IO8, IO9 als input (strapping pins)
+- ECO gebruikt RSSI key `p`, alle andere controllers `ac` (§5.3)
 - Dashboard gebruikt `WebServer` (blocking), niet `AsyncWebServer` (§3.2)
 - Pairing code altijd in webUI tonen, niet alleen Serial (§3.4)
 - Nooit volledige JS-block in één `str_replace` — altijd chirurgisch (§3.11)
@@ -985,5 +1224,9 @@ Telefoon (Tailscale app) ↔ Tailscale relay ↔ Pi (Tailscale) → controllers
 - Geen nieuwe JSON-keys zonder expliciete toestemming (§3.10)
 - Geen state-variabelen die niet NVS-persistent zijn
 - KISS: geen AUTO/MANUEEL lagen boven sliders die al volledig functioneel zijn
+- **Browser gebruikt NOOIT lokale IPs** — alles via `/api/` op RPi
+- **SIM_S0 / SIM_P1 nooit automatisch omschakelen** — altijd bewuste handeling
+- **LED matrix SENRG op IO4** (niet IO10 — bevestigd 26/04/2026)
+- **Matter enkel op ROOM controllers** — verwijderen uit HVAC/ECO/Dashboard
 
-*Zarlar project — Filip Delannoy — bijgewerkt april 2026*
+*Zarlar project — Filip Delannoy — bijgewerkt 26 april 2026*
