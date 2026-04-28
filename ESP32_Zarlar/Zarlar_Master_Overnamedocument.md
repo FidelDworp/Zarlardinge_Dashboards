@@ -481,6 +481,8 @@ Nog te meten — zie openstaande punten §5.7.
 > **Status: in ontwikkeling — sketch v0.0 nog te schrijven.**
 > Volledig technisch detail: zie **`Energy_Management_System_v1_5.md`**
 
+---
+
 ### 6.1 Hardware & pinout
 | Component | Detail |
 |---|---|
@@ -494,9 +496,10 @@ Nog te meten — zie openstaande punten §5.7.
 | ESP32-C6 Pin | Signaal | Functie |
 |---|---|---|
 | IO3 | S0 Solar | S0-puls interrupt FALLING |
-| IO4 | S0 WON | S0-puls interrupt FALLING |
-| IO5 | S0 SCH | S0-puls interrupt FALLING |
-| IO6 | S0 reserve | S0-puls interrupt FALLING |
+| IO4 | LED matrix (48 pixels)
+| IO5 | S0 Solar | S0-puls interrupt FALLING |
+| IO6 | S0 SCH afname | S0-puls interrupt FALLING |
+| IO7 | S0 SCH injectie
 | IO10 | LED-strip data | WS2812B DIN (via 330Ω serie-weerstand) |
 
 ### 6.2 Interface PCB — S0 aansluiting
@@ -522,12 +525,10 @@ Nog te meten — zie openstaande punten §5.7.
 |---|---|---|---|
 | 1 | Oranje-wit | GND | GND |
 | 2 | Oranje | 3.3V | 3.3V |
-| 3 | Groen-wit | S0 Solar | IO3 |
-| 4 | Blauw | S0 WON | IO4 |
-| 5 | Blauw-wit | S0 SCH | IO5 |
+| 3 | Groen-wit S0 Solar (IO5)
+Pin 4 (Blauw)      → S0 SCH afname (IO6)
+Pin 5 (Blauw-wit)  → S0 SCH injectie (IO7)
 | 6 | Groen | S0 reserve | IO6 |
-
-PCB: 40×40mm, 2×2 tiles op 100×100mm panel, V-score, JLCPCB 5 panels = 20 bordjes ±€5.
 
 ### 6.3 Libraries
 | Library | Gebruik |
@@ -603,25 +604,14 @@ Nog te meten bij eerste werkende sketch (v0.1).
 | v0.0 | — | Nog te bouwen — zie fasering in EMS §16.10 |
 
 ### 6.9 Openstaande actiepunten
-| # | Actie | Wie | Status |
-|---|---|---|---|
-| AP1 | Westdak SMA SB3.6-1AV-41: serienummer noteren | Maarten | Open |
-| AP2 | S0-tellers: pulsen/kWh lezen van label | Filip | Open |
-| AP2b | Viessmann Vitovolt 275Wp typeplaatjescode lezen | Filip/Maarten | Open |
-| AP2c | S0-uitgang passief of actief bevestigen | Filip | Open |
-| AP3 | ENTSO-E API token aanvragen (gratis) | Filip | Open |
-| AP4 | ntfy.sh app installeren | Filip + Maarten | Open |
-| AP5 | Eagle PCB ontwerp + JLCPCB bestelling | Filip | Open |
-| AP6 | EV-lader 2 merk/type opzoeken | Maarten | Open |
-| AP7 | UTP kabel trekken verdeelkast → inkomhal | Filip + Maarten | Open |
-| AP8 | SMA Speedwire testen (fase 2) | Filip | Open |
-| AP9 | Jaarbedrag Engie FLOW invullen | Maarten | Open |
-| AP10 | CZ-TAW1 WP WON reset + herregistratie | Filip | Open |
-| AP11 | Cloudflare Worker uitbreiden | Filip | Open |
-| AP12 | RPi OS Lite op SD (RPi Imager Mac) | Filip | Open |
-| AP13 | Cloudflare domein configureren | Filip | Open |
-| AP14 | nginx + cloudflared instellen en testen | Filip | Open |
-| AP15 | Cloudflare Access policies instellen | Filip | Open |
+
+| Actie | Wie | Status |
+|---|---|---|
+ntfy.sh app installeren | Filip + Maarten | Open |
+EV-lader 2 merk/type opzoeken | Maarten | Open |
+UTP kabel trekken verdeelkast → inkomhal | Filip + Maarten | Open |
+CZ-TAW1 WP WON reset + herregistratie | Filip | Open |
+NIEUW: sketch v1.27 getest 28 april 2026
 
 ---
 
@@ -870,7 +860,6 @@ server.onNotFound(cpRedirect);
 | v5.8 | S-ENERGY controller toegevoegd (idx 4, rij 2) · `renderEnergyRow()` 16 kolommen · sim_s0/sim_p1 oranje pixels |
 
 ### 8.10 Openstaande punten
-- ✅ **S-ENERGY rij** toegevoegd aan matrix (rij 2) — v5.8
 - **Matter verwijderen** uit HVAC, ECO en Dashboard sketches → heap besparing ~80–120 KB per controller (Matter enkel nodig op ROOM controllers voor Apple Home)
 - **OTA testen** op Dashboard
 - **Matrix kolommen 6/7 ROOM** aanpassen naar `w>0`/`x>0` (beweging ongeacht licht)
@@ -1022,7 +1011,7 @@ sudo systemctl restart zarlar  # alleen na server.js wijziging
 | `ESP32_C6_MATTER_ECO-boiler_22mar_2200.ino` | ECO Boiler v1.23 productieversie |
 | `ESP32-C6_MATTER_ROOM_13apr_v221.ino` | ROOM v2.21 — productie |
 | `ESP32_C6_Zarlar_Dashboard_MATTER_v5_8.ino` | Dashboard v5.8 — S-ENERGY rij toegevoegd |
-| `ESP32_C6_ENERGY_v1_26.ino` | Smart Energy v1.26 — actief 26/04/2026 |
+| `ESP32_C6_ENERGY_v1_27.ino`  | Smart Energy v1.27 — matrix layout definitief, actief 28/04/2026 |
 | `Oude_MATTER_ROOM_3mar.ino` | Referentie: werkende Matter endpoint-volgorde |
 
 ### 11.2 Google Apps Scripts
@@ -1089,7 +1078,11 @@ sudo systemctl restart zarlar  # alleen na server.js wijziging
 | IO6 | S0 SCH afname — Inepro PRO380-S A5 (klem 18/19) |
 | IO7 | S0 SCH injectie — Inepro PRO380-S A5 (klem 20/21) |
 
-> ⚠️ IO4 = LED matrix — NIET IO10 (was fout in originele sketch, gecorrigeerd 26/04/2026)
+**LED Matrix definitief ontwerp**
+- Kolomindeling samenvatting (0-11)
+- Ontwerpprincipes (lightbar richting, kleurschema)
+- Print overlay vermelding (SVG 120×35mm beschikbaar)
+
 
 ### 12.3 /json keys (v1.26)
 
