@@ -1,5 +1,5 @@
 /* ============================================================
-   Zarlar Dashboard v5.3
+   Zarlar Dashboard v5.9
    ESP32-C6 (32-pin 16MB) @ 192.168.0.60
    Filip Delannoy
 
@@ -29,7 +29,7 @@
    STATUSMATRIX — 16x16 WS2812B op IO4 (Pixel-line, shield R3=33Ω):
      Rij 0  : S-HVAC
      Rij 1  : S-ECO
-     Rij 2  : S-OUTSIDE (gereserveerd, dim paars)
+     Rij 2  : S-ENERGY (idx 4, IP 192.168.0.73)
      Rij 3  : S-ACCESS  (gereserveerd, dim paars)
      Rij 4  : Separator (amber)
      Rij 5  : R-BandB
@@ -45,6 +45,36 @@
        /matrix_test of Serial commando 'matrix-test'. Pas MATRIX_FLIP_H
        aan als kolommen gespiegeld zijn.
 
+   15apr26        v5.9  FIX erratic room-rijen op statusmatrix (Photon-rooms):
+                        P-TESTROOM (duplicate photon_id van P-Zitpl, ongebruikt
+                        in MROW) uit round-robin gehaald: active=false.
+                        pollPhotonController(): 1 automatische retry binnen
+                        dezelfde poll-beurt bij mislukking (vangt eenmalige
+                        TLS/timeout-hikjes op).
+                        Hysterese via nieuwe photon_fail_count[]: status/last_json
+                        blijven behouden tot PHOTON_FAIL_THRESHOLD (3) opeenvolgende
+                        mislukkingen — voorkomt dat 1 mislukte HTTPS-call naar de
+                        Cloudflare Worker een rij meteen zwart/rood maakt terwijl
+                        de Photon in werkelijkheid online is.
+   15apr26        v5.8  S-ENERGY controller toegevoegd (idx 4, IP 192.168.0.73).
+                        FUT1 → S-ENERGY, active=true.
+                        MROW rij 2: S-OUTSIDE (gereserveerd) → S-ENERGY.
+                        renderEnergyRow(): 16 kolommen conform /json v1.26.
+                        sim_s0/sim_p1 vlaggen zichtbaar op matrix (oranje=SIM, groen=LIVE).
+   15apr26        v5.7  Sheets POST throttle: elke SHEETS_POST_EVERY (5) cycli.
+                        Elimineert 3 HTTPS POST/min → grootste TLS-fragmentatiebron.
+                        Timeouts verlaagd: ESP32 GET 4s→1.5s, Sheets 10s→3s, Photon 6s→3s.
+                        UI en matrix blijven elke minuut vers, Sheets om de 5 minuten.
+   15apr26        v5.6  Photon round-robin: per cyclus slechts 1 Photon gepolld.
+                        Nooit meer dan 1 TLS-verbinding per minuut.
+                        photon_round_robin teller, modulo actieve Photons.
+   14apr26        v5.5  TLS-fragmentatie fix: Photon controllers slechts elke
+                        PHOTON_POLL_EVERY (5) cycli gepolld ipv elke minuut.
+                        Reduceert TLS heap-druk van 5 naar 1 verbinding/5min.
+                        photon_skip_counter globale variabele in handlePolling().
+   14apr26        v5.4  Heap fix: getStatusJson() → handleStatusJson() met static char buf[2400]
+                        in BSS. Elke 15s browser-poll lokte String alloc/free uit → snelste
+                        fragmentatiebron. Nul heap-allocatie meer voor status JSON.
    14apr26        v5.3  Poll fix: stream->readBytes() vervangen door getString()+strlcpy().
                         readBytes(699) blokkeerde loop() tot timeout per controller → UI bevroor.
                         Tijdelijke String per poll, onmiddellijk vrijgegeven na strlcpy → geen
@@ -167,7 +197,7 @@ Controller controllers[NUM_CONTROLLERS] = {
   {"S-ECO",     "192.168.0.71", "", TYPE_SYSTEM, true,  STATUS_PENDING,  "", {}, 0},
   {"S-OUTSIDE", "192.168.0.72", "", TYPE_SYSTEM, false, STATUS_INACTIVE, "", {}, 0},
   {"S-ACCESS",  "192.168.0.82", "", TYPE_SYSTEM, false, STATUS_INACTIVE, "", {}, 0},
-  {"FUT1",      "192.168.0.73", "", TYPE_SYSTEM, false, STATUS_INACTIVE, "", {}, 0},
+  {"S-ENERGY",  "192.168.0.73", "", TYPE_SYSTEM, true,  STATUS_PENDING,  "", {}, 0},
   {"FUT2",      "192.168.0.74", "", TYPE_SYSTEM, false, STATUS_INACTIVE, "", {}, 0},
   {"R-BandB",   "192.168.0.75", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", {}, 0},
   {"R-BADK",    "192.168.0.76", "", TYPE_ROOM,   false, STATUS_INACTIVE, "", {}, 0},
@@ -184,8 +214,15 @@ Controller controllers[NUM_CONTROLLERS] = {
   {"P-Waspl",   "", "33004f000e504b464d323520", TYPE_PHOTON, true,  STATUS_PENDING,  "", {}, 0},
   {"P-Eetpl",   "", "3c0030000a47353138383138", TYPE_PHOTON, true,  STATUS_PENDING,  "", {}, 0},
   {"P-Zitpl",   "", "200033000547373336323230", TYPE_PHOTON, true,  STATUS_PENDING,  "", {}, 0},
-  {"P-TESTROOM","", "200033000547373336323230", TYPE_PHOTON, true,  STATUS_PENDING,  "", {}, 0},
+  {"P-TESTROOM","", "200033000547373336323230", TYPE_PHOTON, false, STATUS_INACTIVE, "", {}, 0},
 };
+
+// v5.9: hysterese voor Photon-polling — telt opeenvolgende mislukkingen
+// per controller. Pas na PHOTON_FAIL_THRESHOLD mislukkingen op rij wordt
+// de rij echt als offline getoond; transiënte TLS/timeout-hikjes worden
+// zo niet meer meteen zichtbaar op de matrix.
+uint8_t photon_fail_count[NUM_CONTROLLERS] = {0};
+#define PHOTON_FAIL_THRESHOLD 3
 
 // ============================================================
 // NVS
@@ -216,6 +253,19 @@ int           poll_index       = 0;
 bool          polling_active   = false;
 unsigned long poll_step_timer  = 0;
 bool          home_mode_global = false;
+
+// Photon poll round-robin — v5.6
+// Per cyclus wordt slechts ÉÉN Photon gepolld (round-robin op index).
+// Nooit meer dan 1 TLS-verbinding per poll-cyclus → minimale heap-fragmentatie.
+// Elke Photon krijgt data om de N_ACTIVE_PHOTONS cycli (= minuten).
+static int photon_round_robin = 0;  // index in de reeks actieve Photons
+
+// Sheets POST throttle — v5.7
+// POST naar Sheets slechts elke SHEETS_POST_EVERY cycli.
+// Elimineert 3 HTTPS-verbindingen/minuut → grootste TLS-fragmentatiebron.
+// UI en matrix blijven elke minuut vers. Sheets krijgt data om de 5 minuten.
+#define SHEETS_POST_EVERY 5
+static int sheets_skip_counter = 0;
 
 // WiFi tester — 3 primitieven
 static bool wt_scan_pending = false;
@@ -263,7 +313,7 @@ struct MatrixRowDef {
 const MatrixRowDef MROW[MATRIX_HEIGHT] = {
   {  -1,  -1,   0 }, // rij  0: S-HVAC
   {  -1,  -1,   1 }, // rij  1: S-ECO
-  {  -1,  -1,  -1 }, // rij  2: S-OUTSIDE — gereserveerd
+  {  -1,  -1,   4 }, // rij  2: S-ENERGY (idx 4, IP 192.168.0.73)
   {  -1,  -1,  -1 }, // rij  3: S-ACCESS  — gereserveerd
   {  -1,  -1,  -2 }, // rij  4: separator
   {   6,  14,  -1 }, // rij  5: R-BandB  / P-BandB
@@ -396,8 +446,8 @@ void pollESP32Controller(int i) {
   Serial.printf("[Poll] %s → %s\n", controllers[i].name, url.c_str());
   HTTPClient http;
   http.begin(url);
-  http.setTimeout(4000);
-  http.setConnectTimeout(2000);
+  http.setTimeout(1500);
+  http.setConnectTimeout(1000);
   int code = http.GET();
   if (code == 200) {
     String body = http.getString();
@@ -406,8 +456,12 @@ void pollESP32Controller(int i) {
     controllers[i].status    = STATUS_ONLINE;
     controllers[i].last_poll = millis();
     Serial.printf("  ✓ %s online (%d bytes)\n", controllers[i].name, (int)body.length());
-    delay(500);
-    logControllerToSheets(i);
+    if (sheets_skip_counter == 0) {
+      logControllerToSheets(i);
+    } else {
+      Serial.printf("  [Sheets] %s overgeslagen (cyclus %d/%d)\n",
+                    controllers[i].name, sheets_skip_counter, SHEETS_POST_EVERY);
+    }
   } else {
     controllers[i].status = STATUS_OFFLINE;
     controllers[i].last_json[0] = '\0';
@@ -434,31 +488,54 @@ void pollPhotonController(int i) {
 
   String url = "https://" + String(PHOTON_WORKER_HOST) + String(PHOTON_WORKER_PATH)
                + String(controllers[i].photon_id);
-  Serial.printf("[Poll] %s → worker/%s\n", controllers[i].name, controllers[i].photon_id);
 
-  HTTPClient http;
-  http.begin(url);
-  http.setTimeout(6000);
-  http.setConnectTimeout(4000);
-  int code = http.GET();
-  if (code == 200) {
-    String body = http.getString();
-    http.end();
-    strlcpy(controllers[i].last_json, body.c_str(), sizeof(controllers[i].last_json));
-    if (strstr(controllers[i].last_json, "\"online\":1") != nullptr) {
-      controllers[i].status    = STATUS_ONLINE;
-      controllers[i].last_poll = millis();
-      Serial.printf("  ✓ %s online (%d bytes)\n", controllers[i].name, (int)body.length());
+  bool ok = false;
+  String body;
+
+  // v5.9: max 2 pogingen binnen dezelfde poll-beurt — vangt eenmalige
+  // TLS/timeout-hikjes op zonder te wachten op de volgende round-robin
+  // cyclus (die tot ~70-80 minuten kan duren).
+  for (int attempt = 0; attempt < 2 && !ok; attempt++) {
+    if (attempt > 0) {
+      Serial.printf("  [Photon] %s retry...\n", controllers[i].name);
+      delay(300);
+    }
+    Serial.printf("[Poll] %s → worker/%s (poging %d)\n",
+                  controllers[i].name, controllers[i].photon_id, attempt + 1);
+    HTTPClient http;
+    http.begin(url);
+    http.setTimeout(3000);
+    http.setConnectTimeout(2000);
+    int code = http.GET();
+    if (code == 200) {
+      body = http.getString();
+      http.end();
+      if (body.indexOf("\"online\":1") >= 0) ok = true;
     } else {
+      http.end();
+      Serial.printf("  ✗ %s HTTP %d (poging %d)\n", controllers[i].name, code, attempt + 1);
+    }
+  }
+
+  if (ok) {
+    strlcpy(controllers[i].last_json, body.c_str(), sizeof(controllers[i].last_json));
+    controllers[i].status    = STATUS_ONLINE;
+    controllers[i].last_poll = millis();
+    photon_fail_count[i]     = 0;
+    Serial.printf("  ✓ %s online (%d bytes)\n", controllers[i].name, (int)body.length());
+  } else {
+    photon_fail_count[i]++;
+    Serial.printf("  ⚠ %s mislukt (%d/%d opeenvolgend)\n",
+                  controllers[i].name, photon_fail_count[i], PHOTON_FAIL_THRESHOLD);
+    if (photon_fail_count[i] >= PHOTON_FAIL_THRESHOLD) {
       controllers[i].status = STATUS_OFFLINE;
       controllers[i].last_json[0] = '\0';
-      Serial.printf("  ✗ %s offline (Photon niet verbonden)\n", controllers[i].name);
+      Serial.printf("  ✗ %s nu echt OFFLINE na %d mislukkingen\n",
+                    controllers[i].name, photon_fail_count[i]);
+    } else {
+      Serial.printf("  … %s status behouden (nog niet als offline gemarkeerd)\n",
+                    controllers[i].name);
     }
-  } else {
-    http.end();
-    controllers[i].status = STATUS_OFFLINE;
-    controllers[i].last_json[0] = '\0';
-    Serial.printf("  ✗ %s worker fout (HTTP %d)\n", controllers[i].name, code);
   }
 }
 
@@ -501,7 +578,7 @@ void logControllerToSheets(int i) {
   HTTPClient http;
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
-  http.setTimeout(10000);
+  http.setTimeout(3000);
   int code = http.POST((uint8_t*)postbuf, strlen(postbuf));
   Serial.printf("  [Sheets] %s %s\n", controllers[i].name,
                 (code == 200 || code == 302) ? "OK ✓" : "fout");
@@ -536,15 +613,43 @@ void handlePolling() {
       }
       if (controllers[poll_index].type == TYPE_PHOTON &&
           strlen(controllers[poll_index].photon_id) > 0) {
-        pollPhotonController(poll_index);
+        // Round-robin: tel actieve Photons tot aan deze index
+        int photon_seq = 0;
+        for (int k = 0; k < poll_index; k++) {
+          if (controllers[k].active && controllers[k].type == TYPE_PHOTON
+              && strlen(controllers[k].photon_id) > 0) photon_seq++;
+        }
+        if (photon_seq == photon_round_robin) {
+          // Dit is de beurt van deze Photon
+          pollPhotonController(poll_index);
+        } else {
+          Serial.printf("  [Photon] %s overgeslagen (beurt %d, nu %d)\n",
+                        controllers[poll_index].name,
+                        photon_seq, photon_round_robin);
+        }
         poll_index++;
         return;
       }
     }
     poll_index++;
   }
+  // Sheets skip counter ophogen
+  sheets_skip_counter++;
+  if (sheets_skip_counter >= SHEETS_POST_EVERY) sheets_skip_counter = 0;
+
+  // Round-robin ophogen aan einde van elke cyclus
+  int total_photons = 0;
+  for (int k = 0; k < NUM_CONTROLLERS; k++) {
+    if (controllers[k].active && controllers[k].type == TYPE_PHOTON
+        && strlen(controllers[k].photon_id) > 0) total_photons++;
+  }
+  if (total_photons > 0) {
+    photon_round_robin = (photon_round_robin + 1) % total_photons;
+  }
   polling_active = false;
-  Serial.println(F("=== POLL CYCLUS KLAAR === (typ 'status' voor diagnostiek)\n"));
+  Serial.printf("=== POLL CYCLUS KLAAR | Sheets %d/%d | Photon beurt %d/%d ===\n",
+                sheets_skip_counter, SHEETS_POST_EVERY,
+                photon_round_robin, total_photons);
   updateMatrix();
 }
 
@@ -1005,6 +1110,151 @@ void renderEcoRow(int row, int ci) {
 }
 
 // ============================================================
+// MATRIX — ENERGY rij renderer (v5.8)
+// S-ENERGY controller (192.168.0.73) — /json v1.26
+//
+// Col  0: Status pixel (groen/geel/rood/grijs)
+// Col  1: Solar W         — groen gradient (0–6000W)
+// Col  2: SCH afname W    — rood gradient  (0–10000W)
+// Col  3: SCH injectie W  — cyaan gradient (0–6000W)
+// Col  4: Netto SCH       — groen=injectie / rood=afname
+// Col  5: WON W           — amber gradient (0–5000W, P1)
+// Col  6: Solar dag kWh   — geel-groen (0–30 kWh)
+// Col  7: SCH afname dag  — rood dim  (0–30 kWh)
+// Col  8: SCH injectie dag— cyaan dim (0–15 kWh)
+// Col  9: EPEX nu ct/kWh  — groen(<15)/geel(<25)/rood(>25)
+// Col 10: EPEX +1u        — zelfde kleurschaal
+// Col 11: Maandpiek %     — groen(<60%)/amber(<85%)/rood
+// Col 12: sim_s0 vlag     — oranje=SIM / groen=LIVE
+// Col 13: sim_p1 vlag     — oranje=SIM / groen=LIVE
+// Col 14: Heap largest KB — groen/amber/rood
+// Col 15: WiFi RSSI       — groen/amber/rood
+// ============================================================
+void renderEnergyRow(int row, int ci) {
+  const char* j = controllers[ci].last_json;
+  bool online    = (controllers[ci].status == STATUS_ONLINE);
+
+  statusPx(row, 0, controllers[ci].status);
+
+  if (!online) {
+    for (int c = 1; c < MATRIX_WIDTH; c++) matPx(row, c, 25, 0, 0);
+    return;
+  }
+
+  // Col 1: Solar W — groen gradient (0–6000 W)
+  {
+    int w = jI(j, "a");
+    uint8_t v = (uint8_t)constrain(map(w, 0, 6000, 0, 200), 0, 200);
+    matPx(row, 1, 0, v, 0);
+  }
+
+  // Col 2: SCH afname W — rood gradient (0–10000 W)
+  {
+    int w = jI(j, "c");
+    uint8_t v = (uint8_t)constrain(map(w, 0, 10000, 0, 200), 0, 200);
+    matPx(row, 2, v, 0, 0);
+  }
+
+  // Col 3: SCH injectie W — cyaan gradient (0–6000 W)
+  {
+    int w = jI(j, "d");
+    uint8_t v = (uint8_t)constrain(map(w, 0, 6000, 0, 200), 0, 200);
+    matPx(row, 3, 0, v/2, v);
+  }
+
+  // Col 4: Netto SCH — groen=injectie naar net / rood=afname van net
+  {
+    int netto = jI(j, "e");   // + = injectie, − = afname
+    if (netto > 0) {
+      uint8_t v = (uint8_t)constrain(map(netto, 0, 5000, 20, 200), 20, 200);
+      matPx(row, 4, 0, v, 0);
+    } else if (netto < 0) {
+      uint8_t v = (uint8_t)constrain(map(-netto, 0, 5000, 20, 200), 20, 200);
+      matPx(row, 4, v, 0, 0);
+    } else {
+      matPx(row, 4, 12, 12, 12);
+    }
+  }
+
+  // Col 5: WON W — amber gradient (0–5000 W, P1-dongle)
+  {
+    int w = abs(jI(j, "b"));   // b = WON W (+ = afname, − = injectie)
+    uint8_t v = (uint8_t)constrain(map(w, 0, 5000, 0, 200), 0, 200);
+    matPx(row, 5, v, v*3/4, 0);
+  }
+
+  // Col 6: Solar dag kWh — geel-groen (0–30 kWh)
+  {
+    int wh = jI(j, "h");   // Wh
+    uint8_t v = (uint8_t)constrain(map(wh, 0, 30000, 0, 200), 0, 200);
+    matPx(row, 6, v/3, v, 0);
+  }
+
+  // Col 7: SCH afname dag kWh — rood dim (0–30 kWh)
+  {
+    int wh = jI(j, "j");
+    uint8_t v = (uint8_t)constrain(map(wh, 0, 30000, 0, 160), 0, 160);
+    matPx(row, 7, v, 0, 0);
+  }
+
+  // Col 8: SCH injectie dag kWh — cyaan dim (0–15 kWh)
+  {
+    int wh = jI(j, "k");
+    uint8_t v = (uint8_t)constrain(map(wh, 0, 15000, 0, 160), 0, 160);
+    matPx(row, 8, 0, v/2, v);
+  }
+
+  // Col 9: EPEX nu all-in ct/kWh (n = ct × 100)
+  {
+    float ct = jF(j, "n") / 100.0f;
+    if      (ct < 0)   matPx(row,  9,  0,  80,  80);  // negatief — injecteer!
+    else if (ct < 15)  matPx(row,  9,  0, 160,   0);  // goedkoop
+    else if (ct < 25)  matPx(row,  9, 160, 140,   0); // gemiddeld
+    else if (ct < 35)  matPx(row,  9, 180,  50,   0); // duur
+    else               matPx(row,  9, 200,   0,   0); // zeer duur
+  }
+
+  // Col 10: EPEX +1u (n2 = ct × 100)
+  {
+    float ct = jF(j, "n2") / 100.0f;
+    if      (ct < 0)   matPx(row, 10,  0,  80,  80);
+    else if (ct < 15)  matPx(row, 10,  0, 160,   0);
+    else if (ct < 25)  matPx(row, 10, 160, 140,   0);
+    else if (ct < 35)  matPx(row, 10, 180,  50,   0);
+    else               matPx(row, 10, 200,   0,   0);
+  }
+
+  // Col 11: Maandpiek % van max (pt = W, max = 10000 W standaard)
+  {
+    int pt   = jI(j, "pt");
+    int pct  = (int)constrain(map(pt, 0, 10000, 0, 100), 0, 100);
+    if      (pct < 60) matPx(row, 11,   0, 160,   0);
+    else if (pct < 85) matPx(row, 11, 160, 120,   0);
+    else               matPx(row, 11, 200,   0,   0);
+  }
+
+  // Col 12: sim_s0 — oranje=SIM actief / groen=live hardware
+  {
+    int s = jI(j, "sim_s0");
+    if (s) matPx(row, 12, 180, 80, 0);   // oranje: S0 gesimuleerd ⚠️
+    else   matPx(row, 12,   0, 120, 0);  // groen: live S0 pulsen ✅
+  }
+
+  // Col 13: sim_p1 — oranje=SIM actief / groen=live P1-dongle
+  {
+    int s = jI(j, "sim_p1");
+    if (s) matPx(row, 13, 180, 80, 0);   // oranje: P1 gesimuleerd ⚠️
+    else   matPx(row, 13,   0, 120, 0);  // groen: live HomeWizard P1 ✅
+  }
+
+  // Col 14: Heap largest block KB (ae = bytes)
+  heapPx(row, 14, jF(j, "ae") / 1024.0f);
+
+  // Col 15: WiFi RSSI (ac = dBm)
+  rssiPx(row, 15, jI(j, "ac", -100));
+}
+
+// ============================================================
 // MATRIX — HVAC rij renderer (v4.1)
 // v5.2: const char* j i.p.v. const String& j
 // ============================================================
@@ -1069,8 +1319,9 @@ void updateMatrix() {
     if (rd.sys_idx == -1 && rd.esp_idx == -1 && rd.photon_idx == -1) continue;
     if (rd.sys_idx >= 0) {
       if (!controllers[rd.sys_idx].active) continue;
-      if      (strcmp(controllers[rd.sys_idx].name, "S-ECO")  == 0) renderEcoRow(row,  rd.sys_idx);
-      else if (strcmp(controllers[rd.sys_idx].name, "S-HVAC") == 0) renderHvacRow(row, rd.sys_idx);
+      if      (strcmp(controllers[rd.sys_idx].name, "S-ECO")    == 0) renderEcoRow(row,    rd.sys_idx);
+      else if (strcmp(controllers[rd.sys_idx].name, "S-HVAC")   == 0) renderHvacRow(row,   rd.sys_idx);
+      else if (strcmp(controllers[rd.sys_idx].name, "S-ENERGY") == 0) renderEnergyRow(row, rd.sys_idx);
       else { statusPx(row, 0, controllers[rd.sys_idx].status); }
       continue;
     }
@@ -1290,28 +1541,31 @@ String getWifiPage() {
 
 // ============================================================
 // STATUS JSON
-// v5.2: strstr/atoi i.p.v. String.indexOf/substring
+// v5.4: static char buf[2400] in BSS — nul heap-allocatie.
+// Wordt elke 15s door de browser opgeroepen → was de meest
+// frequente heap alloc/free cyclus, veroorzaakte fragmentatie.
 // ============================================================
-String getStatusJson() {
-  String j = "[";
+void handleStatusJson() {
+  static char buf[2400];  // BSS — vaste allocatie, nooit heap
+  int pos = 0;
+  pos += snprintf(buf + pos, sizeof(buf) - pos, "[");
   for (int i = 0; i < NUM_CONTROLLERS; i++) {
-    if (i > 0) j += ",";
     int rssi = 0;
     if (controllers[i].type != TYPE_PHOTON && controllers[i].last_json[0] != '\0') {
       const char* key = (strcmp(controllers[i].name, "S-ECO") == 0) ? "\"p\":" : "\"ac\":";
-      const char* pos = strstr(controllers[i].last_json, key);
-      if (pos) rssi = atoi(pos + strlen(key));
+      const char* p = strstr(controllers[i].last_json, key);
+      if (p) rssi = atoi(p + strlen(key));
     }
-    j += "{\"n\":\"" + String(controllers[i].name) + "\","
-         "\"t\":" + String(controllers[i].type) + ","
-         "\"ip\":\"" + String(controllers[i].ip) + "\","
-         "\"pid\":\"" + String(controllers[i].photon_id) + "\","
-         "\"a\":" + (controllers[i].active ? "1" : "0") + ","
-         "\"s\":" + String(controllers[i].status) + ","
-         "\"r\":" + String(rssi) + "}";
+    pos += snprintf(buf + pos, sizeof(buf) - pos,
+      "%s{\"n\":\"%s\",\"t\":%d,\"ip\":\"%s\",\"pid\":\"%s\",\"a\":%d,\"s\":%d,\"r\":%d}",
+      i > 0 ? "," : "",
+      controllers[i].name, controllers[i].type,
+      controllers[i].ip, controllers[i].photon_id,
+      controllers[i].active ? 1 : 0,
+      controllers[i].status, rssi);
   }
-  j += "]";
-  return j;
+  snprintf(buf + pos, sizeof(buf) - pos, "]");
+  server.send(200, "application/json", buf);
 }
 
 // ============================================================
@@ -1628,7 +1882,7 @@ void setupWebServer() {
     server.send(200, "text/html; charset=utf-8", getMainPage());
   });
   server.on("/status_json", HTTP_GET, []() {
-    server.send(200, "application/json", getStatusJson());
+    handleStatusJson();
   });
   server.on("/settings", HTTP_GET, []() {
     server.send(200, "text/html; charset=utf-8", getSettingsPage());
@@ -1746,7 +2000,7 @@ void setup() {
   Serial.begin(115200);
   delay(3000);
   Serial.println("\n\n╔══════════════════════════════════════╗");
-  Serial.println("║  Zarlar Dashboard v5.3               ║");
+  Serial.println("║  Zarlar Dashboard v5.7               ║");
   Serial.println("║  192.168.0.60 — Statusmatrix 16×16  ║");
   Serial.println("╚══════════════════════════════════════╝\n");
 
@@ -1865,7 +2119,7 @@ void loop() {
       ESP.restart();
     }
     if (cmd.equalsIgnoreCase("status")) {
-      Serial.printf("\n=== Zarlar Dashboard v5.3 | Uptime: %lu s ===\n", millis()/1000);
+      Serial.printf("\n=== Zarlar Dashboard v5.8 | Uptime: %lu s ===\n", millis()/1000);
       Serial.printf("IP: %s  RSSI: %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
       Serial.printf("Heap free: %u  Largest: %u\n",
                     ESP.getFreeHeap(),
