@@ -1,5 +1,12 @@
 # Zarlar Portal — Projectdocument
-*Bijgewerkt 25 april 2026 — Filip Delannoy (FiDel)*
+*Bijgewerkt 15 oktober 2026 — Filip Delannoy (FiDel)*
+
+> **Review 15 oktober 2026.** Achterhaalde zaken bijgewerkt op basis van de repo (`server.js` v2.1, `public/`). Nieuw: §16 (Matter → RPi).
+> **Nog te verifiëren door FiDel** (tegenstrijdig in de bronnen, bewust niet zelf beslist):
+> - **V1** S-ENERGY GPIO's: §11.2 zegt S0 op IO3/IO5/IO6, andere notities zeggen IO5/IO6/IO7. LED-pin: §11.6 zegt IO2, oudere notities IO4.
+> - **V2** Keys `ps`/`pw`: §12.1 zegt "TODO v1.27", §14.4 zegt "bestaan al". Wat zit in de actieve sketch?
+> - **V3** Rol RPi: §2.1 zegt "RPi neemt GEEN dataverzameling of logging over", maar §12.2 en §13.4 laten de RPi stats (`stats-energie.json`) bijhouden. Welke regel geldt?
+> - **V4** Actieve versies: Dashboard (v5.9?) en ROOM (v2.21 of nieuwer?).
 
 ---
 
@@ -9,12 +16,13 @@
 
 | Component | Detail |
 |---|---|
-| Hardware | Raspberry Pi, vaste IP `192.168.0.50` |
-| Software | Node.js v18 + Express, poort 3000 |
+| Hardware | Raspberry Pi 3B+ (±1 GB RAM, microSD), vaste IP `192.168.0.50` |
+| OS | Debian 13 (Trixie), aarch64 |
+| Software | Node.js + Express, poort 3000 (v18 in april 2026; actuele versie checken met `node -v`, zie §16 F0) |
 | Repo lokaal | `/home/fidel/repo/ESP32_Zarlar/zarlar-rpi/` |
 | Public map | `/home/fidel/repo/ESP32_Zarlar/zarlar-rpi/public/` |
 | Autostart | systemd `zarlar.service` ✅ |
-| SSH lokaal | `ssh fidel@192.168.0.50` (wachtwoord: zarlar) |
+| SSH lokaal | `ssh fidel@192.168.0.50` (wachtwoord: niet in dit publieke document) |
 | SSH overal | `ssh fidel@100.123.74.113` (via Tailscale) |
 
 ### 1.2 GitHub repository
@@ -23,14 +31,21 @@
 
 ```
 zarlar-rpi/
-├── server.js               ← Node.js server v2.0
+├── server.js               ← Node.js server v2.1
 ├── update.sh               ← RPi sync script
 ├── deploy.sh               ← Deploy script (ook actief op Mac als ~/deploy.sh)
+├── 1-check.sh … 4-static-ip.sh ← Eenmalige installatiescripts
 ├── README.md
 ├── Zarlar_Portal_Plan.md   ← Dit document
 └── public/
     ├── index.html          ← Portal NIVO 1 (synoptisch overzicht)
-    ├── eco.html            ← ECO Boiler NIVO 2 detail pagina
+    ├── eco.html            ← ECO Boiler NIVO 2
+    ├── hvac.html           ← HVAC NIVO 2
+    ├── room.html           ← Room NIVO 2 (Eetplaats)
+    ├── outside.html        ← Buitensensor
+    ├── matrix.html         ← 16×16 matrix replica (Dashboard)
+    ├── 12x4_matrix.html    ← S-ENERGY matrix replica
+    ├── verlichting.html    ← Verlichting alle rooms
     ├── epex-grafiek.html   ← EPEX energie grafiek
     ├── zarlar.css          ← Gedeelde stijl
     └── zarlar.js           ← Gedeelde functies
@@ -81,12 +96,15 @@ cp ~/Downloads/deploy.sh ~/deploy.sh && chmod +x ~/deploy.sh && bash ~/deploy.sh
 
 ```
 192.168.0.50  → RPi Zarlar Portal (Node.js poort 3000)
-192.168.0.60  → ESP32 Dashboard v5.7 (bron van waarheid, matrix 16×16)
+192.168.0.60  → ESP32 Dashboard v5.9 (bron van waarheid, matrix 16×16)
 192.168.0.70  → ESP32 HVAC v1.19
 192.168.0.71  → ESP32 ECO Boiler v1.23
-192.168.0.73  → ESP32 Smart Energy (in ontwikkeling)
+192.168.0.73  → ESP32 Smart Energy (S-ENERGY v1.27, zie §11)
 192.168.0.80  → ESP32 Room v2.21 (Eetplaats/Testroom)
-192.168.0.75–.81 → Toekomstige Room controllers
+192.168.0.75–.81 → Room controllers (in server.js v2.1):
+                   .75 B&B · .76 Badkamer · .77 Inkomhal · .78 Keuken
+                   .79 Wasplaats · .80 Eetplaats · .81 Zitplaats
+                   (vervangen stap voor stap de Photons P-*)
 ```
 
 ### 2.1 Architectuurprincipes
@@ -121,7 +139,7 @@ fetch('/api/poll/eco')
 
 ---
 
-## 3. server.js v2.0 — API endpoints
+## 3. server.js v2.1 — API endpoints
 
 | Endpoint | Methode | Functie |
 |---|---|---|
@@ -134,7 +152,9 @@ fetch('/api/poll/eco')
 | `/api/scenes` | GET/POST/DELETE | Scènes beheren |
 | `/api/scenes/:naam/run` | POST | Scène uitvoeren |
 | `/api/controllers` | GET | Lijst van controllers |
-| `/api/history/:naam` | GET | Google Sheets historiek (read-only) |
+| `/api/photon/:id` | GET | Photon-data via Cloudflare Worker (geen CORS) |
+| `/api/matrix` | GET | Alle ESP32 + Photon data parallel — **kritiek, nooit verwijderen** |
+| `/api/history/:naam` | GET | Google Sheets historiek (read-only) — ⬜ gepland, nog niet in server.js |
 
 ---
 
@@ -235,11 +255,11 @@ Via klik naar NIVO 2 pagina
 
 | Controller | SVG icoon | Link |
 |---|---|---|
-| HVAC | `drawheating` | ⬜ /hvac.html |
+| HVAC | `drawheating` | ✅ /hvac.html |
 | ECO Boiler | Custom boiler SVG (6 lagen) | ✅ /eco.html |
 | **S-ENERGY** | **`drawelectricenergy`** | **✅ /12x4_matrix.html (29/04)** |
-| Eetplaats | `drawhome` | ⬜ /room.html |
-| Zon | `drawSunlight` | ⬜ later |
+| Eetplaats | `drawhome` | ✅ /room.html |
+| Buiten | `drawSunlight` | ✅ /outside.html |
 | **Dashboard** | **`drawwifi`** | **✅ /matrix.html (29/04)** |
 
 ### 4.5 NIVO 2a — ECO Boiler (eco.html) ✅
@@ -356,30 +376,13 @@ SENRG controller — het portal interfereert NOOIT met energieautomatisering.
 1. Systeem overzicht (index.html) — alle controllers, online/offline status ✅
 2. ECO Boiler detail (eco.html) ✅
 3. EPEX energie grafiek (epex-grafiek.html) ✅
-4. Matrix pagina — exacte replica 16×16 RGB matrix, live via /json van .60
+4. Matrix pagina — exacte replica 16×16 RGB matrix, live via /json van .60 ✅
 5. Per controller rijke UI — automatisch gegenereerd vanuit /capabilities
-6. Verlichting pagina — alle room controllers gecombineerd, scenes knoppen
+6. Verlichting pagina — alle room controllers gecombineerd, scenes knoppen ✅ (scenes-knoppen nog te bevestigen)
 7. Scenes en Automatisaties — visuele editor, log van uitvoeringen
 
-**Publieke mapstructuur (doel):**
-```
-public/
-├── index.html          ← Systeem overzicht ✅
-├── eco.html            ← ECO Boiler detail ✅
-├── epex-grafiek.html   ← Energie grafiek ✅
-├── 12x4_matrix.html    ← S-ENERGY matrix 12×4 live replica ✅ 29/04
-├── hvac.html           ← HVAC detail ⬜
-├── room.html           ← Room detail ⬜
-├── matrix/
-│   └── index.html      ← 16×16 matrix replica (matrix.html) ✅
-├── verlichting/
-│   └── index.html      ← Gecombineerde verlichting ⬜
-├── scenes/
-│   └── index.html      ← Scenes en automatisaties ⬜
-└── assets/
-    ├── zarlar.css
-    └── zarlar.js
-```
+**Publieke mapstructuur:** plat gehouden (alle pagina's direct in `public/`, zie §1.2).
+Nog te bouwen: `scenes.html` (scenes en automatisaties) ⬜.
 
 ---
 
@@ -413,7 +416,7 @@ public/
 **Injectietarief (teruglevering aan het net):**
 
 Bij het **dynamisch Ecopower-tarief** wordt injectie vergoed aan de EPEX-marktprijs
-minus een onbalanstoeslag ≈ **5,25 ct/kWh gemiddeld** (feb. 2026). Injectie aan 0% BTW.
+minus een onbalansafslag van 0,67 ct/kWh; dat gaf gemiddeld ≈ **5,25 ct/kWh** (feb. 2026). Injectie aan 0% BTW.
 Bij negatieve EPEX-prijzen wordt er géén vergoeding betaald — dan kost injectie zelfs geld.
 
 Bij het **vast Ecopower-tarief** geldt een vaste injectievergoeding van ca. **5,0 ct/kWh**,
@@ -462,13 +465,13 @@ ongeacht het uur of de marktprijs.
 
 ## 8. Technische context
 
-**server.js v2.0:**
+**server.js v2.1:**
 - Alle room controllers toegevoegd (room75–room81, 192.168.0.75–.81)
 - Dashboard controller toegevoegd (192.168.0.60)
 - `/api/photon/:id` proxy endpoint — Cloudflare Worker via RPi (geen CORS issues)
 - `/api/matrix` endpoint — haalt alle ESP32 + Photon data parallel op in één call
 - **ESP32:** C6, Arduino IDE, `#define Serial Serial0` verplicht
-- **ESPAsyncWebServer** — geen MQTT, geen Home Assistant
+- **ESPAsyncWebServer** — geen MQTT, geen Home Assistant *op de ESP32's* (op de RPi komt MQTT voor Zigbee, zie §16)
 - **Nooit** `huge_app` partitie — gebruik `partitions_16mb.csv`
 - **ECO gebruikt RSSI key** `p`, andere controllers `ac`
 - **Dashboard gebruikt** `WebServer` (blocking), niet AsyncWebServer
@@ -486,8 +489,8 @@ ongeacht het uur of de marktprijs.
 | 3 | Tailscale remote toegang (overal) | ✅ Klaar |
 | 4 | Portal NIVO 1: SVG cirkels, alle tabs | ✅ Klaar |
 | 5 | ECO Boiler NIVO 2 pagina | ✅ Klaar |
-| 6 | HVAC NIVO 2 pagina | ⬜ Open |
-| 7 | Room NIVO 2 pagina | ⬜ Open |
+| 6 | HVAC NIVO 2 pagina | 🟡 Eerste versie (29/04) |
+| 7 | Room NIVO 2 pagina | 🟡 Eerste versie (30/04) |
 | 8 | Lichten tab verfijnen (pixel nicknames via NVS) | ⬜ Open |
 | 9 | Maarten + Céline uitnodigen op Tailscale | ⬜ Open |
 | 10 | `/capabilities` endpoint op ESP32 controllers | ⬜ Later |
@@ -498,6 +501,7 @@ ongeacht het uur of de marktprijs.
 | 14 | S-ENERGY: echte S0 bekabeling + overschakelen van SIM naar LIVE | ⬜ Later |
 | 15 | Smart Energy — P1 dongle integratie (na digitale meter ~2028) | ⬜ Toekomst |
 | 16 | Thuisbatterij(en) — beslissing + integratie in sturing (~2028) | ⬜ Toekomst |
+| 17 | Matter centraliseren op RPi (Matterbridge) + Zigbee-knoppen — zie §16 | ⬜ Plan |
 
 ---
 
@@ -505,8 +509,8 @@ ongeacht het uur of de marktprijs.
 
 | # | Actie |
 |---|---|
-| AP1 | HVAC NIVO 2 pagina bouwen |
-| AP2 | Room NIVO 2 pagina bouwen |
+| AP1 | HVAC NIVO 2 pagina afwerken (eerste versie staat) |
+| AP2 | Room NIVO 2 pagina afwerken + generiek maken voor alle rooms |
 | AP3 | NIVO 1: alarmen tonen als prioriteit |
 | AP4 | Maarten uitnodigen op Tailscale |
 | AP5 | Céline uitnodigen op Tailscale |
@@ -520,14 +524,15 @@ ongeacht het uur of de marktprijs.
 | **AP12b** | **Portal: 12x4_matrix.html live replica** | **✅ Klaar 29/04** |
 | AP13 | S-ENERGY: maandpiek per huis loggen (ps, pw, pt) naar stats-bestand RPi |
 | AP14 | Portal: afrekenpagina WON/SCH bouwen (zie §13) |
-| AP15 | S-ENERGY: S0 bekabeling aansluiten → sim_mode uitschakelen → v1.26 LIVE |
+| AP15 | S-ENERGY: S0 bekabeling aansluiten → SIM_S0 uitschakelen → LIVE |
 | AP16 | S-ENERGY: WON afname + injectie toevoegen via P1-dongle (~2028) |
+| AP17 | Matter → RPi: F0 inventaris starten + beslissingen B1–B4 (zie §16) |
 
 ---
 
 ## 11. Smart Energy Controller (S-ENERGY) — Hardware
 
-> **Status: sketch v1.25 SIM beschikbaar — klaar om te flashen.**
+> **Status: sketch v1.27 actief (matrix 12×4 definitief, 28/04/2026), S0 nog in SIM.**
 > IP: `192.168.0.73` · Board: ESP32-C6 32-pin
 
 ### 11.0 Versiehistorie sketch
@@ -536,7 +541,8 @@ ongeacht het uur of de marktprijs.
 |---|---|---|
 | v1.24 | Archief | Eerste productieversie — live S0 ISR |
 | v1.25 SIM | Archief | Enkelvoudige SIMULATION_MODE — vervangen door v1.26 |
-| **v1.26** | **Actief** | Twee onafhankelijke simulatievlaggen SIM_S0 + SIM_P1 · HomeWizard P1 integratie |
+| v1.26 | Archief | Twee onafhankelijke simulatievlaggen SIM_S0 + SIM_P1 · HomeWizard P1 integratie |
+| **v1.27** | **Actief** | Matrix 12×4 definitieve kolomindeling (zie §11.6) |
 
 ### 11.1 Energiemeters
 
@@ -667,7 +673,7 @@ Klem 19 of 21 (S0−) ──── GND (gedeeld met ESP32 GND)
 Geen optocoupler — S0-uitgang van PRO380-S is zelf al optisch geïsoleerd.
 Verbinding via **OPTION RJ45** connector op het Zarlar shield.
 
-### 11.4 LED matrix 12×4
+### 11.6 LED matrix 12×4
 
 **Hardware:** 12×4 WS2812B matrix = **48 pixels**, verticale serpentine (rechts→links, afwisselend ↑↓).
 Pin: **IO2** (was IO4 in oudere versies).
@@ -711,8 +717,8 @@ Voeding: aparte 5V (niet via shield PTC).
 | WON afname van net | P1-dongle HomeWizard | ~2028 | `b` (W), `i` (Wh dag) |
 | WON injectie naar net | P1-dongle HomeWizard | ~2028 | `vw` (Wh dag) |
 | Gecombineerde maandpiek | berekend | Nu | `pt` (W) |
-| Maandpiek SCH individueel | berekend | Nu | `ps` (W) — TODO v1.27 |
-| Maandpiek WON individueel | P1-dongle | ~2028 | `pw` (W) — TODO v1.27 |
+| Maandpiek SCH individueel | berekend | Nu | `ps` (W) — te verifiëren (V2) |
+| Maandpiek WON individueel | P1-dongle | ~2028 | `pw` (W) — te verifiëren (V2) |
 | S0 simulatie actief | vlag | Nu | `sim_s0` (0/1) |
 | P1 simulatie actief | vlag | Nu | `sim_p1` (0/1) |
 
@@ -872,7 +878,7 @@ retailtarief. Dan is een thuisbatterij wél interessant:
 
 ### 15.1 Verlichting pagina development — Auto-discovery & Optimistic UI
 
-**Deliverable:** `/verlichting.html` — Beheer verlichting in alle rooms via Matter switches
+**Deliverable:** `/verlichting.html` — Beheer verlichting in alle rooms via de switch-keys sw1/sw2/sw3 (zelfde logica als de Matter-switches op de ROOM)
 
 **Architectuur:**
 - Auto-discovery via `/api/status` → filter alleen `online: true` rooms
@@ -1062,5 +1068,122 @@ for (const room of onlineRooms) {
 
 ---
 
-*Zarlar Portal Projectdocument — Filip Delannoy — 30 april 2026 (updated)*
+## 16. Matter centraliseren op de RPi (+ Zigbee-knoppen)
 
+*Toegevoegd 15 oktober 2026. Status: **plan, nog niets geïnstalleerd**. Basis: overnamedocument "Plan Matter naar RPi" van 2 oktober 2026 (§16.2), aangevuld met review en stappenplan (§16.3 tot §16.7).*
+
+### 16.1 Doel
+
+- Matter verdwijnt uit de ESP32-C6-controllers. Dat bespaart 80 tot 120 KB heap per controller (zie §15) en maakt de sketches eenvoudiger.
+- De ESP32's doen alleen nog I/O, lokale realtime-berekeningen, JSON serveren en de matrix aansturen, volgens de bestaande architectuurregel.
+- De RPi wordt de enige Matter-laag naar Apple Home, en later eventueel naar Google Home.
+- De 4 Aqara Opple 6-knops schakelaars (WXCJKG13LM, Zigbee 3.0) worden lokaal bruikbaar. De Chinese cloud-hub werkt niet meer.
+- Alles wat nu op de RPi draait blijft behouden: `zarlar.service`, Tailscale (+ Funnel) en desktop/VNC.
+
+### 16.2 Uitgangssituatie (uit overnamedocument 2 okt 2026)
+
+| Item | Waarde |
+|---|---|
+| Hardware | Raspberry Pi 3B+, ±1 GB RAM, microSD 14 GB (5,0 GB vrij) |
+| OS | Debian 13 (Trixie) 13.7, aarch64, kernel 6.18.50+rpt-rpi-v8 |
+| Belasting | load 0.00, CPU ±99% idle, 605 MiB available, swap 175 MiB gebruikt |
+| Docker | niet geïnstalleerd |
+| Processen | zarlar-dashboard (Node, ±48 MB), tailscaled, wayvnc, labwc, wf-panel-pi, pcmanfm, piclone, squeekboard |
+| Apple Home | 2× HomePod mini, 2× Apple TV 4K, iPhones (Thread Border Routers aanwezig) |
+| Tweede RPi | Sjalay (Recht), via Tailscale. Valt buiten deze fase. |
+
+Ontwikkelprincipes uit het overnamedocument, die onverkort gelden:
+- **Niet-destructief.** De bestaande installatie blijft werken.
+- **Eén stap tegelijk:** commando → output bekijken → interpreteren → volgende kleine stap.
+- **Eerst meten, dan wijzigen.**
+- **Tailscale niet herinstalleren of vervangen.**
+- **Backup vóór elke structurele wijziging.**
+- Geen ander OS (geen Home Assistant OS) en geen nieuwe hardware zolang de Pi 3B+ niet getest is.
+- Actuele officiële documentatie gebruiken voor installatie-instructies.
+
+Het overnamedocument vergeleek twee architecturen:
+- **A.** Alleen een Matter Server.
+- **B.** Home Assistant (Container) + Matter Server, in Docker op de bestaande Debian.
+
+Het voorlopige voorstel daar was B.
+
+### 16.3 Review: wat bijgestuurd moet worden
+
+1. **A en B halen het doel niet.** In beide architecturen blijven de ESP32's Matter-devices die de Matter Server commissioneert. Matter verhuist dan niet naar de Pi, er komt alleen een extra controller bij. Om Matter echt uit de ESP32's te halen is een **Matter-*bridge*** op de Pi nodig. Die bridge leest de bestaande HTTP/JSON-endpoints (via `server.js`) en biedt die zelf als Matter-accessoires aan Apple Home aan.
+2. **Het startmechanisme van zarlar-dashboard is al bekend.** Volgens §1.1 is dat systemd `zarlar.service`. `systemctl status zarlar-dashboard` vond niets omdat de unit anders heet. Dit moet bevestigd worden met `systemctl status zarlar` (zie F0).
+3. **Node-versie.** De portal draait op Node.js v18. Matterbridge vraagt Node 20.19+, 22 of 24 (24 LTS aanbevolen). De systeem-Node mag niet blind geüpgraded worden, want dat raakt `server.js`. Daarom draait Matterbridge in Docker, of met een eigen Node, apart van de portal.
+4. **Home Assistant op een Pi 3B+.** Home Assistant ondersteunt alleen nog OS- en Container-installaties. aarch64 blijft ondersteund, maar 1 GB RAM is krap voor HA + Matter Server samen. Voor dashboards en historiek heeft Zarlar al de eigen portal, dus HA is voor het doel niet nodig.
+5. **Aantal Matter-controllers.** Het overnamedocument spreekt van ±12 ESP32-C6 Matter-controllers. §15 zegt dat Matter alleen op de ROOM-controllers blijft. Een inventaris per controller is nodig (F0).
+6. **Apple Home-scènes.** Zodra een ESP32 zonder Matter geflasht wordt, verdwijnt zijn oude accessoire uit Apple Home. Scènes en automaties die daarnaar verwijzen (o.a. die van Mireille) moeten dan opnieuw ingesteld worden op het bridge-accessoire. Dit gebeurt dus per kamer en gepland.
+
+### 16.4 Voorgestelde architectuur (C): Matterbridge + Zarlar-plugin
+
+```text
+ESP32-C6 controllers (géén Matter meer: alleen HTTP/JSON)
+        │  /json, /toggle_pixel, ...
+        ▼
+server.js (portal, zarlar.service)  ← enig toegangspunt naar de controllers
+        │  /api/poll, /api/set, /api/scenes
+        ▼
+Matterbridge (Docker, Node 24, network_mode: host)
+   ├─ plugin "zarlar"  (eigen dynamic platform → rooms als Matter-devices)
+   └─ plugin "zigbee2mqtt" → Zigbee2MQTT ← Mosquitto ← USB Zigbee-dongle ← 4× Opple
+        │
+        ▼
+Apple Home (wired Apple TV als voorkeurshub)  /  later Google Home
+```
+
+Waarom deze keuze:
+- **Licht.** Volgens de projectdocumentatie draait Matterbridge vanaf 512 MB RAM. Dat maakt de Pi 3B+ realistisch, in tegenstelling tot HA.
+- **Past in de stack.** Matterbridge is Node.js, net als de portal, en ondersteunt eigen plugins (accessory- en dynamic platform).
+- **Eén toegangspunt.** De plugin praat alleen met `server.js`, niet rechtstreeks met de ESP32's. De Dashboard-controller (.60) blijft de bron van waarheid (§2.1); de portal is de enige laag die naar buiten praat, en controllers blijven geïsoleerd van de buitenwereld.
+- **Zigbee komt er gratis bij.** De bestaande zigbee2mqtt-plugin stelt de Opple-knoppen beschikbaar in Apple Home. Via MQTT kan `server.js` dezelfde knopacties ook gebruiken voor Zarlar-scènes.
+- **Reversibel.** De Docker-container stoppen herstelt de vorige toestand. Er zijn geen wijzigingen aan Debian-pakketten van de portal.
+
+Aandachtspunten:
+- IPv6 en mDNS moeten op het LAN werken.
+- Apple Home-limiet: 150 accessoires per bridge.
+- Wifi-HomePods kunnen soms zendfouten geven, dus een bekabelde Apple TV als hub verdient de voorkeur.
+
+### 16.5 Stappenplan
+
+Elke fase heeft een **meetpunt** (wanneer is ze geslaagd) en een **terugweg**. Pas na expliciete GO naar de volgende fase. Binnen een fase: één commando per keer.
+
+| Fase | Wat | Meetpunt | Terugweg |
+|---|---|---|---|
+| **F0** | Inventaris, niets wijzigen: `ip -br addr`, `ip -6 addr`, `ip route`, `ip -6 route`, `tailscale status`, `systemctl status zarlar`, `node -v`, `free -h`, `df -h`. Daarnaast een lijst welke ESP32's nu Matter hebben. | IPv6 actief op LAN-interface, autostart portal bevestigd, Matter-lijst compleet | n.v.t. |
+| **F1** | Backup: SD-image (piclone naar USB/SD) + check dat de repo volledig in GitHub staat | Image opstartbaar getest | n.v.t. |
+| **F2** | Docker installeren (officiële Debian-instructies) | Portal, Tailscale en VNC werken nog; RAM gemeten | `apt purge docker-*` |
+| **F3** | Matterbridge in Docker (`network_mode: host`), zonder plugins; koppelen met Apple Home | Bridge zichtbaar in Woning-app; RAM < ±150 MB extra; 24 u stabiel | container stoppen, bridge uit Woning verwijderen |
+| **F4** | Zarlar-plugin v0.1 (code pas na GO): **1 room, alleen sensoren** (temp, vocht, motion) via `/api/poll` | Waarden in Apple Home gelijk aan portal, 48 u stabiel | plugin uitschakelen |
+| **F5** | Plugin v0.2: schakelaars van die room via `/api/set` (sw1/sw2/sw3) | Schakelen vanuit Woning-app werkt, status correct terug | plugin terug naar v0.1 |
+| **F6** | Die ene ESP32 flashen **zonder Matter** (nieuwe sketchversie, na GO); oud accessoire uit Apple Home; scènes van die kamer opnieuw instellen | Heap-winst gemeten; kamer volledig bedienbaar via bridge | vorige sketch terugflashen |
+| **F7** | Opschalen 1 → 2 → 4 → alle rooms, telkens met dezelfde check | RAM, CPU, swap, mDNS en Apple Home stabiel na elke stap | laatste groep terugdraaien |
+| **F8** | Zigbee: USB-dongle + Mosquitto + Zigbee2MQTT (Docker) + matterbridge-zigbee2mqtt; 1 Opple koppelen, `operation_mode: event` | Alle 6 knoppen (single/double/long) zien in Z2M en Apple Home | containers stoppen |
+| **F9** | Optioneel: Opple-acties ook in portal (`server.js` via MQTT → bestaande scenes) | Knop start Zarlar-scene | feature uitzetten |
+| **F10** | Optioneel: Google Home als tweede fabric | Devices in beide apps | fabric verwijderen |
+
+**Wanneer naar een Pi 4/5 (4 GB)?** Bij aanhoudend swapgebruik, RAM-tekort, instabiele mDNS/Matter-discovery, trage reacties of minder dan 2 GB vrije opslag. De Pi 3B+ kan dan portal, Tailscale en VNC blijven draaien.
+
+### 16.6 Open beslissingen
+
+| # | Vraag |
+|---|---|
+| B1 | Architectuur C (Matterbridge) akkoord, of toch HA (B) testen? |
+| B2 | Welke Zigbee-dongle (bv. Sonoff ZBDongle-E / SLZB-06)? |
+| B3 | Welke room eerst als testkamer (voorstel: room80, R-EETPL)? |
+| B4 | Google Home echt nodig, of enkel Apple Home? |
+
+### 16.7 Eerstvolgende actie
+
+**Nog niets installeren.** F0 starten met:
+
+```bash
+ip -br addr
+```
+
+Volledige output terugsturen, daarna samen de volgende stap.
+
+---
+
+*Zarlar Portal Projectdocument — Filip Delannoy — 15 oktober 2026 (updated)*
