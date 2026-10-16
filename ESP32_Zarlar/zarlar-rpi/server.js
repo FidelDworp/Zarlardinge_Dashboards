@@ -1,6 +1,15 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Zarlar Dashboard Server v2.2 — Raspberry Pi
+// Zarlar Dashboard Server v2.3 — Raspberry Pi
 // Node.js + Express — draait op poort 3000
+//
+// v2.3 (16 okt 2026):
+//   - Login (HTTP Basic Auth) voor verkeer via Tailscale Funnel (publiek adres).
+//     Funnel-verkeer komt binnen als 127.0.0.1 (tailscaled proxy).
+//     LAN (192.168.0.x) en Tailscale (100.64.0.0/10) blijven zonder login.
+//   - Gebruikersnaam/wachtwoord in auth.json naast server.js (NIET in GitHub):
+//       /home/fidel/zarlar-dashboard/auth.json → {"user":"...","pass":"..."}
+//     Ontbreekt auth.json → Funnel volledig geblokkeerd (veilig standaardgedrag).
+//   - 10 foute pogingen via Funnel → 15 min blokkade.
 //
 // v2.2 (16 okt 2026):
 //   - /api/epex: cache enkel nog geldig als ze "compleet" is.
@@ -22,6 +31,56 @@ const path    = require('path');
 const app     = express();
 
 app.use(express.json());
+
+// ─── v2.3: LOGIN VOOR FUNNEL-VERKEER ─────────────────────────────────────────
+// Moet vóór express.static staan, zodat ook de pagina's achter de login zitten.
+const crypto    = require('crypto');
+const AUTH_FILE = path.join(__dirname, 'auth.json');
+const AUTH_MAX_FOUT = 10, AUTH_BLOK_MS = 15 * 60 * 1000;
+let authFouten = 0, authGeblokkeerdTot = 0;
+
+function isEigenNetwerk(ip) {
+  ip = String(ip || '').replace(/^::ffff:/, '');
+  if (/^192\.168\.0\.\d+$/.test(ip)) return true;              // LAN
+  const m = ip.match(/^100\.(\d+)\.\d+\.\d+$/);                  // Tailscale 100.64.0.0/10
+  return !!m && +m[1] >= 64 && +m[1] <= 127;
+}
+function gelijk(a, b) {   // vergelijking in constante tijd
+  const ha = crypto.createHash('sha256').update(String(a)).digest();
+  const hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
+app.use((req, res, next) => {
+  if (isEigenNetwerk(req.socket.remoteAddress)) return next();
+
+  // Vanaf hier: Funnel (127.0.0.1) of onbekende afzender → login vereist
+  if (Date.now() < authGeblokkeerdTot)
+    return res.status(429).send('Te veel foute pogingen — probeer later opnieuw.');
+
+  const auth = readJSON(AUTH_FILE);
+  if (!auth || !auth.user || !auth.pass) {
+    console.log('[AUTH] auth.json ontbreekt — publieke toegang geblokkeerd');
+    return res.status(503).send('Publieke toegang niet geconfigureerd.');
+  }
+
+  const hdr = req.headers.authorization || '';
+  if (hdr.startsWith('Basic ')) {
+    const [u, ...rest] = Buffer.from(hdr.slice(6), 'base64').toString().split(':');
+    const p = rest.join(':');
+    if (gelijk(u, auth.user) && gelijk(p, auth.pass)) { authFouten = 0; return next(); }
+    authFouten++;
+    console.log(`[AUTH] foute login via Funnel (${authFouten}/${AUTH_MAX_FOUT})`);
+    if (authFouten >= AUTH_MAX_FOUT) {
+      authGeblokkeerdTot = Date.now() + AUTH_BLOK_MS; authFouten = 0;
+      console.log('[AUTH] te veel fouten — Funnel 15 min geblokkeerd');
+      return res.status(429).send('Te veel foute pogingen — probeer later opnieuw.');
+    }
+  }
+  res.set('WWW-Authenticate', 'Basic realm="Zarlar", charset="UTF-8"');
+  return res.status(401).send('Login vereist.');
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 const SETTINGS_FILE = path.join(__dirname, 'settings.json');
