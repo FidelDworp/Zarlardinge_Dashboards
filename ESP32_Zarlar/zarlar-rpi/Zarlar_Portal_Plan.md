@@ -150,12 +150,12 @@ fetch('/api/poll/eco')
 
 ---
 
-## 3. server.js v2.1 — API endpoints
+## 3. server.js v2.2 — API endpoints
 
 | Endpoint | Methode | Functie |
 |---|---|---|
 | `/api/settings` | GET/POST | Persistente instellingen |
-| `/api/epex` | GET | EPEX België spotprijzen (cache) |
+| `/api/epex` | GET | EPEX België spotprijzen. Slimme cache (v2.2, §6.1), optioneel `?force=1`, extra velden `slots_vandaag`/`slots_morgen` |
 | `/api/poll/:naam` | GET | Poll ESP32 `/json` |
 | `/api/capabilities/:naam` | GET | Controller capabilities (cache 6u) |
 | `/api/set/:naam` | POST | Commando naar controller |
@@ -453,6 +453,8 @@ ongeacht het uur of de marktprijs.
 
 ### 6.1 Probleem: prijzen van morgen verschijnen te laat (analyse 16 okt 2026)
 
+> **Status: ✅ opgelost in `server.js` v2.2, live sinds 16 okt 2026 14:43.** Eerste opvraging na deploy: `bron: live`, `slots_vandaag: 96`, `slots_morgen: 96`. Opvolgen kan met `journalctl -u zarlar -f` (regels `[EPEX] fetch …`).
+
 **Symptoom:** de prijzen van morgen verschijnen vaak niet in de grafiek, soms pas de volgende ochtend. EPEX publiceert de day-ahead prijzen normaal rond 12:55–13:05.
 
 **Oorzaak:** `server.js` v2.1, `/api/epex`:
@@ -543,7 +545,7 @@ Het veld `morgen_beschikbaar` bestaat al in de respons. Daarna eventueel een kle
 | 16 | Thuisbatterij(en) — beslissing + integratie in sturing (~2028) | ⬜ Toekomst |
 | 17 | Matter centraliseren op RPi (Matterbridge) + Zigbee-knoppen — zie §16 | ⬜ Plan |
 | 18 | Energiebeslissingen op RPi + Tesla-bediening via portal — zie §17 | ⬜ Plan |
-| 19 | EPEX-cache fix: prijzen van morgen tijdig binnenhalen — zie §6.1 | ⬜ Plan |
+| 19 | EPEX-cache fix: prijzen van morgen tijdig binnenhalen — zie §6.1 | ✅ Live 16/10 (v2.2) |
 
 ---
 
@@ -570,7 +572,8 @@ Het veld `morgen_beschikbaar` bestaat al in de respons. Daarna eventueel een kle
 | AP16 | S-ENERGY: WON afname + injectie toevoegen via P1-dongle (~2028) |
 | AP17 | Matter → RPi: F0 inventaris starten + beslissingen B1–B4 (zie §16) |
 | AP18 | Energie: E0 inventaris + vragen Q1–Q3 beantwoorden (zie §17) |
-| AP19 | `server.js` `/api/epex`: cache alleen geldig als compleet, max. 1 fetch/10 min na 13:00 (zie §6.1) |
+| ~~AP19~~ | ✅ `server.js` v2.2 live (16/10) |
+| ~~AP20~~ | ✅ `deploy.sh` v2 (16/10): stopt bij Rosetta-, git- of SSH-fout, en ruimt Downloads alleen op als alles lukte |
 
 ---
 
@@ -847,6 +850,8 @@ app.get('/api/matrix', async (req, res) => {
 ```bash
 bash ~/deploy.sh "Beschrijving zonder uitroepteken"
 ```
+
+**Mac-vereiste (16/10/2026):** Terminal mag **niet** via Rosetta draaien. Anders faalt git met een `xcrun ... need 'x86_64'`-fout. Controle: `arch` moet `arm64` geven. Oplossing: Finder → Hulpprogramma's → Terminal → Cmd-I → "Open met Rosetta" uitvinken.
 
 **Deploy.sh flow:**
 1. Detecteert files in ~/Downloads
