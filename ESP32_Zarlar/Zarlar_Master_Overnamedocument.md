@@ -1165,8 +1165,15 @@ Verhuisd naar `Zarlar_Portal_Plan.md` §14.
 **Migratie per controller** (volgorde in Portal Plan §16.5):
 1. De RPi-bridge biedt de controller aan in Apple Home en wordt getest naast het bestaande Matter-device.
 2. Nieuwe sketchversie zonder Matter, met bijgewerkte versieheader en nieuwe heap-baseline.
-3. Het oude accessoire uit Apple Home verwijderen. Scènes en automaties (o.a. van Mireille) opnieuw koppelen aan het bridge-accessoire.
-4. §3.4, het Matter-gedeelte van §3.6 en de Matter-sectie van die controller in dit document laten vervallen.
+3. **Bestandsnaam aanpassen in dezelfde commit:** "MATTER" uit de naam halen (nooit eerder, zodat naam en inhoud altijd overeenkomen). Op de Mac ook de schetsmap hernoemen, want Arduino IDE eist dat map en `.ino` dezelfde naam hebben. Een naam kiezen die nog niet in `old/` of het archief bestaat. §11.1 van dit document en de README van de repo bijwerken.
+
+   | Huidig | Na migratie (voorstel) |
+   |---|---|
+   | `ZarlarApp/ESP32_Zarlar/ESP32_C6_Zarlar_Dashboard-Matrix_MATTER.ino` (v5.9) | `ESP32_C6_Zarlar_Dashboard_Matrix.ino` (v6.0) |
+   | `ESP32-HVAC/Productie/ESP32C6_MATTER_HVAC.ino` | `ESP32C6_HVAC.ino` |
+   | `ESP32C6_ROOMS/TESTROOM/ESP32_C6_ROOM.ino` | ongewijzigd (heeft al geen "MATTER" in de naam), v3.0 |
+4. Het oude accessoire uit Apple Home verwijderen. Scènes en automaties (o.a. van Mireille) opnieuw koppelen aan het bridge-accessoire.
+5. §3.4, het Matter-gedeelte van §3.6 en de Matter-sectie van die controller in dit document laten vervallen.
 
 **`#define Serial Serial0` na migratie:** deze regel stuurt alle output naar UART0, dus naar de USB-C-poort **"UART"** van het board (§2.1, §3.9). Na het verwijderen van Matter: per sketch één vaste keuze maken en die in de versieheader noteren. Ofwel de define behouden en altijd via de "UART"-poort monitoren, ofwel de define weghalen en via de "USB"-poort werken (USB CDC On Boot = Enabled). S-ENERGY v1.29 heeft de define: monitoren via de "UART"-poort.
 
