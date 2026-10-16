@@ -150,7 +150,9 @@ fetch('/api/poll/eco')
 
 ---
 
-## 3. server.js v2.2 — API endpoints
+## 3. server.js v2.3 — API endpoints
+
+> **Toegang (v2.3):** LAN (`192.168.0.x`) en Tailscale (`100.64.0.0/10`) zonder login. Via **Funnel** (komt binnen als `127.0.0.1`) is voor alles een login nodig (HTTP Basic Auth). Gegevens in `/home/fidel/zarlar-dashboard/auth.json` op de Pi, niet in GitHub. Zonder dat bestand is Funnel volledig geblokkeerd. 10 foute pogingen geven 15 min blokkade.
 
 | Endpoint | Methode | Functie |
 |---|---|---|
@@ -573,6 +575,7 @@ Het veld `morgen_beschikbaar` bestaat al in de respons. Daarna eventueel een kle
 | AP17 | Matter → RPi: F0 inventaris starten + beslissingen B1–B4 (zie §16) |
 | AP18 | Energie: E0 inventaris + vragen Q1–Q3 beantwoorden (zie §17) |
 | ~~AP19~~ | ✅ `server.js` v2.2 live (16/10) |
+| ~~AP21~~ | ✅ `server.js` v2.3 live (16/10): login voor Funnel, `auth.json` op de Pi. Funnel-URL is nu `https://rpi-raspberrypi-zarlar.tail3c7f42.ts.net` (Pi hernoemd in Tailscale; oude naam bestond publiek niet meer, opgelost met `tailscale funnel reset`). iOS: beginscherm-icoon als web-app toont wit blad bij Basic Auth → icoon openen in Safari. Eventueel later: eigen loginpagina met cookie (v2.4). |
 | ~~AP20~~ | ✅ `deploy.sh` v2 (16/10): stopt bij Rosetta-, git- of SSH-fout, en ruimt Downloads alleen op als alles lukte |
 
 ---
@@ -1116,7 +1119,7 @@ Gebruikers (Maarten, Filip) ──► RPi portal  (energie-pagina)
 1. **Eén weg naar de auto:** RPi → S-ENERGY `/tesla_cmd`. De RPi praat niet rechtstreeks met de proxy, zodat S-ENERGY de grens `t1_maxa` blijft bewaken.
 2. **Veilig bij uitval:** valt de RPi weg, dan gebeurt er niets nieuws. De auto blijft in zijn laatste toestand en S-ENERGY blijft meten.
 3. **Begrenzing op twee plaatsen:** de RPi kiest de ampère binnen de grenzen, en S-ENERGY knipt nog eens op `t1_maxa` (5–32 A).
-4. **Toegang (belangrijk):** de portal is via Tailscale Funnel tijdelijk publiek bereikbaar. **Stuurcommando's** (Tesla, en ook `/api/set` voor lichten) mogen niet uitvoerbaar zijn voor Funnel-bezoekers. Ze moeten beperkt worden tot LAN en Tailscale-leden. Hoe dat technisch het best gebeurt, wordt in E1 uitgezocht (bv. aparte poort of read-only modus voor Funnel).
+4. **Toegang:** Funnel blijft beschikbaar als eigen toegang zonder VPN, maar achter een login (`server.js` v2.3, zie §3). LAN en Tailscale zonder login. Stuurcommando's (Tesla, `/api/set`) vallen daar automatisch onder. *(Beslist 16/10: geen alleen-lezen-modus voor gasten, want er wordt niet verhuurd en gasten in huis gebruiken het lokale IP.)*
 5. **Transparant:** elke actie komt in een log op de RPi (`energy-log.json`), zichtbaar op de pagina, met wie het vroeg (Maarten/Filip).
 6. **Tarieven op één plek:** de vaste opslag (nu hardcoded `VAST_CT_KWH` 14,32 in S-ENERGY) komt uit `/api/settings` van de RPi. Dit staat al als openstaand punt in de sketch.
 
