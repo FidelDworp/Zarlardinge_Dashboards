@@ -576,6 +576,8 @@ Het veld `morgen_beschikbaar` bestaat al in de respons. Daarna eventueel een kle
 | AP18 | Energie: E0 inventaris + vragen Q1–Q3 beantwoorden (zie §17) |
 | ~~AP19~~ | ✅ `server.js` v2.2 live (16/10) |
 | ~~AP21~~ | ✅ `server.js` v2.3 live (16/10): login voor Funnel, `auth.json` op de Pi. Funnel-URL is nu `https://rpi-raspberrypi-zarlar.tail3c7f42.ts.net` (Pi hernoemd in Tailscale; oude naam bestond publiek niet meer, opgelost met `tailscale funnel reset`). iOS: beginscherm-icoon als web-app toont wit blad bij Basic Auth → icoon openen in Safari. Eventueel later: eigen loginpagina met cookie (v2.4). |
+| AP22 | Portal-Node upgraden van v18 (EOL) naar 22/24 LTS, met nieuwe NodeSource-bron. Apart traject, met backup en test van `server.js`. |
+| AP23 | `apt upgrade` van de 95 openstaande pakketten, apart en met verse backup |
 | ~~AP20~~ | ✅ `deploy.sh` v2 (16/10): stopt bij Rosetta-, git- of SSH-fout, en ruimt Downloads alleen op als alles lukte |
 
 ---
@@ -972,7 +974,7 @@ for (const room of onlineRooms) {
 
 ## 16. Matter centraliseren op de RPi (+ Zigbee-knoppen)
 
-*Toegevoegd 15 oktober 2026. Status: **plan, nog niets geïnstalleerd**. Basis: overnamedocument "Plan Matter naar RPi" van 2 oktober 2026 (§16.2), aangevuld met review en stappenplan (§16.3 tot §16.7).*
+*Toegevoegd 15 oktober 2026. Status: **plan, nog niets geïnstalleerd**. Basis: overnamedocument "Plan Matter naar RPi" van 2 oktober 2026 (§16.2), aangevuld met review, stappenplan en werking (§16.3 tot §16.8).*
 
 ### 16.1 Doel
 
@@ -1076,15 +1078,56 @@ Elke fase heeft een **meetpunt** (wanneer is ze geslaagd) en een **terugweg**. P
 | B3 | Welke room eerst als testkamer (voorstel: room80, R-EETPL)? |
 | B4 | Google Home echt nodig, of enkel Apple Home? |
 
-### 16.7 Eerstvolgende actie
+### 16.7 Werking bridge & dynamische kamers (toegevoegd 16 okt 2026)
 
-**Nog niets installeren.** F0 starten met:
+**Koppelen met Apple Home: één keer, niet per kamer**
+- De RPi is één **Matter-bridge** (vergelijkbaar met een Hue-bridge). Alle kamers zijn accessoires *achter* die bridge.
+- **Wanneer:** stap F3. Eerst wordt de lege bridge gekoppeld, die 24 u stabiel moet blijven. Pas daarna komen er kamers bij (F4).
+- **Hoe:** de Matterbridge-webpagina op de Pi (`http://192.168.0.50:8283`) toont QR-code en koppelcode. Woning-app → **+** → Accessoire toevoegen → QR scannen of code intypen.
+- Later toegevoegde kamers verschijnen vanzelf in Apple Home, zonder opnieuw te koppelen.
+- **Opvolgen:** de Matterbridge-pagina toont de koppelstatus, de fabrics (Apple Home, later evt. Google Home), de apparaten en een live log. Gepland: een portaltegel "Apple Home-bridge" met status (gekoppeld / aantal accessoires) en een link naar die pagina.
+- Voorkeurshub in Apple Home: bij voorkeur een bekabelde Apple TV (wifi-HomePods kunnen soms zendfouten geven).
 
-```bash
-ip -br addr
+**Het bestaande lichtensysteem blijft het hart**
 ```
+Apple Home ──► Matterbridge (plugin "zarlar") ──► server.js ──► room-ESP32
+Portal     ─────────────────────────────────────► server.js ──► room-ESP32
+Dashboard  ◄──────────────────────────────────── (pollt de ESP32's, zoals nu)
+```
+- De plugin gebruikt **dezelfde calls** als `verlichting.html`: `/api/status`, `/api/poll/roomNN`, `/api/set/roomNN` (sw1/sw2/sw3) en `/setcolor`. Er komt geen tweede bedieningslogica.
+- **Eén toestand:** die zit op de ESP32. Een lamp in de portal schakelen is binnen enkele seconden zichtbaar in Apple Home (de plugin pollt), en omgekeerd.
+- Dashboard en 16×16-matrix blijven ongewijzigd.
 
-Volledige output terugsturen, daarna samen de volgende stap.
+**Dynamische kamers**
+- De plugin ontdekt rooms zoals `verlichting.html` dat doet: `/api/status` filteren op `online: true` voor `room*`. De namen komen uit `/capabilities` (pixel-nicknames uit NVS van de room).
+- Een nieuwe room op het wifi wordt een nieuw accessoire in Apple Home, met de namen uit `/settings` van die room.
+- **Een offline room wordt NIET verwijderd** uit Apple Home, maar getoond als "geen reactie". Verwijderen zou scènes en automaties (o.a. van Mireille) breken. Er worden alleen rooms toegevoegd, nooit automatisch verwijderd.
+- **Te testen in F4:** kan Matterbridge een room toevoegen terwijl de bridge draait, of pas na een herstart van de plugin? Beide zijn bruikbaar. In het tweede geval herstart de plugin zichzelf (bv. hooguit om de 15 min) wanneer er een nieuwe room ontdekt is.
+
+**Matter-accessoires per room (voorstel, zelfde functies als room80 nu zelf via Matter aanbiedt)**
+| Functie | Matter-type | Bron in server.js / room |
+|---|---|---|
+| SW1 — pixel 0 (MOV-override) | Lamp aan/uit | `/api/set` `sw1` |
+| SW2 — pixel 1 | Lamp aan/uit | `/api/set` `sw2` |
+| SW3 — pixels 2+ (AAN/UIT, geen toggle) | Lamp aan/uit | `/api/set` `sw3` |
+| Kleur alle pixels | Kleurlamp | `/setcolor` |
+| Thuis/Weg + setpoint | Thermostaat | bestaande room-endpoints (`/toggle_home`, `/set_setpoint`) |
+| Temperatuur, vochtigheid | Sensoren | `/json` keys `e`/`f`, `h` |
+| Beweging MOV1/MOV2 | Bewegingssensoren | `/json` keys `w`/`x` |
+
+### 16.8 Voortgang
+
+| Fase | Datum | Resultaat |
+|---|---|---|
+| **F0** inventaris | 16/10/2026 | ✅ `zarlar.service` actief (startmechanisme bevestigd). Node **v18.20.8** → Matterbridge komt in Docker. RAM 905 MiB (641 MiB beschikbaar vóór Docker). Schijf 14 GB, 4,7 GB vrij. Alleen **wifi** (`eth0` down). IPv6 + ULA `fd78:…` in orde. Thread-routers aanwezig (Aqara camerahub G3 / deurbel). |
+| **F1** backup | 16/10/2026 | ✅ SD-clone (16 GB → 32 GB) met SD Card Copier, na de deploy van v2.3 |
+| **F2** Docker | 16/10/2026 | ✅ Docker **29.9.1** + Compose **v5.6.0** uit de officiële Debian-bron (trixie/arm64). `hello-world` OK. zarlar/tailscaled/docker actief, portal 200. RAM beschikbaar **544 MiB** (−97 MiB), schijf 4,4 GB vrij. |
+| **F3** Matterbridge | — | ⬜ Volgende stap |
+
+**Bijvangst (los van Matter):**
+- De NodeSource-bron `node_18.x` wordt door apt geweigerd (SHA1-sleutel ongeldig sinds 02/2026). Geen gevolg voor de werking, maar Node 18 is EOL → zie AP22.
+- `apt` meldt 95 upgradebare pakketten. Bewust uitgesteld: later apart, met verse backup (AP23).
+- Aanbeveling: netwerkkabel naar de Pi vóór F3/F4 (stabielere mDNS/multicast voor Matter). IP `192.168.0.50` moet dan behouden blijven.
 
 ---
 
