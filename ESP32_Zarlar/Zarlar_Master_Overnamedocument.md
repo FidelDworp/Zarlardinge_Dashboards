@@ -58,7 +58,7 @@ Elke controller publiceert enkel zijn `/json` endpoint — het Dashboard doet de
 | **HVAC** | ESP32_HVAC | 192.168.0.70 | 58:8C:81:32:2B:90 | 32-pin clone | v1.19 | ✅ Productie stabiel |
 | **ECO Boiler** | ESP32_ECO Boiler | 192.168.0.71 | 58:8C:81:32:2B:D4 | 32-pin clone | v1.23 | ✅ Productie stabiel |
 | **Smart Energy** | ESP32_C6_ENERGY | 192.168.0.73 | — | 32-pin clone | v1.29 | ✅ Actief, incl. Tesla bridge (sep 2026) |
-| **Tesla-proxy** | tesla-key-esp32 | via NVS `t1_host` | — | ESP32 (apart) | — | ✅ BLE-proxy naar Tesla1 (§6.10) |
+| **Tesla-proxy** | tesla-key-esp32 | via NVS `t1_host` | — | ESP32-C6 30-pin P4 (4 MB), apart board, niet op het Zarlar shield | — | ✅ BLE-proxy naar Tesla1 (§6.10) |
 | **ROOM / Eetplaats** | ESP32_EETPLAATS | 192.168.0.80 | 58:8C:81:32:2F:48 | 32-pin clone | v2.21 | ✅ Matter + heap stabiel |
 | **Zarlar Dashboard** | ESP32_ZARLAR | 192.168.0.60 | A8:42:E3:4B:FA:BC | 32-pin DevKitM-1 | v5.9 | ✅ Matter + Matrix 16×16 |
 | **RPi Portal** | zarlar-rpi | 192.168.0.50 | — | Raspberry Pi 3B+ | server.js v2.1 | ✅ Actief (Tailscale) |
@@ -722,7 +722,7 @@ RPi portal ──(gepland)──► S-ENERGY .73  /tesla_cmd · /tesla_json · /
 
 | Item | Detail |
 |---|---|
-| Proxy | `tesla-key-esp32`: aparte ESP32 die Fleet-API-achtige REST-calls lokaal via BLE naar de auto stuurt |
+| Proxy | `tesla-key-esp32` op een aparte **ESP32-C6 30-pin P4 (4 MB)**: stuurt Fleet-API-achtige REST-calls lokaal via BLE naar de auto |
 | Config (NVS) | `t1_host` (proxy host/IP), `t1_vin` (VIN), `t1_maxa` (max laadstroom, 5–32 A, default 16) |
 | Lezen | `GET /api/1/vehicles/<VIN>/vehicle_data` → stream-parse van alleen `charge_state` (15 keys: SOC, laadstatus, A, V, fasen, kWh, minuten, bereik, laadpoort) |
 | Commando's | `POST /api/1/vehicles/<VIN>/command/{charge_start, charge_stop, wake_up, set_charging_amps}` |
