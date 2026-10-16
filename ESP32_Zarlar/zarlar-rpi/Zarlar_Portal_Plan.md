@@ -1122,7 +1122,13 @@ Dashboard  ◄──────────────────────
 | **F0** inventaris | 16/10/2026 | ✅ `zarlar.service` actief (startmechanisme bevestigd). Node **v18.20.8** → Matterbridge komt in Docker. RAM 905 MiB (641 MiB beschikbaar vóór Docker). Schijf 14 GB, 4,7 GB vrij. Alleen **wifi** (`eth0` down). IPv6 + ULA `fd78:…` in orde. Thread-routers aanwezig (Aqara camerahub G3 / deurbel). |
 | **F1** backup | 16/10/2026 | ✅ SD-clone (16 GB → 32 GB) met SD Card Copier, na de deploy van v2.3 |
 | **F2** Docker | 16/10/2026 | ✅ Docker **29.9.1** + Compose **v5.6.0** uit de officiële Debian-bron (trixie/arm64). `hello-world` OK. zarlar/tailscaled/docker actief, portal 200. RAM beschikbaar **544 MiB** (−97 MiB), schijf 4,4 GB vrij. |
-| **F3** Matterbridge | — | ⬜ Volgende stap |
+| **F3** Matterbridge | 16/10/2026 | ✅ Matterbridge **3.10.14** in Docker (`~/matterbridge/docker-compose.yml`, image `luligu/matterbridge:latest`, host-netwerk, loglimiet 3×10 MB). Interne Node 24. Frontend `http://192.168.0.50:8283` met wachtwoord. **Gekoppeld met Apple Home** (2 fabrics = Woning + sleutelhanger, normaal). Extra RAM ±80 MiB → 462 MiB beschikbaar. "Virtual mode" uitgezet. ⏳ 24-uurstest loopt (tot 17/10 avond). |
+
+**Lessen F3 (16/10):**
+- **Nooit updaten via de virtuele "Update"-schakelaar of via de webpagina.** In Docker brak dat de container (`matterbridge: not found`, herstartlus). Herstel: `docker compose up -d --force-recreate`. De koppeling bleef intact (staat in `~/.matterbridge`).
+- **Updaten = alleen zo:** `ssh -t fidel@100.123.74.113 'cd ~/matterbridge && sudo docker compose pull && sudo docker compose up -d'`
+- `docker stats` toont 0 B: de Pi-kernel houdt geen geheugen per container bij (memory-cgroup uit). Meten via `free -h` volstaat.
+- De log toont UTC-tijd. Optioneel later `TZ=Europe/Brussels` in de compose.
 
 **Bijvangst (los van Matter):**
 - De NodeSource-bron `node_18.x` wordt door apt geweigerd (SHA1-sleutel ongeldig sinds 02/2026). Geen gevolg voor de werking, maar Node 18 is EOL → zie AP22.
