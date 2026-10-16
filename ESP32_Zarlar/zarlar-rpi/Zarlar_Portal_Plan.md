@@ -1,12 +1,17 @@
 # Zarlar Portal — Projectdocument
-*Bijgewerkt 15 oktober 2026 — Filip Delannoy (FiDel)*
+*Bijgewerkt 16 oktober 2026 — Filip Delannoy (FiDel)*
 
-> **Review 15 oktober 2026.** Achterhaalde zaken bijgewerkt op basis van de repo (`server.js` v2.1, `public/`). Nieuw: §16 (Matter → RPi).
-> **Nog te verifiëren door FiDel** (tegenstrijdig in de bronnen, bewust niet zelf beslist):
-> - **V1** S-ENERGY GPIO's: §11.2 zegt S0 op IO3/IO5/IO6, andere notities zeggen IO5/IO6/IO7. LED-pin: §11.6 zegt IO2, oudere notities IO4.
-> - **V2** Keys `ps`/`pw`: §12.1 zegt "TODO v1.27", §14.4 zegt "bestaan al". Wat zit in de actieve sketch?
-> - **V3** Rol RPi: §2.1 zegt "RPi neemt GEEN dataverzameling of logging over", maar §12.2 en §13.4 laten de RPi stats (`stats-energie.json`) bijhouden. Welke regel geldt?
-> - **V4** Actieve versies: Dashboard (v5.9?) en ROOM (v2.21 of nieuwer?).
+> **Rolverdeling documenten:**
+> - Dit document: alles op de **RPi** (server, pagina's, deploy, Tailscale, Matter-bridge §16, energiebeslissingen §17, tarieven, afrekening, batterij).
+> - `ESP32_Zarlar/Zarlar_Master_Overnamedocument.md`: systeemoverzicht en alle **ESP32-controllers**.
+>
+> **Review 16 oktober 2026.** De punten V1–V4 van 15 okt zijn opgelost op basis van de sketches:
+> - **V1:** S0 op IO5/IO6/IO7, LED op IO4 (§11).
+> - **V2:** `pw`/`ps` bestaan nog niet (§12, §14).
+> - **V3:** de RPi bewaart instellingen, keuzes en stats, en neemt energiebeslissingen. Google Sheets-logging blijft op het Dashboard (§2.1).
+> - **V4:** Dashboard v5.9, ROOM v2.21.
+>
+> Nieuw: §17 Energiebeslissingen + Tesla bridge.
 
 ---
 
@@ -27,7 +32,9 @@
 
 ### 1.2 GitHub repository
 
-**Repo:** `FidelDworp/Zarlardinge_Dashboards/ESP32_Zarlar/zarlar-rpi/`
+**Repo:** `FidelDworp/ZarlarApp/ESP32_Zarlar/zarlar-rpi/` (oude naam `Zarlardinge_Dashboards` stuurt door; lokale map op de Mac in `deploy.sh` heet nog `~/Zarlardinge_Dashboards`)
+
+> ⚠️ Na de hernoeming wijzigt het GitHub Pages-adres naar `fideldworp.github.io/ZarlarApp/`. `public/outside.html` verwijst nog naar `fideldworp.github.io/Zarlardinge_Dashboards/` → nakijken of dat nog laadt.
 
 ```
 zarlar-rpi/
@@ -99,7 +106,8 @@ cp ~/Downloads/deploy.sh ~/deploy.sh && chmod +x ~/deploy.sh && bash ~/deploy.sh
 192.168.0.60  → ESP32 Dashboard v5.9 (bron van waarheid, matrix 16×16)
 192.168.0.70  → ESP32 HVAC v1.19
 192.168.0.71  → ESP32 ECO Boiler v1.23
-192.168.0.73  → ESP32 Smart Energy (S-ENERGY v1.27, zie §11)
+192.168.0.73  → ESP32 Smart Energy (S-ENERGY v1.29 + Tesla bridge, zie §11)
+(LAN)         → tesla-key-esp32 (BLE-proxy naar Tesla1, host in S-ENERGY NVS)
 192.168.0.80  → ESP32 Room v2.21 (Eetplaats/Testroom)
 192.168.0.75–.81 → Room controllers (in server.js v2.1):
                    .75 B&B · .76 Badkamer · .77 Inkomhal · .78 Keuken
@@ -116,13 +124,16 @@ cp ~/Downloads/deploy.sh ~/deploy.sh && chmod +x ~/deploy.sh && bash ~/deploy.sh
 - Serveert /json met volledige systeemstatus
 - Bestuurt 16×16 RGB pixel matrix
 
-**RPi = display + controle laag**
+**RPi = display + controle + beslissingslaag**
 - Leest /json van Dashboard controller (lijst van alle controllers)
 - Haalt /json en /capabilities op van elke controller
 - Toont rijke UI zonder heap beperkingen
 - Leest Google Sheets (read-only) voor historiek
 - Voert scenes en automatisaties uit via /api/set/
-- Neemt GEEN dataverzameling of logging taken over
+- **Enige Matter-laag naar Apple Home** (§16)
+- **Neemt energiebeslissingen** (tarieven, batterijplanning, laadkeuzes) en stuurt die naar S-ENERGY en de Tesla bridge (§17)
+- Bewaart eigen gegevens: instellingen, scenes, keuzes, energie-stats (`stats-energie.json`) en actielog
+- Neemt de **sensordata-logging naar Google Sheets NIET** over (blijft Dashboard)
 
 **Gouden regels:**
 - /json endpoint op elke controller wordt nooit gewijzigd
@@ -360,8 +371,9 @@ RPi haalt config op via /capabilities — geen hardcoded configuratie nodig.
 | Welkom | Gang aan, salon aan, rest uit |
 | Lezen | Salon 80%, leeslamp aan, rest uit |
 
-**Energiebeheer (ECO boiler, EVs, WPs, batterij)** wordt volledig beheerd door de
-SENRG controller — het portal interfereert NOOIT met energieautomatisering.
+**Energiebeheer (ECO boiler, EVs, WPs, batterij):** beslissingen worden op de **RPi** genomen
+(keuzes van Maarten en Filip, tarieven, planning). S-ENERGY en de Tesla bridge voeren uit. Zie §17.
+*(Wijziging okt 2026: vroeger stond hier dat de SENRG-controller alles zelf beheert.)*
 
 **Automatisaties — enkel voor verlichting:**
 
@@ -439,6 +451,34 @@ ongeacht het uur of de marktprijs.
 - Onbalansafslag: instelbaar via nieuw veld (standaard 0,67 ct/kWh)
 - Totaal: EPEX − onbalansafslag ct/kWh aan 0% BTW
 
+### 6.1 Probleem: prijzen van morgen verschijnen te laat (analyse 16 okt 2026)
+
+**Symptoom:** de prijzen van morgen verschijnen vaak niet in de grafiek, soms pas de volgende ochtend. EPEX publiceert de day-ahead prijzen normaal rond 12:55–13:05.
+
+**Oorzaak:** `server.js` v2.1, `/api/epex`:
+```js
+if (cache && Date.now() - cache.ts < 26 * 3600000)
+  return res.json({ ...cache, bron: 'cache' });
+```
+De cache blijft **26 uur geldig, ook als de prijzen van morgen er niet in zitten**. Gebeurt de eerste opvraging vóór ±13:00, dan wordt een cache zonder "morgen" een volle dag lang teruggegeven. Vaker pollen vanuit de browser helpt dus niet. Ook S-ENERGY (die `/api/epex` gebruikt) krijgt zo te laat de prijzen van morgen.
+
+**Voorstel (alleen `server.js`, chirurgisch, pas na GO):**
+| Situatie | Gedrag |
+|---|---|
+| Cache bevat vandaag + morgen (volledig) | Geldig tot morgen ±13:00 |
+| Vóór ±13:00, cache bevat vandaag | Geldig (morgen bestaat nog niet) |
+| Na ±13:00, morgen ontbreekt | Opnieuw ophalen bij energy-charts, **maximaal om de 10 min** |
+| Ophalen mislukt | Laatste cache teruggeven met `bron: 'cache_fallback'` (zoals nu) |
+| `?force=1` (optioneel, voor refresh-knop) | Meteen ophalen, begrensd tot 1× per minuut |
+
+Het veld `morgen_beschikbaar` bestaat al in de respons. Daarna eventueel een kleine aanpassing in `epex-grafiek.html`: een statusregel "morgen nog niet gepubliceerd (±13u)" en een refresh-knop. Verder niets.
+
+**Later, optioneel:**
+- **Tweede bron als fallback**, bv. ENTSO-E Transparency (gratis token).
+- **Logregel per fetch** in de RPi-log: tijd, aantal slots vandaag/morgen, bron.
+
+*Voorstellen van Grok/ChatGPT (mei 2026) zijn verworpen. Ze vervingen het volledige script (met lege stubs of weggelaten functies) en zochten de oorzaak in de browser in plaats van in de servercache.*
+
 ---
 
 ## 7. ECO Boiler JSON keys
@@ -502,6 +542,8 @@ ongeacht het uur of de marktprijs.
 | 15 | Smart Energy — P1 dongle integratie (na digitale meter ~2028) | ⬜ Toekomst |
 | 16 | Thuisbatterij(en) — beslissing + integratie in sturing (~2028) | ⬜ Toekomst |
 | 17 | Matter centraliseren op RPi (Matterbridge) + Zigbee-knoppen — zie §16 | ⬜ Plan |
+| 18 | Energiebeslissingen op RPi + Tesla-bediening via portal — zie §17 | ⬜ Plan |
+| 19 | EPEX-cache fix: prijzen van morgen tijdig binnenhalen — zie §6.1 | ⬜ Plan |
 
 ---
 
@@ -517,8 +559,8 @@ ongeacht het uur of de marktprijs.
 | AP6 | `/capabilities` endpoint op Room sketch |
 | AP7 | `/capabilities` endpoint op HVAC sketch |
 | AP8 | `/capabilities` endpoint op ECO sketch |
-| AP9 | S-ENERGY: GPIO-pinnen toewijzen via OPTION RJ45 connector |
-| AP10 | S-ENERGY: interface printje met pull-up + serieweerstanden bouwen |
+| ~~AP9~~ | ~~S-ENERGY: GPIO-pinnen toewijzen~~ ✅ IO5/IO6/IO7 via Roomsense RJ45 |
+| AP10 | S-ENERGY: S0-interfaceprintje bouwen volgens variant C (Master §6.2) + 1 kanaal testen |
 | **AP11** | **S-ENERGY: sketch v1.27 — matrix 12×4 definitief** | **✅ Klaar 28/04** |
 | **AP12** | **S-ENERGY: SIM_S0 + SIM_P1 valideren via /json badges** | **✅ Klaar** |
 | **AP12b** | **Portal: 12x4_matrix.html live replica** | **✅ Klaar 29/04** |
@@ -527,180 +569,32 @@ ongeacht het uur of de marktprijs.
 | AP15 | S-ENERGY: S0 bekabeling aansluiten → SIM_S0 uitschakelen → LIVE |
 | AP16 | S-ENERGY: WON afname + injectie toevoegen via P1-dongle (~2028) |
 | AP17 | Matter → RPi: F0 inventaris starten + beslissingen B1–B4 (zie §16) |
+| AP18 | Energie: E0 inventaris + vragen Q1–Q3 beantwoorden (zie §17) |
+| AP19 | `server.js` `/api/epex`: cache alleen geldig als compleet, max. 1 fetch/10 min na 13:00 (zie §6.1) |
 
 ---
 
-## 11. Smart Energy Controller (S-ENERGY) — Hardware
+## 11. Smart Energy Controller (S-ENERGY) — samenvatting
 
-> **Status: sketch v1.27 actief (matrix 12×4 definitief, 28/04/2026), S0 nog in SIM.**
-> IP: `192.168.0.73` · Board: ESP32-C6 32-pin
+> **Controllerdetail staat in `Zarlar_Master_Overnamedocument.md` §6:** hardware, pinout, S0-printje (variant C), `/json`-keys, matrix 12×4 en Tesla bridge (§6.10). Hieronder staat alleen wat de portal nodig heeft. Bij twijfel geldt de sketch.
 
-### 11.0 Versiehistorie sketch
+| Item | Waarde |
+|---|---|
+| Sketch | `ESP32_C6_ENERGY_v1_29.ino` (24 sep 2026), IP `192.168.0.73` |
+| Pinnen | S0 op **IO5/IO6/IO7** (Roomsense RJ45), matrix 12×4 op **IO4** |
+| Status | S0 nog in SIM (printje nog te bouwen), P1 in SIM tot ~2028 |
+| Portal-pagina's | `12x4_matrix.html`, `epex-grafiek.html` (via `/api/poll/senrg`) |
+| EPEX | S-ENERGY haalt `/api/epex` van de RPi (`{unix_seconds, price}` in EUR/MWh) |
 
-| Versie | Status | Wijziging |
-|---|---|---|
-| v1.24 | Archief | Eerste productieversie — live S0 ISR |
-| v1.25 SIM | Archief | Enkelvoudige SIMULATION_MODE — vervangen door v1.26 |
-| v1.26 | Archief | Twee onafhankelijke simulatievlaggen SIM_S0 + SIM_P1 · HomeWizard P1 integratie |
-| **v1.27** | **Actief** | Matrix 12×4 definitieve kolomindeling (zie §11.6) |
+**`/json`-keys die de portal gebruikt** (volledige lijst in Master §6.4):
+`a` solar W · `b` WON W · `c`/`d` SCH afname/injectie W · `e` netto SCH W · `h`/`j`/`k` solar, SCH afname, SCH injectie dag Wh · `i`/`vw` WON afname/injectie dag Wh · `n`/`n2` EPEX nu/+1u (ct/kWh × 100) · `pt` maandpiek W · `sim_s0`/`sim_p1` · `ac`/`ae` · `ver`.
+`pw` en `ps` bestaan **nog niet**.
 
-### 11.1 Energiemeters
+**Simulatievlaggen `SIM_S0` / `SIM_P1`:** onafhankelijk van elkaar, alleen via `/settings` van de controller. ⚠️ **Nooit automatisch omschakelen**, ook niet vanuit de portal. De portal toont ze enkel als badge (`S0:SIM · P1:SIM`).
 
-| Meter | Label | Type | Locatie kast |
-|---|---|---|---|
-| Zonnepanelen | A14 | Inepro PRO380-S | Kast bij Maarten |
-| Schuur | A5 | Inepro PRO380-S | Kast bij Maarten |
+**Tesla bridge (sinds v1.28):** S-ENERGY biedt `/tesla_json`, `/tesla_cfg`, `/tesla_save` en `/tesla_cmd` aan, en stuurt via de `tesla-key-esp32`-proxy (BLE) naar de auto. Bediening vanuit de portal: zie §17.
 
-**S0 pulsrate:** `R_L = 0,1 Wh/imp` → **10.000 pulsen per kWh**
-```cpp
-#define PULSEN_PER_KWH 10000
-// 1 puls = 0,1 Wh
-float wh = (float)pulsTeller / PULSEN_PER_KWH * 1000.0;
-// Vermogen (W) via interval tussen pulsen (ms):
-float watt = 0.1 / (intervalMs / 3600000.0);
-```
-
-### 11.2 S0 kanalen
-
-| Kanaal | Meter | Klemmen | Richting | GPIO | Inhoud |
-|---|---|---|---|---|---|
-| S0-1 | Zonnepanelen (A14) | 18/19 | Forward | IO3 | Solar productie |
-| S0-2 | Schuur (A5) | 18/19 | Forward | IO5 | SCH afname van net |
-| S0-3 | Schuur (A5) | 20/21 | Reverse | IO6 | SCH injectie naar net (incl. batterij later) |
-
-> ⚠️ **S0-3 toekomstige uitbreiding:** zodra SCH een thuisbatterij plaatst,
-> registreert S0-3 niet alleen zonnepaneeloverschot maar ook batterijontlading
-> richting het net. Dit kanaal moet dan als gecombineerde "export SCH" beschouwd
-> worden — de opsplitsing solar vs. batterij gebeurt op basis van vermogensvergelijking.
-
-**WON-verbruik:** niet gemeten in fase 1 (nog analoge meter).
-JSON key `b` = 0 tot digitale meter beschikbaar (~2028). Dan via P1-dongle op het netwerk.
-
-**WON toekomstige meting via P1-dongle (~2028):**
-Wanneer WON een digitale meter krijgt, plaatst een P1-dongle de verbruiksdata op het
-lokale netwerk. De RPi leest deze data en registreert:
-- WON afname van net (kWh en momentaan vermogen)
-- WON injectie naar net (kWh — incl. eventuele thuisbatterij)
-
-### 11.3 Simulatiemodi — twee onafhankelijke vlaggen (v1.26)
-
-De sketch bevat twee **volledig onafhankelijke** simulatievlaggen, elk apart instelbaar via `/settings` of serieel commando. **Nooit automatisch omschakelen** — elke overgang is een bewuste handeling om valse data in de logs te voorkomen.
-
-| Vlag | Default | Betekenis | Omschakelen naar LIVE |
-|---|---|---|---|
-| `SIM_S0` | `true` | Simuleert 3× S0-kanalen (solar, SCH afname, SCH injectie) | Na S0-bekabeling: checkbox uit → reboot |
-| `SIM_P1` | `true` | Simuleert P1-dongle (WON afname + injectie) | Na HomeWizard plaatsing (~2028): checkbox uit + P1-IP invullen → reboot |
-
-**Serieel commando's:** `sim s0 on/off` · `sim p1 on/off` · `status` · `help`
-
-**In `/json`:** `"sim_s0":1` en `"sim_p1":1` als aparte indicatoren — de RPi en epex-pagina tonen per bron de status (badge `S0:SIM · P1:SIM`, `S0:LIVE · P1:SIM`, enz.)
-
-**Simulatieprofiel S0 (april, België):**
-- Solar: sinus-curve 07:00–19:00, piek 4000 W, ±10% ruis (bewolking)
-- SCH afname: 500 W basis + ochtendspits (+1800 W), middag (+600 W), avondspits (+2200 W), nacht (+800 W)
-- SCH injectie: max(0, solar − afname) → overschot zonne-energie
-
-**Simulatieprofiel P1 (april, België):**
-- WON afname: 400 W basis + ochtend-/avondspits, geen eigen productie in fase 1
-- WON injectie: 0 Wh (geen solar bij WON in simulatie)
-
-**Matrix-indicator:** col 0 rij 0 knippert rood als SIM_S0 actief · col 1 rij 0 als SIM_P1 actief · groen sweep bij boot als beide LIVE
-
-### 11.4 HomeWizard P1 Meter — HWE-P1-RJ12
-
-**Hardware:**
-- Model: HomeWizard P1 Meter HWE-P1-RJ12
-- Aansluiting: RJ12 op P1-poort digitale slimme meter (WON, na ~2028)
-- Voeding: 5V 500mA via P1-poort zelf (geen externe voeding nodig)
-- WiFi: 2.4 GHz, verbindt via HomeWizard Energy app
-
-**Activatie lokale API:**
-1. Installeer de HomeWizard Energy app
-2. Koppel de P1 Meter aan je WiFi-netwerk
-3. Ga naar: Settings → Meters → jouw meter → **Local API: AAN**
-4. Noteer het IP-adres en vul dit in bij S-ENERGY `/settings` → P1 IP-adres
-
-**API endpoint:**
-```
-GET http://<P1_IP>/api/v1/data
-```
-Plain HTTP, geen authenticatie, geen cloud vereist. Documentatie: https://api-documentation.homewizard.com/docs/introduction/
-
-**JSON response (relevante velden voor S-ENERGY):**
-```json
-{
-  "smr_version": 50,
-  "active_power_w": 997,
-  "total_power_import_t1_kwh": 19055.287,
-  "total_power_import_t2_kwh": 19505.815,
-  "total_power_export_t1_kwh": 0.002,
-  "total_power_export_t2_kwh": 0.007
-}
-```
-
-| P1 JSON key | Betekenis | → S-ENERGY /json key |
-|---|---|---|
-| `active_power_w` | Momentaan vermogen WON (+ = afname, − = injectie) | `b` (W) |
-| `total_power_import_t1_kwh + t2_kwh` | Cumulatieve afname (dag via delta midnight) | `i` (Wh) |
-| `total_power_export_t1_kwh + t2_kwh` | Cumulatieve injectie (dag via delta midnight) | `vw` (Wh) |
-
-**Update-frequentie:** elke seconde bij DSMR 5.0, elke 10s bij oudere meters. S-ENERGY pollt elke 5s — ruim voldoende.
-
-**GitHub library (referentie, niet gebruikt in sketch):**
-https://github.com/jvandenaardweg/homewizard-energy-api
-(Node.js, type-safe, toont volledige JSON structuur en polling aanpak)
-
-**Artikel integratie energiemanagementsysteem:**
-https://engineering360.nl/homewizard-p1-meter-koppelen-aan-je-energiemanagement
-
-> 💡 **Nota:** `total_power_import/export_kwh` zijn **cumulatieve tellers** die nooit resetten. De sketch berekent dagcumulatieven via een delta tov een midnight-snapshot — identiek aan hoe een klassieke teller werkt.
-
-### 11.5 S0 interfaceschema (per kanaal, 3×)
-
-```
-3,3V
- |
-[4,7kΩ pull-up]
- |
- +──────────── GPIO (INPUT, interne pull-up uit)
- |
-[1kΩ serie]
- |
-Klem 18 of 20 (S0+) ←── 5V extern (gedeeld met ESP32 voeding)
-Klem 19 of 21 (S0−) ──── GND (gedeeld met ESP32 GND)
-```
-
-Geen optocoupler — S0-uitgang van PRO380-S is zelf al optisch geïsoleerd.
-Verbinding via **OPTION RJ45** connector op het Zarlar shield.
-
-### 11.6 LED matrix 12×4
-
-**Hardware:** 12×4 WS2812B matrix = **48 pixels**, verticale serpentine (rechts→links, afwisselend ↑↓).
-Pin: **IO2** (was IO4 in oudere versies).
-Connector: JST SM 3-pin (wit=DI, rood=+5V, blauw=GND).
-Voeding: aparte 5V (niet via shield PTC).
-
-**Kolomindeling (v1.27 definitief, 28 april 2026):**
-
-| Col | Emoji | Label | Bereik | Kleurlogica |
-|---|---|---|---|---|
-| 0 | ☀️ | SOL | 0-6kW | Groen lightbar |
-| 1 | ⚡ | SCH↓ | 0-10kW | Rood lightbar (afname) |
-| 2 | ⚡ | SCH↑ | 0-6kW | Groen lightbar (injectie) |
-| 3 | 🏠 | WON↓ | 0-10kW | Rood lightbar (afname) |
-| 4 | 🏠 | WON↑ | 0-6kW | Groen lightbar (injectie, ~2028) |
-| 5 | 📊 | PIEK | 15kW | Groen OK / rood alarm |
-| 6 | 💰 | ct/kWh | 0-40ct | Cyaan→groen→geel→oranje→rood |
-| 7 | 💡 | HUIS | OK | Groen=goed moment / rood=duur |
-| 8 | 🔋 | BAT | ~2028 | Dim paars (toekomst) |
-| 9 | ❤️ | HEAP | 60KB | Groen>50% / amber / rood |
-| 10 | 📶 | WiFi | -60dB | Groen≥-60 / amber / rood |
-| 11 | 🔴 | SIM | S0·P1 | **Bovenaan (rij 0+1)** rood=SIM / groen=LIVE |
-
-**Lightbar principe:** Vult van onderaan (rij 3) naar boven (rij 0).
-**Serpentine:** Pixel 0-3 = col 11 (↑), 4-7 = col 10 (↓), 8-11 = col 9 (↑), etc.
-
-**Web replica:** Live versie beschikbaar op `/12x4_matrix.html` (29 april 2026).
+**HomeWizard P1 (WON, ~2028):** HWE-P1-RJ12, lokale API `GET http://<P1_IP>/api/v1/data`. Wordt door S-ENERGY gepolld, niet door de RPi. De P1-velden worden omgezet naar de keys `b`, `i` en `vw`.
 
 ---
 
@@ -716,9 +610,9 @@ Voeding: aparte 5V (niet via shield PTC).
 | SCH batterij ontlading naar net | S0-3 (zelfde kanaal) | Na batterijplaatsing | idem |
 | WON afname van net | P1-dongle HomeWizard | ~2028 | `b` (W), `i` (Wh dag) |
 | WON injectie naar net | P1-dongle HomeWizard | ~2028 | `vw` (Wh dag) |
-| Gecombineerde maandpiek | berekend | Nu | `pt` (W) |
-| Maandpiek SCH individueel | berekend | Nu | `ps` (W) — te verifiëren (V2) |
-| Maandpiek WON individueel | P1-dongle | ~2028 | `pw` (W) — te verifiëren (V2) |
+| Maandpiek | berekend | Nu | `pt` (W) — momentaan en enkel SCH; kwartierpiek gepland |
+| Maandpiek SCH individueel | berekend | Gepland | `ps` (W) — bestaat nog niet |
+| Maandpiek WON individueel | P1-dongle | ~2028 | `pw` (W) — bestaat nog niet |
 | S0 simulatie actief | vlag | Nu | `sim_s0` (0/1) |
 | P1 simulatie actief | vlag | Nu | `sim_p1` (0/1) |
 
@@ -868,7 +762,7 @@ retailtarief. Dan is een thuisbatterij wél interessant:
 ### 14.4 Infrastructuur al klaar
 
 - S0-3 kanaal (IO6) registreert al reverse-pulsen van SCH
-- JSON keys `pw`, `ps`, `pt` voor individuele en gecombineerde pieken bestaan al
+- JSON key `pt` (maandpiek) bestaat. `pw` en `ps` (individuele pieken WON/SCH) moeten nog toegevoegd worden.
 - EPEX-arbitrage simulatie draait al in de grafiekpagina
 - Piekbeheer-algoritme in de EPEX-pagina houdt al rekening met batterij
 
@@ -1074,7 +968,7 @@ for (const room of onlineRooms) {
 
 ### 16.1 Doel
 
-- Matter verdwijnt uit de ESP32-C6-controllers. Dat bespaart 80 tot 120 KB heap per controller (zie §15) en maakt de sketches eenvoudiger.
+- Matter verdwijnt uit de ESP32-C6-controllers (ROOM, HVAC, Dashboard; beslist okt 2026, zie Master §16). Dat bespaart 80 tot 120 KB heap per controller (zie §15) en maakt de sketches eenvoudiger.
 - De ESP32's doen alleen nog I/O, lokale realtime-berekeningen, JSON serveren en de matrix aansturen, volgens de bestaande architectuurregel.
 - De RPi wordt de enige Matter-laag naar Apple Home, en later eventueel naar Google Home.
 - De 4 Aqara Opple 6-knops schakelaars (WXCJKG13LM, Zigbee 3.0) worden lokaal bruikbaar. De Chinese cloud-hub werkt niet meer.
@@ -1113,7 +1007,7 @@ Het voorlopige voorstel daar was B.
 2. **Het startmechanisme van zarlar-dashboard is al bekend.** Volgens §1.1 is dat systemd `zarlar.service`. `systemctl status zarlar-dashboard` vond niets omdat de unit anders heet. Dit moet bevestigd worden met `systemctl status zarlar` (zie F0).
 3. **Node-versie.** De portal draait op Node.js v18. Matterbridge vraagt Node 20.19+, 22 of 24 (24 LTS aanbevolen). De systeem-Node mag niet blind geüpgraded worden, want dat raakt `server.js`. Daarom draait Matterbridge in Docker, of met een eigen Node, apart van de portal.
 4. **Home Assistant op een Pi 3B+.** Home Assistant ondersteunt alleen nog OS- en Container-installaties. aarch64 blijft ondersteund, maar 1 GB RAM is krap voor HA + Matter Server samen. Voor dashboards en historiek heeft Zarlar al de eigen portal, dus HA is voor het doel niet nodig.
-5. **Aantal Matter-controllers.** Het overnamedocument spreekt van ±12 ESP32-C6 Matter-controllers. §15 zegt dat Matter alleen op de ROOM-controllers blijft. Een inventaris per controller is nodig (F0).
+5. **Welke controllers hebben Matter?** Volgens de Master (§16): ROOM (8 endpoints), HVAC (9 endpoints) en Dashboard (1 endpoint HOME/UIT). ECO en S-ENERGY hebben geen Matter. Het overnamedocument sprak van ±12 controllers, inclusief de geplande rooms .75–.81. Die krijgen meteen een sketch zonder Matter.
 6. **Apple Home-scènes.** Zodra een ESP32 zonder Matter geflasht wordt, verdwijnt zijn oude accessoire uit Apple Home. Scènes en automaties die daarnaar verwijzen (o.a. die van Mireille) moeten dan opnieuw ingesteld worden op het bridge-accessoire. Dit gebeurt dus per kamer en gepland.
 
 ### 16.4 Voorgestelde architectuur (C): Matterbridge + Zarlar-plugin
@@ -1169,7 +1063,7 @@ Elke fase heeft een **meetpunt** (wanneer is ze geslaagd) en een **terugweg**. P
 
 | # | Vraag |
 |---|---|
-| B1 | Architectuur C (Matterbridge) akkoord, of toch HA (B) testen? |
+| B1 | Architectuur C (Matterbridge) akkoord, of toch HA (B) testen? (de richting "Matter naar RPi" zelf is beslist) |
 | B2 | Welke Zigbee-dongle (bv. Sonoff ZBDongle-E / SLZB-06)? |
 | B3 | Welke room eerst als testkamer (voorstel: room80, R-EETPL)? |
 | B4 | Google Home echt nodig, of enkel Apple Home? |
@@ -1186,4 +1080,61 @@ Volledige output terugsturen, daarna samen de volgende stap.
 
 ---
 
-*Zarlar Portal Projectdocument — Filip Delannoy — 15 oktober 2026 (updated)*
+## 17. Energiebeslissingen op de RPi (+ Tesla bridge)
+
+*Toegevoegd 16 oktober 2026. Status: **plan**. Beslissing FiDel: alles rond energietarieven, batterijplanning en laadkeuzes komt op de RPi-interface. Keuzes van de gebruikers (Maarten en Filip) worden naar de controllers gestuurd die ze uitvoeren.*
+
+### 17.1 Rolverdeling
+
+```text
+Gebruikers (Maarten, Filip) ──► RPi portal  (energie-pagina)
+                                   │  bewaart instellingen + keuzes + log
+                                   │  beslist (handmatig nu, later automatisch)
+                                   ▼
+                             server.js  /api/energy/...
+                                   │  HTTP (LAN)
+                     ┌─────────────┴──────────────┐
+                     ▼                            ▼
+          S-ENERGY .73 (meet, toont)     S-ENERGY /tesla_cmd
+          /json, matrix 12×4                 │ HTTP
+                                             ▼
+                                   tesla-key-esp32 ──BLE──► Tesla1
+```
+
+| Laag | Doet | Doet niet |
+|---|---|---|
+| **RPi** | Tarieven en vaste opslag bewaren (`settings.json`, bestaat al via `/api/settings`) · laadkeuzes en planning bewaren · beslissen · commando's sturen · alles loggen (wie, wat, wanneer, resultaat) | Geen S0/P1 meten. `SIM_S0`/`SIM_P1` nooit omschakelen. |
+| **S-ENERGY** | Meten, `/json` serveren, matrix tonen, Tesla-commando's doorgeven aan de proxy | Geen eigen laadlogica (bewuste regel sinds v1.28) |
+| **tesla-key-esp32** | BLE-sessie met de auto | Geen logica |
+
+### 17.2 Ontwerpregels
+1. **Eén weg naar de auto:** RPi → S-ENERGY `/tesla_cmd`. De RPi praat niet rechtstreeks met de proxy, zodat S-ENERGY de grens `t1_maxa` blijft bewaken.
+2. **Veilig bij uitval:** valt de RPi weg, dan gebeurt er niets nieuws. De auto blijft in zijn laatste toestand en S-ENERGY blijft meten.
+3. **Begrenzing op twee plaatsen:** de RPi kiest de ampère binnen de grenzen, en S-ENERGY knipt nog eens op `t1_maxa` (5–32 A).
+4. **Toegang (belangrijk):** de portal is via Tailscale Funnel tijdelijk publiek bereikbaar. **Stuurcommando's** (Tesla, en ook `/api/set` voor lichten) mogen niet uitvoerbaar zijn voor Funnel-bezoekers. Ze moeten beperkt worden tot LAN en Tailscale-leden. Hoe dat technisch het best gebeurt, wordt in E1 uitgezocht (bv. aparte poort of read-only modus voor Funnel).
+5. **Transparant:** elke actie komt in een log op de RPi (`energy-log.json`), zichtbaar op de pagina, met wie het vroeg (Maarten/Filip).
+6. **Tarieven op één plek:** de vaste opslag (nu hardcoded `VAST_CT_KWH` 14,32 in S-ENERGY) komt uit `/api/settings` van de RPi. Dit staat al als openstaand punt in de sketch.
+
+### 17.3 Stappenplan (telkens pas na GO)
+
+| Stap | Wat | Meetpunt |
+|---|---|---|
+| **E0** | Inventaris: welke energie-instellingen bestaan al in `settings.json` / `epex-grafiek.html`? Welke beslissingen willen Maarten en Filip kunnen nemen? | Lijst akkoord |
+| **E1** | `server.js`: read-only proxy `/api/tesla` → S-ENERGY `/tesla_json` + toegangsregel voor stuurcommando's (regel 4) | Tesla-data zichtbaar in portal, Funnel kan niet sturen |
+| **E2** | Portal-pagina `energie.html`: Tesla-status + handmatig start/stop/ampère via `/api/tesla/cmd` → S-ENERGY `/tesla_cmd`, met log | Bediening werkt vanaf iPhone (Tailscale) |
+| **E3** | Tarieven/vaste opslag centraal: S-ENERGY leest de vaste opslag van `/api/settings` (sketchwijziging, nieuwe versie) | Zelfde ct/kWh op matrix en portal |
+| **E4** | Planning: laadvenster per gebruiker (bv. "vóór 7:00 80%"), en goedkoopste EPEX-kwartieren kiezen. De RPi stuurt start/stop. | Laadt in goedkope uren, log klopt |
+| **E5** | Automatisch: solar-overschot en piekbewaking (15 kW) → ampère bijsturen | Geen piekoverschrijding, overschot benut |
+| **E6** | Later: thuisbatterij (§14) en P1 WON (~2028) in dezelfde beslislaag | — |
+
+### 17.4 Open vragen
+| # | Vraag |
+|---|---|
+| Q1 | Laadt alleen Tesla1 hier, of komt er een tweede EV (EV-lader 2 Maarten, merk/type nog open)? |
+| Q2 | Wie mag wat: mogen Maarten en Filip beiden de Tesla bedienen, of elk alleen de eigen auto/verbruik? |
+| Q3 | Moet de afrekening (§13) de Tesla-laadenergie apart tonen (solar→Tesla, `t1_`-tellers)? |
+
+---
+
+*Zarlar Portal Projectdocument — Filip Delannoy — 16 oktober 2026 (updated)*
+
