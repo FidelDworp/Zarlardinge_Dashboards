@@ -1,6 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Zarlar Dashboard Server v2.1 — Raspberry Pi
+// Zarlar Dashboard Server v2.2 — Raspberry Pi
 // Node.js + Express — draait op poort 3000
+//
+// v2.2 (16 okt 2026):
+//   - /api/epex: cache enkel nog geldig als ze "compleet" is.
+//     Vroeger bleef de cache 26 u geldig, ook zonder de prijzen van morgen
+//     → prijzen van morgen verschenen soms pas de volgende ochtend.
+//     Nu: vóór 12:45 volstaat vandaag; vanaf 12:45 moet morgen erin zitten,
+//     anders opnieuw ophalen (max. 1× per 10 min). Optioneel ?force=1 (max. 1×/min).
+//   - Nieuw veld in respons: slots_vandaag, slots_morgen. Bestaande velden ongewijzigd.
 //
 // v2.1 (01 mei 2026):
 //   - ROOM controller proxy in /api/set endpoint
@@ -105,14 +113,52 @@ app.post('/api/settings', (req, res) => {
 // EPEX DATA (server-side fetch, geen CORS-proxy nodig)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-app.get('/api/epex', async (req, res) => {
-  try {
-    if (fs.existsSync(EPEX_CACHE)) {
-      const cache = readJSON(EPEX_CACHE);
-      if (cache && Date.now() - cache.ts < 26 * 3600000)
-        return res.json({ ...cache, bron: 'cache' });
-    }
+// v2.2: slimme cache — zie header. Responsformaat ongewijzigd (+ slots_vandaag/slots_morgen).
+const EPEX_REFETCH_MS   = 10 * 60 * 1000;  // max. 1 fetch per 10 min zolang morgen ontbreekt
+const EPEX_FORCE_MS     = 60 * 1000;       // ?force=1: max. 1 fetch per minuut
+const EPEX_PUBLICATIE_H = 12, EPEX_PUBLICATIE_M = 45;  // EPEX publiceert normaal ±12:55–13:05
+let   epexLaatsteFetch  = 0;               // millis van laatste poging bij energy-charts
 
+function epexDagStart(offsetDagen) {
+  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + offsetDagen);
+  return Math.floor(d.getTime() / 1000);
+}
+function epexSlotsOpDag(cache, offsetDagen) {
+  if (!cache || !Array.isArray(cache.unix_seconds)) return 0;
+  const van = epexDagStart(offsetDagen), tot = epexDagStart(offsetDagen + 1);
+  return cache.unix_seconds.filter(s => s >= van && s < tot).length;
+}
+function epexNaPublicatie() {
+  const n = new Date();
+  return n.getHours() > EPEX_PUBLICATIE_H ||
+        (n.getHours() === EPEX_PUBLICATIE_H && n.getMinutes() >= EPEX_PUBLICATIE_M);
+}
+function epexMetTellers(cache, bron) {
+  return { ...cache, bron,
+           slots_vandaag: epexSlotsOpDag(cache, 0),
+           slots_morgen:  epexSlotsOpDag(cache, 1) };
+}
+
+app.get('/api/epex', async (req, res) => {
+  const cache       = readJSON(EPEX_CACHE);
+  const heeftVandaag = epexSlotsOpDag(cache, 0) >= 23;   // ≥23: werkt voor uur- én kwartierdata (DST-dag 23 u)
+  const heeftMorgen  = epexSlotsOpDag(cache, 1) >= 23;
+  const force        = req.query.force === '1';
+  const sindsFetch   = Date.now() - epexLaatsteFetch;
+
+  // 1) Cache compleet genoeg? → teruggeven
+  const cacheGeldig = heeftVandaag && (heeftMorgen || !epexNaPublicatie());
+  if (cacheGeldig && !(force && sindsFetch >= EPEX_FORCE_MS))
+    return res.json(epexMetTellers(cache, 'cache'));
+
+  // 2) Niet compleet, maar recent nog geprobeerd → cache teruggeven (energy-charts niet overspoelen)
+  const wachttijd = force ? EPEX_FORCE_MS : EPEX_REFETCH_MS;
+  if (heeftVandaag && sindsFetch < wachttijd)
+    return res.json(epexMetTellers(cache, 'cache'));
+
+  // 3) Ophalen bij energy-charts
+  epexLaatsteFetch = Date.now();
+  try {
     const nu     = new Date();
     const morgen = new Date(nu); morgen.setDate(nu.getDate() + 1);
     const fmt    = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -138,11 +184,13 @@ app.get('/api/epex', async (req, res) => {
       morgen_beschikbaar: !!morgenD?.price?.length,
     };
     writeJSON(EPEX_CACHE, result);
-    res.json(result);
+    const uit = epexMetTellers(result, 'live');
+    console.log(`[EPEX] fetch ${force ? '(force) ' : ''}OK — vandaag ${uit.slots_vandaag} slots, morgen ${uit.slots_morgen} slots`);
+    res.json(uit);
 
   } catch(e) {
-    const cache = readJSON(EPEX_CACHE);
-    if (cache) return res.json({ ...cache, bron: 'cache_fallback' });
+    console.log(`[EPEX] fetch mislukt: ${e.message}`);
+    if (cache) return res.json(epexMetTellers(cache, 'cache_fallback'));
     res.status(503).json({ error: 'EPEX niet beschikbaar', detail: e.message });
   }
 });
