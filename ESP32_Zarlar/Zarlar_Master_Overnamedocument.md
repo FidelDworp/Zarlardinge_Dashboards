@@ -12,9 +12,10 @@
 >   - naam van de partitietabel;
 >   - het SSH-wachtwoord is verwijderd.
 >
-> **Nog te verifiëren door FiDel:**
-> - **V1** Dashboard: draait v5.8 of v5.9?
-> - **V2** S0-interfaceprintje: 4,7 kΩ + 1 kΩ (sketch-header) of 10 kΩ + 10 nF (eerdere tekst)?
+> **Opgelost 16 okt:**
+> - **V1:** Dashboard v5.9 is actief. §8.6 is bijgewerkt volgens de code.
+> - **V2:** het S0-printje bestaat nog niet. §6.2 toont drie varianten met advies C.
+> - **V3:** alle controllers, ook het Dashboard, gebruiken de **ESP32-C6-DevKitM-1, 32-pin, 16 MB** op het Zarlar shield (§2.1).
 
 ---
 
@@ -59,7 +60,7 @@ Elke controller publiceert enkel zijn `/json` endpoint — het Dashboard doet de
 | **Smart Energy** | ESP32_C6_ENERGY | 192.168.0.73 | — | 32-pin clone | v1.29 | ✅ Actief, incl. Tesla bridge (sep 2026) |
 | **Tesla-proxy** | tesla-key-esp32 | via NVS `t1_host` | — | ESP32 (apart) | — | ✅ BLE-proxy naar Tesla1 (§6.10) |
 | **ROOM / Eetplaats** | ESP32_EETPLAATS | 192.168.0.80 | 58:8C:81:32:2F:48 | 32-pin clone | v2.21 | ✅ Matter + heap stabiel |
-| **Zarlar Dashboard** | ESP32_ZARLAR | 192.168.0.60 | A8:42:E3:4B:FA:BC | 30-pin clone | v5.8 (V1) | ✅ Matter + Matrix 16×16 |
+| **Zarlar Dashboard** | ESP32_ZARLAR | 192.168.0.60 | A8:42:E3:4B:FA:BC | 32-pin DevKitM-1 | v5.9 | ✅ Matter + Matrix 16×16 |
 | **RPi Portal** | zarlar-rpi | 192.168.0.50 | — | Raspberry Pi 3B+ | server.js v2.1 | ✅ Actief (Tailscale) |
 
 ⚠️ **MAC-wissel HVAC:** experimenteerbord (MAC `58:8C:81:32:29:54`) is ook als HVAC gebruikt.
@@ -99,17 +100,27 @@ Het Dashboard pollt hun data via een **Cloudflare Worker** die de Particle Cloud
 ## 2. Gemeenschappelijke hardware
 
 ### 2.1 ESP32-C6 module & boards
-Alle Zarlar-controllers draaien op de **ESP32-C6-WROOM-1N16** (Espressif):
-- 16 MB flash, WiFi 6 (2.4 GHz), BLE 5, Zigbee/Thread
+Alle Zarlar-controllers draaien op hetzelfde 32-pin devboard (foto HVAC-controller, 16 okt 2026):
+
+| Item | Detail |
+|---|---|
+| Module | **DOIT "WiFi6 Module", MODEL: ESPC6-32 N16** (ESP32-C6, **16 MB flash**), FCC ID 2BB77-ESPC6-X, PCB-antenne |
+| Board | Clone van fabrikant **OSZNTEC**, layout zoals de Espressif **ESP32-C6-DevKitC-1** (in eerdere notities "DevKitM-1" genoemd) |
+| USB | **2× USB-C**: poort **"UART"** (USB-serieel chip → UART0 = TX/RX) en poort **"USB"** (native USB Serial/JTAG van de C6), zie §3.9 |
+| Voeding | AMS1117-3.3 LDO op het board |
+| Knoppen / LED | REST + BOOT, RGB-LED op het board (bij DevKitC-1-layout op IO8, strapping pin, zie §2.3) |
+| Uitgebroken pinnen | Links: 3V3, EN, 4, 5, 6, 7, 0, 1, 8, 10, 11, 2, 3, 5V, GND · Rechts: GND, TX, RX, 15, 23, 22, 21, 20, 19, 18, 9, GND, 13, 12, GND |
+
+- WiFi 6 (2.4 GHz), BLE 5, Zigbee/Thread
 - 3.3V IO — **niet 5V-tolerant**
-- Ingebouwde PCB-antenne (standaard) of WROOM-1U met U.FL-connector voor externe antenne
 
 **Dev boards in gebruik:**
 
 | Type | Pins | Prijs | Aantal | Gebruik |
 |---|---|---|---|---|
-| 32-pin clone | 32 | €2.52/stuk (AliExpress dec 2025) | 10 stuks | **Productie** — HVAC, ECO, ROOM, SENRG |
-| 30-pin clone | 30 | €9/stuk | 3 stuks | Dashboard + reserve |
+| **ESP32-C6-DevKitM-1** (clone), 16 MB | 32 | €2.52/stuk (AliExpress dec 2025) | 10 stuks | **Alle controllers** op het Zarlar shield: HVAC, ECO, ROOM, SENRG, Dashboard |
+
+*(Vroeger stond hier een 30-pin board voor het Dashboard. Dat klopt niet meer: ook het Dashboard draait op de 32-pin DevKitM-1, bevestigd 16 okt 2026.)*
 
 ⚠️ **Clone-boards:** clones, niet officieel Espressif. Werken identiek maar hebben soms
 afwijkende pinlabels. Gebruik altijd de pinout uit de controllersecties van dit document.
@@ -307,8 +318,12 @@ if (lb < 25000 && !crash_logged_this_episode) {
 | `status` | Uitgebreid statusrapport in Serial Monitor |
 
 ### 3.9 Serial monitor — bekende valkuilen ESP32-C6
-- **Serial leeg na boot:** `USB CDC On Boot` staat op Disabled → zetten op Enabled
-- **Serial leeg na boot (2):** `#define Serial Serial0` aanwezig zonder Matter → verwijderen
+- **Welke USB-C poort?** Het board heeft er twee (§2.1). Dat verklaart de meeste "lege Serial Monitor"-gevallen:
+  - `Serial0` = UART0 → zichtbaar op de poort **"UART"**.
+  - `Serial` met `USB CDC On Boot` = Enabled → zichtbaar op de poort **"USB"** (native).
+  - `#define Serial Serial0` stuurt dus alle `Serial.print` naar de **"UART"**-poort. Monitor je via de "USB"-poort, dan blijft het scherm leeg, en omgekeerd.
+- **Serial leeg na boot:** controleer eerst de poort (zie hierboven). Daarna: `USB CDC On Boot` op Enabled als je via de "USB"-poort werkt.
+- **Serial leeg na boot (2):** `#define Serial Serial0` zonder Matter → output gaat naar de "UART"-poort. Monitor die poort, of verwijder de define.
 - **Serial mist boot-berichten:** sketch print te snel → `delay(3000)` na `Serial.begin(115200)`
 
 ### 3.10 JSON key synchronisatie
@@ -340,6 +355,19 @@ Bij elke JSON-structuurwijziging meteen nalopen:
 - **MROW-volgorde** moet exact overeenkomen met SVG-labelsheet — verificeer via `status` commando
 - **Largest free block** is de echte heap-metric, niet total free heap
 - **`sed -i` op `*/`** corrupteert versieheader-blokcommentaar → compileerfout. Nooit globaal vervangen.
+
+### 3.14 AP-mode, netwerk & opstart — regels (uit TESTROOM-notities dec 2025–mrt 2026)
+| Regel | Reden |
+|---|---|
+| **Static IP default = leeg → DHCP** | Een ongeldige default (`192.168.xx.xx`) maakte de WiFi-stack instabiel: AP-mode + reboot-lussen |
+| **AP-mode: geen sensor reads, geen blocking calls** (`pulseIn()`, lange `delay()`) | Anders raakt de webserver uitgehongerd en volgt een watchdog-reset bij `/settings` |
+| **AP-mode: captive portal (DNS) altijd actief, `/settings` altijd bereikbaar** | Herstel en configuratie moeten altijd lukken |
+| **mDNS alleen in STA-mode**, en pas na `WL_CONNECTED` én `localIP() != 0.0.0.0` | mDNS starten zonder geldig IP gaf fouten |
+| **Geen lange `delay()` in `setup()`** | Watchdog-resets (Arduino-ESP32 core v3.x is gevoelig) |
+| **Core Debug Level = None** (Arduino IDE → Tools) | 20–30 KB heap gratis, zonder codewijziging |
+| Safari captive portal soms traag / manuele refresh nodig | Aanvaard gedrag, geen bug |
+
+> mDNS werd in v2.9 enkel verwijderd wegens het conflict met de mDNS-stack van Matter (§3.4). Na de Matter-migratie (§16) mag het terug, volgens de regel hierboven.
 
 ---
 
@@ -520,18 +548,49 @@ Nog te meten — zie openstaande punten §5.7.
 | IO6 | `S0_SCHF_PIN 6` | S0 Schuur A5, forward afname (klem 18/19) |
 | IO7 | `S0_SCHR_PIN 7` | S0 Schuur A5, reverse injectie (klem 20/21) |
 
-### 6.2 Interface PCB — S0 aansluiting
-**S0-uitgang Inepro PRO380-S:** 0,1 Wh/imp (10.000 imp/kWh), directe verbinding zonder optocoupler.
+### 6.2 Interface PCB — S0 aansluiting (plan, nog niet gebouwd)
+**S0-uitgang Inepro PRO380-S:** passieve transistor (open collector), polariteitsgevoelig: S0+ aan de pull-up-kant. 0,1 Wh/imp (10.000 imp/kWh).
 
-**Schema per kanaal, zoals in de sketch-header v1.29:**
+**Ontwerpgegevens:**
+- Snelste pulsreeks: SCH 10 kW = 100.000 imp/h → één puls om de **36 ms**. Solar 6 kW → om de 60 ms.
+- ESP32-C6: een ingang geldt pas zeker als "laag" onder **±0,8 V** (0,25 × 3,3 V).
+- Lange UTP-kabel van verdeelkast naar inkomhal, door een elektriciteitskast: storing en bescherming tellen mee.
+
+**Variant A — 4,7 kΩ pull-up + 1 kΩ in serie naar de S0-klem** (staat in de sketch-header v1.29)
 ```
-3,3V ─[4,7kΩ]─┬─ GPIO (INPUT, geen interne pull-up)
-              [1kΩ] serie
-               │
-              S0+ klem 18/20 (Inepro PRO380-S)
-              S0– klem 19/21 ──── GND
+3,3V ─[4,7k]─┬─ GPIO
+             └─[1k]─ S0+ … S0– ─ GND
 ```
-> ⚠️ **V2:** een eerdere versie van dit document beschreef een 40×40 mm SMD-PCB met 10 kΩ pull-up + 10 nF, 4 kanalen. Welk printje werkelijk gebouwd of besteld is, moet nog bevestigd worden.
+| + | − |
+|---|---|
+| 1 kΩ beschermt de GPIO tegen pieken op de kabel | ±0,5 mA bij geleiding. Over de 1 kΩ valt ±0,5 V, plus de spanning over de transistor: de GPIO ziet ±0,7–0,9 V, **op of over de grens van "laag"**. Kans op gemiste of dubbele pulsen. |
+| | Geen filter tegen storing |
+
+**Variant B — 10 kΩ pull-up + 10 nF, S0 rechtstreeks op de GPIO** (eerdere versie van dit document)
+```
+3,3V ─[10k]─┬─ GPIO ─ S0+ … S0– ─ GND
+            └─[10nF]─ GND
+```
+| + | − |
+|---|---|
+| Zuiver laag niveau (±0,2–0,3 V) | Slechts ±0,3 mA: hoogohmige lijn, gevoelig voor storing op een lange kabel |
+| RC-filter 100 µs dempt pieken (ruim snel genoeg voor 36 ms) | Kabel rechtstreeks op de GPIO, geen stroombegrenzing bij pieken |
+
+**Variant C — advies: de sterke punten van A en B gecombineerd**
+```
+3,3V ─[2,2k]─┬─ S0+ … S0– ─ GND        (kabelkant)
+             └─[1k]─┬─ GPIO
+                    └─[10nF]─ GND
+```
+- **2,2 kΩ pull-up** → ±1,4 mA: stevigere lijn, minder gevoelig voor storing, de transistor schakelt beter door.
+- **1 kΩ tussen kabel en GPIO:** er loopt geen gelijkstroom door, dus het laag niveau blijft zuiver (±0,3 V). Bij pieken begrenst hij de stroom.
+- **10 nF aan de GPIO:** filter van 10 µs samen met de 1 kΩ.
+- Zelfde aantal onderdelen als A. Optioneel per kanaal een ESD-diode (bv. PESD3V3) voor extra zekerheid.
+- **4 kanalen voorzien:** 3 in gebruik + 1 reserve op RJ45 pin 6.
+
+**Kanttekening:** de S0-norm (IEC 62053-31) spreekt van 10–27 mA aan-stroom. In de praktijk werken S0-uitgangen meestal ook met 1–2 mA. **Eerst één kanaal testen** tegen het display van de meter vóór alles bekabeld wordt.
+
+**Bijhorende sketchwijziging (nog te doen, pas na GO):** de ISR's (`isrSol`, `isrSchF`, `isrSchR`) hebben geen ontdendering, dus elke stoorpiek telt als 0,1 Wh. Toevoegen: negeer een puls binnen 10 ms na de vorige. Echte pulsen komen nooit sneller dan om de 36 ms.
 
 **RJ45 Roomsense pinout (sketch v1.29):**
 
@@ -633,6 +692,8 @@ v1.29: heap-robuustheid verbeterd (geen `http.getString()`, geen `String` in ser
 
 | Actie | Wie | Status |
 |---|---|---|
+| S0-interfaceprintje bouwen volgens variant C (§6.2), 1 kanaal testen tegen meterdisplay | Filip | Open |
+| ISR-ontdendering 10 ms toevoegen (§6.2) | Filip | Open |
 | S0 bekabeling aansluiten → SIM_S0 uit (bewust, via /settings) | Filip + Maarten | Open |
 | UTP-kabel trekken verdeelkast → inkomhal | Filip + Maarten | Open |
 | `pt` wordt een echte kwartierpiek (nu momentaan en enkel SCH) | Filip | Open |
@@ -641,7 +702,7 @@ v1.29: heap-robuustheid verbeterd (geen `http.getString()`, geen `String` in ser
 | ntfy.sh push bij piekdrempel (app installeren Filip + Maarten) | Filip + Maarten | Open |
 | **Tesla1:** dag-/totaaltellers solar→Tesla, `t1_`-keys in `/json` (+ GAS + Dashboard), matrix col 11 rij 2-3 | Filip | Open |
 | **Tesla1 automatische sturing:** beslissing op RPi, uitvoering via `/tesla_cmd` (§6.10) | Filip | Open |
-| **Dashboard matrix-rij 2** afstemmen op de v1.29-keys (zie §8.6) | Filip | Open |
+| Dashboard rij 2 col 11: maandpiek-schaal staat op 10 kW, elders 15 kW (`max_piek`) → afstemmen | Filip | Open |
 | EV-lader 2: merk/type opzoeken | Maarten | Open |
 | CZ-TAW1 WP WON reset + herregistratie | Filip | Open |
 | Portal 12×4 matrix kleuren debuggen (sommige fout) | Filip | Open |
@@ -690,7 +751,8 @@ RPi portal ──(gepland)──► S-ENERGY .73  /tesla_cmd · /tesla_json · /
 ### 7.1 Hardware & pinout
 | Component | Detail |
 |---|---|
-| Board | ESP32-C6 32-pin clone (MAC `58:8C:81:32:2F:48` productie / `58:8C:81:32:29:54` experimenteerbord) |
+| Board | ESP32-C6-DevKitM-1 32-pin 16 MB (§2.1) — MAC `58:8C:81:32:2F:48` productie / `58:8C:81:32:29:54` experimenteerbord |
+| Sketch | **v2.24 actief** (8 mei 2026) — repo `ESP32C6_ROOMS/TESTROOM/ESP32_C6_ROOM.ino` |
 | Static IP | 192.168.0.80 |
 | Sensoren | DHT22, DS18B20, MH-Z19 CO2, Sharp GP2Y dust, TSL2561 lux, LDR |
 | PIR sensoren | **AM312** (3.3V natively, push-pull active HIGH — vervangt HC-SR501) |
@@ -778,11 +840,13 @@ RPi portal ──(gepland)──► S-ENERGY .73  /tesla_cmd · /tesla_json · /
 NVS-persistent. Volledig synchroon met "Thuis" toggle in webUI.
 
 ### 7.5 Heap-baseline
-```
-Setup:   23% free (62.936 bytes)  largest=~45 KB
-Runtime: 20% free (~74 KB)        largest=~31 KB  ✅
-```
-Matter kost ~214 KB heap. Crashdrempel 25 KB — marge 6 KB.
+| Meting | Versie | Largest free block | Opmerking |
+|---|---|---|---|
+| 5 mrt 2026 | v1.6, **zonder Matter** | **232 KB** (67% vrij) | Referentie voor v3.0 |
+| 13 apr 2026 | v2.21, met Matter | setup ~45 KB, runtime ~31 KB | Matter kost ~214 KB |
+| 1–7 mei 2026 (Google Sheets-log, 305 metingen) | v2.22, met Matter | **22–37 KB** (gem. 31 KB), *heap min* tot **2 KB** | **10 herstarts in 7 dagen**, waarvan 5 op 7 mei |
+
+Crashdrempel 25 KB. Met Matter zit de ROOM structureel op of onder de drempel → oorzaak wordt weggenomen door v3.0 (§7.9).
 
 ### 7.6 Specifieke features (v2.21)
 **Verwarmingslogica:**
@@ -809,6 +873,9 @@ als sensor niet leest — samen met DS18B20 delay: main loop elke minuut ~1.150m
 ### 7.7 Versiehistorie
 | Versie | Datum | Wijziging |
 |---|---|---|
+| **v2.24** | 8 mei 2026 | **Actief.** Gedeelde CSS-helper (~3–5 KB winst), Serial-versiestring verwijderd |
+| v2.23 | 8 mei 2026 | PROGMEM-experiment **mislukt**: `FPSTR` kopieert alsnog naar heap (les: PROGMEM alleen helpt bij `send_P` zonder kopie) |
+| v2.22 | 1 mei 2026 | `/capabilities` endpoint voor portal-verlichting (pixel-nicknames JSON) |
 | v2.21 | 13 apr 2026 | KISS: `heating_mode` + `vent_mode` verwijderd. Matter `onChangeMode` → `home_mode`. CO2 dot. |
 | v2.20 | 13 apr 2026 | NVS crashlog feedback loop fix, Matter interval 5s→30s, CO2 timeout 400ms→50ms |
 | v2.19 | 12 apr 2026 | Dim snelheid + Licht tijd: JS leest slider DOM-waarde direct |
@@ -822,7 +889,29 @@ als sensor niet leest — samen met DS18B20 delay: main loop elke minuut ~1.150m
 2. ~~Aparte tegels Apple Home~~: vervalt, wordt geregeld in de RPi-bridge (§16)
 3. **Dashboard matrix**: kolommen 6/7 aanpassen van `y`/`z` naar `w>0`/`x>0`
 4. **CO2 `pulseIn()`**: vervanging door non-blocking aanpak
-5. **Gedeeld CSS endpoint**: geschatte winst ~2–3 KB fragmentatie per request
+5. ~~Gedeeld CSS endpoint~~: gedaan als CSS-helper in v2.24
+6. **Sensor reads draaien ook in AP-mode**: in v2.24 staat er geen `ap_mode_active`-check vóór de trage sensor-loop (verzacht door 60 s interval + CO2-timeout 50 ms) → regel §3.14
+
+### 7.9 ROOM v3.0 — plan (opgesteld 16 okt 2026)
+
+**Vertrekpunt:** v2.24 (actief op room80), **niet** de oude v2.8 zonder Matter (maart). Na v2.8 kwamen 16 versies met fixes die niet Matter-gebonden zijn en die portal en Dashboard nodig hebben: `/capabilities`, `/set_home`, NVS-crashlog fix, CO2-timeout 50 ms, KISS Thuis/Weg, CSS-helper, slider/MOV/JS-fixes. Matter zit in v2.24 op afgebakende plaatsen en is dus gericht te verwijderen.
+
+**Nieuwe bestandsnaam:** `ESP32_C6_ROOM.ino` blijft de naam in de repo. In de versieheader staat v3.0 en "zonder Matter".
+
+**Stappen (elke stap: één versie, versieheader bijwerken, testen, pas dan verder na GO):**
+
+| Versie | Wat | Meetpunt |
+|---|---|---|
+| **v3.0** | **Alleen Matter verwijderen:** includes, 8 endpoints, callbacks, `update_matter()`, `/matter`, `/matter_reset`, auto-recovery bij boot, Matter-sync in `/toggle_*`, `/set_setpoint`, `/toggle_home`, `/setcolor`. Niets anders. **Pas doen als de RPi-bridge room80 al aanbiedt** (Portal Plan §16, F4–F5), anders verdwijnen Mireilles scènes. | Largest block richting de 232 KB van v1.6; 48 u geen herstart |
+| v3.1 | `#define Serial Serial0` beslissen: "UART"- of "USB"-poort (§3.9, §16) | Serial zichtbaar op de gekozen poort |
+| v3.2 | Sensor reads uit in AP-mode (§3.14) | `/settings` in AP-mode blijft responsief |
+| v3.3 | mDNS terug (`<room>.local`), alleen in STA-mode na geldig IP (§3.14) | `eetplaats.local` bereikbaar |
+| v3.4+ | Sjalay-punten, één per versie: live-JSON vs. page-load-velden scheiden, `.icring`-statuscirkels, korte sectietitels, volgorde knoppen in `/settings` | — |
+| later | Ideeën uit de TESTROOM-README (dec 2025): sensor-nicknames op de hoofdpagina (`<room> <sensor>`), `/reset_runtime` (wist alleen runtime-states, geen factory reset), CO2 non-blocking i.p.v. `pulseIn()` | — |
+
+**Bewust NIET overnemen uit Sjalay:** WOLF-ketellogica, SWW/boilerrelais, gasten-landingspagina (enkel als idee).
+
+**Na v3.0:** de geplande rooms .75–.81 krijgen meteen de sketch zonder Matter; geen Photon-vervanging meer met Matter.
 
 ---
 
@@ -831,12 +920,11 @@ als sensor niet leest — samen met DS18B20 delay: main loop elke minuut ~1.150m
 ### 8.1 Hardware & pinout
 | Component | Detail |
 |---|---|
-| Board | ESP32-C6 **30-pin** clone, MAC `A8:42:E3:4B:FA:BC` |
+| Board | ESP32-C6-DevKitM-1 32-pin 16 MB, MAC `A8:42:E3:4B:FA:BC` |
 | Static IP | 192.168.0.60 |
 | WebServer | `WebServer` (blocking) — bewust, niet `AsyncWebServer` |
 | Statusmatrix | 16×16 WS2812B op IO4 |
 
-⚠️ **30-pin vs 32-pin:** pinvolgorde verschilt van 32-pin — gebruik pinout van 30-pin board.
 ⚠️ **Matrix voeding:** 16×16 matrix bij volle helderheid >3A — **aparte 5V, niet via shield PTC**.
 
 ### 8.2 Functies
@@ -882,27 +970,30 @@ Synchronisatie: boot + Apple Home callback + webUI handler + loop sync elke 5s.
 |---|---|---|
 | 0 | S-HVAC | Systeem |
 | 1 | S-ECO | Systeem |
-| **2** | **S-ENERGY** | **Systeem — ✅ Actief (S-ENERGY v1.29)** |
-| 3 | S-OUTSIDE | Gereserveerd |
-| 4 | Separator | "ROOMS" |
-| 5–11 | R-BandB…R-ZITPL | Rooms |
+| **2** | **S-ENERGY** (idx 4) | **Systeem — ✅ Actief** |
+| 3 | S-ACCESS | Gereserveerd (dim paars) |
+| 4 | Separator | Amber, "ROOMS" |
+| 5–11 | R-BandB, R-BADK, R-INKOM, R-KEUKEN, R-WASPL, R-EETPL (idx 13), R-ZITPL | Rooms |
 | 12–15 | — | Leeg |
 
-**S-ENERGY matrix-rij (rij 2) — kolomindeling:**
-
-> ⚠️ **Loopt niet meer gelijk met S-ENERGY v1.29** (§6.4): `d` is nu SCH-injectie (niet de balans), `e` is netto W (niet de ECO-boiler), en `f`/`g` bestaan niet meer. Deze tabel beschrijft de Dashboard-code v5.8. Rendering aanpassen staat in de openstaande punten van §6.9.
+**S-ENERGY matrix-rij (rij 2) — `renderEnergyRow()` v5.9.** Komt overeen met de v1.29-keys (§6.4).
 
 | Col | Key | Label | Kleurlogica |
 |---|---|---|---|
 | 0 | — | Status | Groen=online, rood=offline |
-| 1 | `a` | Solar | Geel dim→groen helder |
-| 2 | `d` | Balans | Rood=afname / groen=injectie |
-| 3 | `n` | EPEX nu | Groen<€0,10 / geel / oranje / rood |
-| 4 | `n2` | EPEX +1u | Zelfde schaal |
-| 5 | `e` | ECO-boiler | Grijs=uit / oranje=aan |
-| 6 | `f` | EV-lader | Grijs=uit / groen=laden |
-| 7 | `g` | Override | Rood=override / dim=auto |
-| 8–13 | — | Reserve | — |
+| 1 | `a` | Solar W | Groen gradient (0–6 kW) |
+| 2 | `c` | SCH afname W | Rood gradient (0–10 kW) |
+| 3 | `d` | SCH injectie W | Cyaan gradient (0–6 kW) |
+| 4 | `e` | Netto SCH | Groen=injectie / rood=afname / grijs=0 |
+| 5 | `b` | WON W (P1) | Amber gradient (0–5 kW) |
+| 6 | `h` | Solar dag | Geel-groen (0–30 kWh) |
+| 7 | `j` | SCH afname dag | Rood dim (0–30 kWh) |
+| 8 | `k` | SCH injectie dag | Cyaan dim (0–15 kWh) |
+| 9 | `n` | EPEX nu | Cyaan<0 / groen<15 / geel<25 / oranje<35 / rood ct |
+| 10 | `n2` | EPEX +1u | Zelfde schaal |
+| 11 | `pt` | Maandpiek % | Groen<60% / amber<85% / rood (schaal 10 kW, zie §6.9) |
+| 12 | `sim_s0` | S0 SIM | Oranje=SIM / groen=LIVE |
+| 13 | `sim_p1` | P1 SIM | Oranje=SIM / groen=LIVE |
 | 14 | `ae` | Heap | Groen>35KB / geel / rood |
 | 15 | `ac` | RSSI | Groen≥-60 / oranje / rood |
 
@@ -934,12 +1025,13 @@ server.onNotFound(cpRedirect);
 |---|---|
 | v5.0 | Matter HOME/UIT + Matrix 16×16 + Photon fallback + push-architectuur stabiel |
 | v5.8 | S-ENERGY controller toegevoegd (idx 4, rij 2) · `renderEnergyRow()` 16 kolommen · sim_s0/sim_p1 oranje pixels |
+| **v5.9** | **Actief.** Fix erratische Photon-room-rijen: P-TESTROOM uit round-robin, 1 retry per poll-beurt, hysterese (3 opeenvolgende fouten vóór offline) |
 
 ### 8.10 Openstaande punten
 
 **Heap-druk door Matter:** opgelost door Matter naar de RPi te verhuizen (§16). Het idee van een aangepaste partitietabel (april 2026) is vervallen: een partitietabel verdeelt de flash, niet het RAM.
 
-**OTA testen op Dashboard:** Nog niet getest na v5.8 update
+**OTA testen op Dashboard:** nog niet getest na de v5.8/v5.9 updates
 
 **Matrix kolommen 6/7 ROOM aanpassen naar bewegingsdetectie:**
 - **Huidige logica:** Col 6/7 tonen PIR beweging ALLEEN als licht aan is (`w>0 AND x>0`)
@@ -989,15 +1081,23 @@ De volledige schimmelbeschermingslogica zit in de room controllers — de HVAC i
 
 ## 11. Bestanden
 
-> ⚠️ Van de sketches staat alleen `ESP32_C6_Zarlar_Dashboard-Matrix_MATTER.ino` in de GitHub-repo. De andere bestanden staan in het Claude-project of lokaal op de Mac.
+### 11.0 GitHub-repo's (één repo per type controller, elk met eigen `README.md`)
+| Repo | Inhoud | README |
+|---|---|---|
+| **`ZarlarApp`** (oude namen `Zarlardinge_Dashboards`, `Zarlar` verwijzen hierheen) | GitHub Pages-dashboards · `ESP32_Zarlar/`: dit document, Dashboard-sketch v5.9, `partitions.csv`, `worker-status.js` · `zarlar-rpi/`: RPi portal + `Zarlar_Portal_Plan.md` | ✅ |
+| `ESP32C6_ROOMS` | `TESTROOM/`: ROOM-sketch v2.24, `ROOM_GoogleScript.gs`, `partitions.csv`, `old/` (v2.8 zonder Matter) | ⬜ te vernieuwen (dec 2025) |
+| `ESP32-HVAC` (oude naam `ESP32C6_HVAC`) | `Productie/`: HVAC-sketch, GAS, `partitions.csv` · oude Photon- en niet-Matter-versies | ✅ (na te kijken) |
+| ECO, S-ENERGY, Sjalay, … | *nog aan te vullen door FiDel* | ? |
+
+> Regel: per repo één `README.md` (wat, actieve versie, bestanden, verwijzing naar dit document). Dit Master-document blijft de enige systeembrede referentie; kopieën of verwijzingsbestanden in andere repo's (bv. `ESP32-HVAC/Productie/-Zarlar_Overnamedocument.md`) worden vervangen door een link in de README.
 
 ### 11.1 ESP32 sketches
 | Bestand | Beschrijving |
 |---|---|
 | `ESP32_C6_MATTER_HVAC_v1.19.ino` | HVAC productieversie |
 | `ESP32_C6_MATTER_ECO-boiler_22mar_2200.ino` | ECO Boiler v1.23 productieversie |
-| `ESP32-C6_MATTER_ROOM_13apr_v221.ino` | ROOM v2.21 productie |
-| `ESP32_C6_Zarlar_Dashboard_MATTER_v5_8.ino` | Dashboard v5.8 (v5.9 bestaat mogelijk, zie V1) |
+| `ESP32C6_ROOMS/TESTROOM/ESP32_C6_ROOM.ino` | **ROOM v2.24** actief (8 mei 2026) — basis voor v3.0 (§7.9) |
+| `ESP32_C6_Zarlar_Dashboard-Matrix_MATTER.ino` | **Dashboard v5.9** (staat in de repo onder `ESP32_Zarlar/`) |
 | `ESP32_C6_ENERGY_v1_29.ino` | **Smart Energy v1.29**: Tesla1-bridge + heap-robuustheid (24 sep 2026) |
 | `Oude_MATTER_ROOM_3mar.ino` | Referentie: werkende Matter endpoint-volgorde |
 
@@ -1006,7 +1106,7 @@ De volledige schimmelbeschermingslogica zit in de room controllers — de HVAC i
 |---|---|
 | `HVAC_GoogleScript_v4.gs` | GAS HVAC: 31 kolommen A–AE |
 | `ECO_GoogleScript_v2.gs` | GAS ECO: 20 kolommen A–T |
-| `ROOM_GoogleScript_v1_4.gs` | GAS ROOM: 37 kolommen A–AK |
+| `ESP32C6_ROOMS/TESTROOM/ROOM_GoogleScript.gs` | GAS ROOM **v1.5** (18 mrt 2026): 37 kolommen A–AK, `MAX_ROWS` (default 1000) |
 | `ENERGY_GoogleScript_v1.gs` | GAS ENERGY: 19 kolommen A–S, sim-vlaggen gelogd |
 
 ### 11.3 RPi Portal bestanden
@@ -1068,7 +1168,7 @@ Verhuisd naar `Zarlar_Portal_Plan.md` §14.
 3. Het oude accessoire uit Apple Home verwijderen. Scènes en automaties (o.a. van Mireille) opnieuw koppelen aan het bridge-accessoire.
 4. §3.4, het Matter-gedeelte van §3.6 en de Matter-sectie van die controller in dit document laten vervallen.
 
-**`#define Serial Serial0` na migratie:** volgens §3.1 en §3.9 stuurt deze regel zonder Matter de output naar UART0, waardoor de Serial Monitor leeg blijft. Per controller testen of de regel weg moet zodra Matter verwijderd is. S-ENERGY v1.29 (zonder Matter) heeft hem wel staan: nakijken hoe de Serial Monitor zich daar gedraagt.
+**`#define Serial Serial0` na migratie:** deze regel stuurt alle output naar UART0, dus naar de USB-C-poort **"UART"** van het board (§2.1, §3.9). Na het verwijderen van Matter: per sketch één vaste keuze maken en die in de versieheader noteren. Ofwel de define behouden en altijd via de "UART"-poort monitoren, ofwel de define weghalen en via de "USB"-poort werken (USB CDC On Boot = Enabled). S-ENERGY v1.29 heeft de define: monitoren via de "UART"-poort.
 
 ---
 
