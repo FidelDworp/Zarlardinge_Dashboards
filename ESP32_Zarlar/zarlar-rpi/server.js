@@ -1,6 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Zarlar Dashboard Server v2.5 — Raspberry Pi
+// Zarlar Dashboard Server v2.6 — Raspberry Pi
 // Node.js + Express — draait op poort 3000
+//
+// v2.6 (17 okt 2026): meerstand-knoppen vereenvoudigen, stap 1 (§16.9)
+//   - Zomer/Winter (2 knoppen) → 1 schakelaar "Zomertijd": aan = summer, uit = winter.
+//   - HVAC Home/Out (2 knoppen) → 1 schakelaar "HVAC Home": aan = home, uit = out.
+//   - Nieuw knoptype: argAan/argUit (vast argument voor aan en voor uit). 35 knoppen.
 //
 // v2.5 (17 okt 2026):
 //   - /api/knoppen geeft per knop ook "soort": "lamp" of "schakelaar" (keuze A, §16.9).
@@ -324,13 +329,13 @@ const PHOTON_STUUR = {
 
 // Aan/uit-knop: tag   → args = tag + 'on' / tag + 'off'
 // Stand-knop:   groep → args = arg; binnen een groep is maar één stand "aan"
+// Twee-standen-knop (v2.6): argAan/argUit → args = argAan bij aan, argUit bij uit
 // soort (v2.5): standaard 'lamp' voor aan/uit en 'schakelaar' voor standen; anders expliciet.
 const KNOPPEN = [
   // R7-ZITPL
   { id: 'muurspots',    naam: 'Muurspots',         photon: 'R7-ZITPL',  tag: 'muurspots' },
   { id: 'tvback',       naam: 'TV Backlight',      photon: 'R7-ZITPL',  tag: 'tvback' },
-  { id: 'klok-zomer',   naam: 'Zomertijd',         photon: 'R7-ZITPL',  groep: 'kloktijd',       arg: 'summer' },
-  { id: 'klok-winter',  naam: 'Wintertijd',        photon: 'R7-ZITPL',  groep: 'kloktijd',       arg: 'winter' },
+  { id: 'kloktijd',     naam: 'Zomertijd',         photon: 'R7-ZITPL',  argAan: 'summer', argUit: 'winter', soort: 'schakelaar' },
   { id: 'klok-hoog',    naam: 'Klok hoog',         photon: 'R7-ZITPL',  groep: 'klokhelderheid', arg: 'h' },
   { id: 'klok-midden',  naam: 'Klok midden',       photon: 'R7-ZITPL',  groep: 'klokhelderheid', arg: 'm' },
   { id: 'klok-laag',    naam: 'Klok laag',         photon: 'R7-ZITPL',  groep: 'klokhelderheid', arg: 'l' },
@@ -369,8 +374,7 @@ const KNOPPEN = [
   // S-HVAC
   { id: 'eco-schuur',   naam: 'ECO => SCHUUR',     photon: 'S-HVAC',    tag: 'sch', soort: 'schakelaar' },
   { id: 'eco-woning',   naam: 'ECO => WONING',     photon: 'S-HVAC',    tag: 'won', soort: 'schakelaar' },
-  { id: 'hvac-home',    naam: 'HVAC Home',         photon: 'S-HVAC',    groep: 'hvac',           arg: 'home' },
-  { id: 'hvac-out',     naam: 'HVAC Out',          photon: 'S-HVAC',    groep: 'hvac',           arg: 'out' },
+  { id: 'hvac-mode',    naam: 'HVAC Home',         photon: 'S-HVAC',    argAan: 'home',   argUit: 'out',    soort: 'schakelaar' },
 ];
 
 // Laatst gestuurde toestand per knop (alleen RAM; Photons melden niets terug)
@@ -408,7 +412,9 @@ app.post('/api/photon/:knop', async (req, res) => {
     return res.status(503).json({ error: 'Particle-token niet geconfigureerd (particle.json)' });
   }
 
-  const arg = k.groep ? k.arg : k.tag + (aan ? 'on' : 'off');
+  const arg = k.groep  ? k.arg
+            : k.argAan ? (aan ? k.argAan : k.argUit)
+            : k.tag + (aan ? 'on' : 'off');
   try {
     const r = await fetch(`https://api.particle.io/v1/devices/${PHOTON_STUUR[k.photon]}/manual`, {
       method:  'POST',
@@ -688,7 +694,7 @@ app.get('/api/controllers', (req, res) => {
 
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✓ Zarlar Portal v2.5 draait op http://192.168.0.50:${PORT}`);
+  console.log(`✓ Zarlar Portal v2.6 draait op http://192.168.0.50:${PORT}`);
   console.log(`  Knoppen:     ${KNOPPEN.length} op ${Object.keys(PHOTON_STUUR).length} Photons — token ${fs.existsSync(PARTICLE_FILE) ? 'aanwezig' : 'ONTBREEKT (particle.json)'}`);
   console.log(`  Controllers: ${Object.keys(CONTROLLERS).filter(k=>k!=='room1').join(', ')}`);
   console.log(`  Settings:    ${SETTINGS_FILE}`);
