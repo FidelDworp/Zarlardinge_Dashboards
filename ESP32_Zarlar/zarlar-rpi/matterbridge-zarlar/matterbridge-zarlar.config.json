@@ -1,0 +1,7 @@
+{
+  "name": "matterbridge-zarlar",
+  "type": "DynamicPlatform",
+  "portal": "http://192.168.0.50:3000",
+  "debug": false,
+  "unregisterOnShutdown": false
+}
