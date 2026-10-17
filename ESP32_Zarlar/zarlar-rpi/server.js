@@ -1,6 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Zarlar Dashboard Server v2.8 — Raspberry Pi
+// Zarlar Dashboard Server v2.9 — Raspberry Pi
 // Node.js + Express — draait op poort 3000
+//
+// v2.9 (17 okt 2026): rooms naar de RPi-bridge, stap 1 (§16.11)
+//   - ROOMS_APPLE: vaste lijst van rooms in Apple Home (R2), met kamernaam (R3).
+//   - GET /api/rooms-apple → per room: naam, online, mov2, pixel-nicknames (LAN/Tailscale).
+//     MOV2 aan/uit wordt gelezen uit het vinkje name="mov2" op /settings van de room
+//     (tot de room-sketch het in /capabilities meldt, F6). Laatst gekende info bewaard in
+//     room-info.json, zodat een offline room toch zijn tegels houdt.
+//   - Room-proxy /api/set/roomNN:
+//       sw1/sw2: niet meer blind togglen, maar de gevraagde toestand instellen
+//         (SW1 = pixel 0 manueel aan / auto; SW2 idem met MOV2, anders pixel 1 aan/uit).
+//       Nieuw: setpoint (→ /set_setpoint), home of hm (→ /set_home), pN (→ pixel N togglen,
+//         zoals de knoppen op de room zelf). Daarmee werken de knoppen in index.html.
 //
 // v2.8 (17 okt 2026): meerstand-knoppen vereenvoudigen, stap 3 (§16.9)
 //   - Trap (5 knoppen) → 1 kleurenlamp (soort "kleur"). Body {"aan":bool, "hue":0-360, "sat":0-100}.
@@ -123,6 +135,7 @@ const SETTINGS_FILE = path.join(__dirname, 'settings.json');
 const EPEX_CACHE    = path.join(__dirname, 'epex-cache.json');
 const SCENES_FILE   = path.join(__dirname, 'scenes.json');
 const CAPS_CACHE    = path.join(__dirname, 'controller-configs.json');
+const ROOM_INFO     = path.join(__dirname, 'room-info.json');   // v2.9: laatst gekende room-info
 
 // ── ESP32 controllers op het lokale netwerk ───────────────────────────────────
 const CONTROLLERS = {
@@ -154,6 +167,12 @@ const PHOTON_IDS = {
   'P-Eetpl':    '3c0030000a47353138383138',
   'P-Zitpl':    '200033000547373336323230',
 };
+
+// ── Rooms in Apple Home (v2.9, §16.11) ───────────────────────────────────────
+// Vaste lijst: een room hier toevoegen = tegels in Apple Home. Nooit automatisch.
+const ROOMS_APPLE = [
+  { id: 'room80', naam: 'Eetplaats' },
+];
 
 // ── Standaard instellingen ────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
@@ -564,6 +583,56 @@ app.get('/api/capabilities/:controller', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ROOMS IN APPLE HOME (v2.9)  →  GET /api/rooms-apple
+// Per room: naam, online, mov2, pixel-nicknames. Info 6 u in cache; laatst gekende
+// waarden in room-info.json, zodat een room die offline is toch zijn tegels houdt.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ROOM_INFO_MS = 6 * 3600000;
+const roomInfoMem  = {};
+
+async function roomInfo(naam) {
+  const baseUrl = CONTROLLERS[naam];
+  const mem = roomInfoMem[naam];
+  if (mem && Date.now() - mem._ts < ROOM_INFO_MS) return mem;
+
+  const bewaard = readJSON(ROOM_INFO, {});
+  let info = bewaard[naam] || { mov2: true, pixels: [] };   // standaard zoals de room-sketch
+  let gelukt = false;
+  try {
+    // MOV2: vinkje name="mov2" op /settings (tot de room-sketch het in /capabilities meldt)
+    const html = await (await fetch(baseUrl + '/settings', { timeout: 3000 })).text();
+    const m = html.match(/name="mov2"(\s*checked)?/);
+    const caps = await (await fetch(baseUrl + '/capabilities', { timeout: 3000 })).json();
+    info = {
+      mov2:   m ? !!m[1] : (typeof caps.mov2 === 'boolean' ? caps.mov2 : info.mov2),
+      pixels: Array.isArray(caps.pixels) ? caps.pixels : info.pixels,
+    };
+    if (typeof caps.mov2 === 'boolean') info.mov2 = caps.mov2;   // F6: /capabilities heeft voorrang
+    bewaard[naam] = info;
+    writeJSON(ROOM_INFO, bewaard);
+    gelukt = true;
+  } catch(e) {
+    console.log(`[ROOMS] ${naam}: info niet gelezen (${e.message}) — laatst gekende waarden`);
+  }
+  // Gelukt → 6 u geldig; mislukt → na 1 min opnieuw proberen
+  roomInfoMem[naam] = { ...info, _ts: gelukt ? Date.now() : Date.now() - ROOM_INFO_MS + 60000 };
+  return roomInfoMem[naam];
+}
+
+app.get('/api/rooms-apple', async (req, res) => {
+  if (!isEigenNetwerk(req.socket.remoteAddress))
+    return res.status(403).json({ error: 'Alleen vanaf eigen netwerk' });
+  const lijst = await Promise.all(ROOMS_APPLE.map(async r => {
+    let online = false;
+    try { online = (await fetch(CONTROLLERS[r.id] + '/json', { timeout: 2000 })).ok; } catch {}
+    const info = await roomInfo(r.id);
+    return { id: r.id, naam: r.naam, online, mov2: info.mov2, pixels: info.pixels };
+  }));
+  res.json(lijst);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // STUUR COMMANDO NAAR CONTROLLER  →  /set
 // v2.1: ROOM controllers proxy (sw1/sw2/sw3 → GET endpoints)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -583,30 +652,38 @@ app.post('/api/set/:controller', async (req, res) => {
   if (naam.startsWith('room')) {
     try {
       const results = [];
-      
-      // SW1: Pixel 0 (MOV override)
+      const get = async url => { const r = await fetch(url, { timeout: 3000 }); return r.ok; };
+
+      // v2.9: toestand één keer lezen als een schakelaar gevraagd wordt
+      let json = null;
+      const leesJson = async () => {
+        if (!json) json = await (await fetch(`${baseUrl}/json`, { timeout: 3000 })).json();
+        return json;
+      };
+      const pixelOn   = async i => ((await leesJson()).t || '').replace('P=', '')[i] === '1';
+      const pixelMode = async i => ((await leesJson()).u || '')[i] === '1';
+
+      // SW1: pixel 0 — aan = manueel aan, uit = auto (zoals de Matter-tegel van de room)
       if (body.sw1 !== undefined) {
-        const url = `${baseUrl}/toggle_pixel_mode?idx=0`;
-        const resp = await fetch(url, { timeout: 3000 });
-        results.push({ sw1: resp.ok });
+        const doel = !!Number(body.sw1);
+        const nu   = await pixelMode(0);
+        if (nu !== doel) results.push({ sw1: await get(`${baseUrl}/toggle_pixel_mode?idx=0`) });
+        else             results.push({ sw1: true, ongewijzigd: true });
       }
-      
-      // SW2: Pixel 1
+
+      // SW2: pixel 1 — met MOV2 zoals SW1, zonder MOV2 gewoon aan/uit
       if (body.sw2 !== undefined) {
-        const url = `${baseUrl}/toggle_pixel_mode?idx=1`;
-        const resp = await fetch(url, { timeout: 3000 });
-        results.push({ sw2: resp.ok });
+        const doel = !!Number(body.sw2);
+        const mov2 = (await roomInfo(naam)).mov2;
+        const nu   = mov2 ? await pixelMode(1) : await pixelOn(1);
+        if (nu !== doel) results.push({ sw2: await get(`${baseUrl}/${mov2 ? 'toggle_pixel_mode' : 'toggle_pixel'}?idx=1`) });
+        else             results.push({ sw2: true, ongewijzigd: true });
       }
-      
+
       // SW3: Pixels 2+ (AAN/UIT, niet toggle)
       if (body.sw3 !== undefined) {
-        const targetState = body.sw3 === 1; // true = AAN, false = UIT
-        
-        // Haal eerst /json op om huidige state te weten
-        const jsonResp = await fetch(`${baseUrl}/json`, { timeout: 3000 });
-        const data = await jsonResp.json();
-        const pixelStr = (data.t || '').replace('P=', '');
-        
+        const targetState = Number(body.sw3) === 1; // true = AAN, false = UIT
+        const pixelStr = ((await leesJson()).t || '').replace('P=', '');
         let toggled = 0;
         // Toggle alleen pixels die niet in gewenste state zijn
         for (let i = 2; i < pixelStr.length; i++) {
@@ -618,16 +695,39 @@ app.post('/api/set/:controller', async (req, res) => {
         }
         results.push({ sw3: true, pixels: pixelStr.length - 2, toggled });
       }
-      
+
+      // v2.9: pN = pixel N togglen (knoppen in index.html), zoals op de room zelf:
+      //       pixel 0 (en pixel 1 met MOV2) wisselen manueel/auto, de andere aan/uit
+      for (const key of Object.keys(body)) {
+        const m = key.match(/^p(\d+)$/);
+        if (!m) continue;
+        const i = Number(m[1]);
+        const modus = i === 0 || (i === 1 && (await roomInfo(naam)).mov2);
+        results.push({ [key]: await get(`${baseUrl}/${modus ? 'toggle_pixel_mode' : 'toggle_pixel'}?idx=${i}`) });
+      }
+
+      // v2.9: setpoint (°C, 10–30 zoals de Matter-thermostaat van de room)
+      if (body.setpoint !== undefined) {
+        const sp = Math.max(10, Math.min(30, Math.round(Number(body.setpoint))));
+        results.push({ setpoint: await get(`${baseUrl}/set_setpoint?setpoint=${sp}`), waarde: sp });
+      }
+
+      // v2.9: Thuis/Weg — "home" (plugin) of "hm" (index.html), 1 = Thuis, 0 = Weg
+      const home = body.home !== undefined ? body.home : body.hm;
+      if (home !== undefined) {
+        const v = Number(home) ? 1 : 0;
+        results.push({ home: await get(`${baseUrl}/set_home?v=${v}`), waarde: v });
+      }
+
       // RGB Color (alle pixels)
       if (body.r !== undefined && body.g !== undefined && body.b !== undefined) {
         const url = `${baseUrl}/setcolor?r=${body.r}&g=${body.g}&b=${body.b}`;
         const resp = await fetch(url, { timeout: 3000 });
         results.push({ color: resp.ok, rgb: [body.r, body.g, body.b] });
       }
-      
+
       return res.json({ ok: true, controller: naam, results });
-      
+
     } catch(e) {
       return res.status(503).json({ error: 'ROOM commando mislukt', detail: e.message });
     }
@@ -756,7 +856,7 @@ app.get('/api/controllers', (req, res) => {
 
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✓ Zarlar Portal v2.8 draait op http://192.168.0.50:${PORT}`);
+  console.log(`✓ Zarlar Portal v2.9 draait op http://192.168.0.50:${PORT}`);
   console.log(`  Knoppen:     ${KNOPPEN.length} op ${Object.keys(PHOTON_STUUR).length} Photons — token ${fs.existsSync(PARTICLE_FILE) ? 'aanwezig' : 'ONTBREEKT (particle.json)'}`);
   console.log(`  Controllers: ${Object.keys(CONTROLLERS).filter(k=>k!=='room1').join(', ')}`);
   console.log(`  Settings:    ${SETTINGS_FILE}`);
