@@ -1,6 +1,6 @@
 {
   "name": "matterbridge-zarlar",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Zarlar Photon-knoppen in Apple Home via de Zarlar Portal (RPi)",
   "author": "Filip Delannoy",
   "homepage": "https://github.com/FidelDworp/Zarlardinge_Dashboards",

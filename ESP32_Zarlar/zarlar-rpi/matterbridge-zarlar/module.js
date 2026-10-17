@@ -1,8 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// matterbridge-zarlar v0.4 — Zarlar Photon-knoppen en rooms in Apple Home
+// matterbridge-zarlar v0.5 — Zarlar Photon-knoppen en rooms in Apple Home
 // Filip Delannoy — Portal Plan §16.9 (F4a)
 //
 // Apple Home ──► Matterbridge (deze plugin) ──► server.js (RPi) ──► Particle ──► Photon
+//
+// v0.5 (17 okt 2026): elke room = één samengesteld toestel (keuze B), zoals de ESP32 zelf:
+//   één accessoire "Eetplaats" met de functies als onderdelen. In Apple Home kies je dan zelf
+//   "Toon als afzonderlijke tegels" aan/uit. Nieuwe id per room (bv. "room80"); de losse
+//   tegels van v0.4 (room80-thermostaat, …) verdwijnen. Bereikbaar/onbereikbaar op het toestel.
 //
 // v0.4 (17 okt 2026): rooms (Portal Plan §16.11, server.js ≥ v2.9)
 //   - Rooms uit GET /api/rooms-apple (vaste lijst in server.js). Per room dezelfde tegels als
@@ -38,11 +43,11 @@
 //     (niet localhost: dat behandelt server.js als Funnel-verkeer).
 // ─────────────────────────────────────────────────────────────────────────────
 import { MatterbridgeDynamicPlatform, MatterbridgeEndpoint, onOffLight, onOffPlugInUnit, dimmableLight, extendedColorLight,
-         thermostat, humiditySensor, occupancySensor } from 'matterbridge';
+         thermostat, humiditySensor, occupancySensor, bridgedNode, powerSource } from 'matterbridge';
 import { OnOff, LevelControl, ColorControl, Thermostat, RelativeHumidityMeasurement, OccupancySensing,
          BridgedDeviceBasicInformation } from 'matterbridge/matter/clusters';
 
-const VERSIE  = '0.4.0';
+const VERSIE  = '0.5.0';
 const POLL_MS = 10000;   // R5: rooms elke 10 s opvragen
 const PORTAL  = 'http://192.168.0.50:3000';
 const wacht   = ms => new Promise(r => setTimeout(r, ms));
@@ -275,23 +280,23 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
     return [];
   }
 
-  // Basis van elke room-tegel: identify + bridged-info + voeding
-  roomTegel(type, id, naam, model) {
-    return new MatterbridgeEndpoint(type, { id })
-      .createDefaultIdentifyClusterServer()
-      .createDefaultBridgedDeviceBasicInformationClusterServer(kort(naam), 'ZARLAR-' + id, this.matterbridge.aggregatorVendorId, 'Delannoy', model, 1, VERSIE);
-  }
-
   async maakRooms() {
     const lijst = await this.haalRooms();
     for (const room of lijst) {
       const R = room.id, n = (room.pixels || []).length, t = {};
-      const naamPixel = i => (room.pixels[i] || `${room.naam} pixel ${i}`);
+      const naamPixel = i => kort(room.pixels[i] || `${room.naam} pixel ${i}`);
+
+      // Het toestel zelf: één accessoire per room, met de functies als onderdelen
+      const toestel = new MatterbridgeEndpoint([bridgedNode, powerSource], { id: R })
+        .createDefaultBridgedDeviceBasicInformationClusterServer(kort(room.naam), 'ZARLAR-' + R, this.matterbridge.aggregatorVendorId, 'Delannoy', 'Zarlar room', 1, VERSIE)
+        .createDefaultPowerSourceWiredClusterServer()
+        .addRequiredClusterServers();
 
       // 1. Thermostaat: temperatuur + setpoint; verwarmen = Thuis, uit = Weg
-      t.thermo = this.roomTegel(thermostat, `${R}-thermostaat`, room.naam, 'Zarlar room thermostaat')
+      t.thermo = toestel.addChildDeviceType('Thermostaat', thermostat)
+        .createDefaultIdentifyClusterServer()
         .createDefaultHeatingThermostatClusterServer(20, 20, 10, 30)
-        .createDefaultPowerSourceWiredClusterServer().addRequiredClusters();
+        .addRequiredClusterServers();
       t.thermo.subscribeAttribute(Thermostat, 'occupiedHeatingSetpoint', (nw, oud, ctx) => {
         if (ctx?.fabric === undefined) return;                      // eigen update
         this.roomSet(R, { setpoint: nw / 100 });
@@ -302,26 +307,30 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
       });
 
       // 2. Vochtigheid
-      t.vocht = this.roomTegel(humiditySensor, `${R}-vocht`, `${room.naam} vochtigheid`, 'Zarlar room vochtigheid')
+      t.vocht = toestel.addChildDeviceType('Vochtigheid', humiditySensor)
+        .createDefaultIdentifyClusterServer()
         .createDefaultRelativeHumidityMeasurementClusterServer(null)
-        .createDefaultPowerSourceWiredClusterServer().addRequiredClusters();
+        .addRequiredClusterServers();
 
       // 3-4. Beweging MOV1 (+ MOV2)
-      t.mov1 = this.roomTegel(occupancySensor, `${R}-mov1`, `${room.naam} beweging 1`, 'Zarlar room beweging')
+      t.mov1 = toestel.addChildDeviceType('Beweging 1', occupancySensor)
+        .createDefaultIdentifyClusterServer()
         .createDefaultOccupancySensingClusterServer(false)
-        .createDefaultPowerSourceWiredClusterServer().addRequiredClusters();
+        .addRequiredClusterServers();
       if (room.mov2) {
-        t.mov2 = this.roomTegel(occupancySensor, `${R}-mov2`, `${room.naam} beweging 2`, 'Zarlar room beweging')
+        t.mov2 = toestel.addChildDeviceType('Beweging 2', occupancySensor)
+          .createDefaultIdentifyClusterServer()
           .createDefaultOccupancySensingClusterServer(false)
-          .createDefaultPowerSourceWiredClusterServer().addRequiredClusters();
+          .addRequiredClusterServers();
       }
 
       // 5. Kleurpicker voor alle pixels (altijd aan, zoals op de room)
-      t.kleur = this.roomTegel(extendedColorLight, `${R}-kleur`, `${room.naam} kleur`, 'Zarlar room kleur')
+      t.kleur = toestel.addChildDeviceType('Kleur', extendedColorLight)
+        .createDefaultIdentifyClusterServer()
         .createDefaultOnOffClusterServer(true)
         .createDefaultLevelControlClusterServer(254)
         .createDefaultColorControlClusterServer()
-        .createDefaultPowerSourceWiredClusterServer().addRequiredClusters();
+        .addRequiredClusterServers();
       const k = t.kleur;
       const hs = () => ({ hue: hueGr(k.getAttribute(ColorControl, 'currentHue')), sat: satPct(k.getAttribute(ColorControl, 'currentSaturation')) });
       k.addCommandHandler('on',     () => {});
@@ -335,22 +344,23 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
       k.addCommandHandler('moveToColor',            ({ request: { colorX, colorY } }) => this.roomKleur(R, xyNaarHs(colorX, colorY)));
       k.addCommandHandler('moveToColorTemperature', () => this.roomKleur(R, { hue: 0, sat: 0 }));
 
-      // 6-8. SW1 (pixel 0), SW2 (pixel 1), SW3 (pixels 2+)
-      const sw = [['sw1', 1, naamPixel(0)], ['sw2', 2, naamPixel(1)], ['sw3', 3, `${room.naam} lampen`]];
+      // 6-8. SW1 (pixel 0), SW2 (pixel 1), SW3 (pixels 2+) — onderdeelnaam = pixel-nickname
+      const sw = [['sw1', 1, naamPixel(0)], ['sw2', 2, naamPixel(1)], ['sw3', 3, kort(`${room.naam} lampen`)]];
       for (const [key, nodig, naam] of sw) {
         if (n < nodig) continue;
-        const d = this.roomTegel(onOffLight, `${R}-${key}`, naam, 'Zarlar room lamp')
+        const d = toestel.addChildDeviceType(naam, onOffLight)
+          .createDefaultIdentifyClusterServer()
           .createDefaultOnOffClusterServer(false)
-          .createDefaultPowerSourceWiredClusterServer().addRequiredClusters();
+          .addRequiredClusterServers();
         d.addCommandHandler('on',     () => this.roomSet(R, { [key]: 1 }));
         d.addCommandHandler('off',    () => this.roomSet(R, { [key]: 0 }));
         d.addCommandHandler('toggle', () => this.roomSet(R, { [key]: d.getAttribute(OnOff, 'onOff') ? 0 : 1 }));
         t[key] = d;
       }
 
-      for (const dev of Object.values(t)) await this.registerDevice(dev);
-      this.rooms.push({ id: R, naam: room.naam, mov2: !!room.mov2, n, tegels: t, kleurBusyTot: 0 });
-      this.log.info(`Room ${R} (${room.naam}): ${Object.keys(t).length} tegels geregistreerd${room.online ? '' : ' — room nu offline'}`);
+      await this.registerDevice(toestel);
+      this.rooms.push({ id: R, naam: room.naam, mov2: !!room.mov2, n, toestel, tegels: t, kleurBusyTot: 0 });
+      this.log.info(`Room ${R} (${room.naam}): 1 toestel met ${Object.keys(t).length} onderdelen geregistreerd${room.online ? '' : ' — room nu offline'}`);
     }
   }
 
@@ -413,7 +423,7 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
       const online = !!(j && j.online !== false);
       if (room.online !== online) {
         room.online = online;
-        for (const dev of Object.values(t)) await dev.setAttribute(BridgedDeviceBasicInformation, 'reachable', online, this.log).catch(() => {});
+        await room.toestel.setAttribute(BridgedDeviceBasicInformation, 'reachable', online, this.log).catch(() => {});
         this.log.info(`Room ${room.id} ${online ? 'online' : 'OFFLINE — tegels "geen reactie"'}`);
       }
       if (!online) continue;
