@@ -1,6 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Zarlar Dashboard Server v2.3 — Raspberry Pi
+// Zarlar Dashboard Server v2.4 — Raspberry Pi
 // Node.js + Express — draait op poort 3000
+//
+// v2.4 (17 okt 2026): F4a — Photon-knoppen voor Apple Home (Portal Plan §16.9)
+//   - KNOPPEN: 37 schakelaars op 8 Photons (18 aan/uit + 19 standen in 6 groepen).
+//   - GET  /api/knoppen       → lijst + laatst gekozen toestand (voor de Matterbridge-plugin).
+//   - POST /api/photon/:knop  body {"aan":true|false} → Particle-functie "manual" op de Photon.
+//     Standen zijn onderling exclusief binnen hun groep; de actieve stand uitzetten doet niets.
+//   - Toestand alleen in RAM: de Photons melden hun stand niet. Na herstart alles "uit".
+//   - Beide endpoints alleen vanaf LAN en Tailscale (niet via Funnel). De plugin gebruikt
+//     http://192.168.0.50:3000 (niet localhost: 127.0.0.1 = Funnel-verkeer).
+//   - Particle-token in particle.json naast server.js (NIET in GitHub):
+//       /home/fidel/zarlar-dashboard/particle.json → {"token":"..."}
+//     Ontbreekt het → POST /api/photon/:knop antwoordt 503.
+//   - Bestaande GET /api/photon/:id (sensorproxy) en PHOTON_IDS (/api/matrix) ongewijzigd.
 //
 // v2.3 (16 okt 2026):
 //   - Login (HTTP Basic Auth) voor verkeer via Tailscale Funnel (publiek adres).
@@ -285,6 +298,132 @@ app.get('/api/photon/:id', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// PHOTON KNOPPEN (v2.4)  →  GET /api/knoppen, POST /api/photon/:knop
+// Apple Home → Matterbridge (plugin "zarlar") → hier → Particle Cloud → Photon
+// Portal Plan §16.9. Vervangt Full_Particle_Bridge_Compliant.ino (HomeSpan).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const PARTICLE_FILE = path.join(__dirname, 'particle.json');
+
+// Photons die we aansturen (namen en ID's zoals in console.particle.io, 17/10/2026)
+const PHOTON_STUUR = {
+  'R7-ZITPL':  '200033000547373336323230',
+  'R2-BADK':   '5600420005504b464d323520',
+  'R3-INKOM':  '2c0026000747343232363230',
+  'R4-KEUK':   '310017001647373335333438',
+  'R5-WASPL':  '33004f000e504b464d323520',
+  'R6-EETPL':  '3c0030000a47353138383138',
+  'S-OUTSIDE': '3e003f001447343338333633',
+  'S-HVAC':    '290044000147353138383138',
+};
+
+// Aan/uit-knop: tag   → args = tag + 'on' / tag + 'off'
+// Stand-knop:   groep → args = arg; binnen een groep is maar één stand "aan"
+const KNOPPEN = [
+  // R7-ZITPL
+  { id: 'muurspots',    naam: 'Muurspots',         photon: 'R7-ZITPL',  tag: 'muurspots' },
+  { id: 'tvback',       naam: 'TV Backlight',      photon: 'R7-ZITPL',  tag: 'tvback' },
+  { id: 'klok-zomer',   naam: 'Zomertijd',         photon: 'R7-ZITPL',  groep: 'kloktijd',       arg: 'summer' },
+  { id: 'klok-winter',  naam: 'Wintertijd',        photon: 'R7-ZITPL',  groep: 'kloktijd',       arg: 'winter' },
+  { id: 'klok-hoog',    naam: 'Klok hoog',         photon: 'R7-ZITPL',  groep: 'klokhelderheid', arg: 'h' },
+  { id: 'klok-midden',  naam: 'Klok midden',       photon: 'R7-ZITPL',  groep: 'klokhelderheid', arg: 'm' },
+  { id: 'klok-laag',    naam: 'Klok laag',         photon: 'R7-ZITPL',  groep: 'klokhelderheid', arg: 'l' },
+  // R2-BADK
+  { id: 'badkamer',     naam: 'Badkamerlicht',     photon: 'R2-BADK',   tag: 'badkamer' },
+  { id: 'leeslampjes',  naam: 'Leeslampjes',       photon: 'R2-BADK',   tag: 'leeslampjes' },
+  // R3-INKOM
+  { id: 'inkom',        naam: 'Inkom',             photon: 'R3-INKOM',  tag: 'inkom' },
+  { id: 'dressing',     naam: 'Dressing',          photon: 'R3-INKOM',  tag: 'dressing' },
+  { id: 'trap-uit',     naam: 'Trap uit',          photon: 'R3-INKOM',  groep: 'trap',           arg: 'trapoff' },
+  { id: 'trap-aan',     naam: 'Trap aan',          photon: 'R3-INKOM',  groep: 'trap',           arg: 'trapon' },
+  { id: 'trap-rood',    naam: 'Trap rood',         photon: 'R3-INKOM',  groep: 'trap',           arg: 'traproodon' },
+  { id: 'trap-groen',   naam: 'Trap groen',        photon: 'R3-INKOM',  groep: 'trap',           arg: 'trapgroenon' },
+  { id: 'trap-blauw',   naam: 'Trap blauw',        photon: 'R3-INKOM',  groep: 'trap',           arg: 'trapblauwon' },
+  // R4-KEUK
+  { id: 'spots',        naam: 'Keuken Spots',      photon: 'R4-KEUK',   tag: 'spots' },
+  // R5-WASPL
+  { id: 'wasplaats',    naam: 'Wasplaats',         photon: 'R5-WASPL',  tag: 'wasplaats' },
+  { id: 'toilet',       naam: 'Toilet/Vestiaire',  photon: 'R5-WASPL',  tag: 'toilet' },
+  // R6-EETPL (ook Buro en Bed: Slaapkamer is geen aparte controller)
+  { id: 'tafel',        naam: 'Tafel',             photon: 'R6-EETPL',  tag: 'tafel' },
+  { id: 'bib',          naam: 'Bib',               photon: 'R6-EETPL',  tag: 'bib' },
+  { id: 'buro',         naam: 'Buro',              photon: 'R6-EETPL',  tag: 'buro' },
+  { id: 'bed',          naam: 'Bed',               photon: 'R6-EETPL',  tag: 'bed' },
+  { id: 'ramen-uit',    naam: 'Ramen uit',         photon: 'R6-EETPL',  groep: 'ramen',          arg: 'ramenlowoff' },
+  { id: 'ramen-hoog',   naam: 'Ramen hoog',        photon: 'R6-EETPL',  groep: 'ramen',          arg: 'ramenhion' },
+  { id: 'ramen-midden', naam: 'Ramen midden',      photon: 'R6-EETPL',  groep: 'ramen',          arg: 'ramenmedon' },
+  { id: 'ramen-laag',   naam: 'Ramen laag',        photon: 'R6-EETPL',  groep: 'ramen',          arg: 'ramenlowon' },
+  // S-OUTSIDE
+  { id: 'terras',       naam: 'Terras',            photon: 'S-OUTSIDE', tag: 'S' },
+  { id: 'veldkant',     naam: 'Veldkant',          photon: 'S-OUTSIDE', tag: 'W2' },
+  { id: 'voordeur',     naam: 'Voordeur',          photon: 'S-OUTSIDE', tag: 'W1' },
+  { id: 'sun-auto',     naam: 'Sunlight auto',     photon: 'S-OUTSIDE', groep: 'sunlight',       arg: 'auto' },
+  { id: 'sun-dag',      naam: 'Sunlight dag',      photon: 'S-OUTSIDE', groep: 'sunlight',       arg: 'day' },
+  { id: 'sun-nacht',    naam: 'Sunlight nacht',    photon: 'S-OUTSIDE', groep: 'sunlight',       arg: 'night' },
+  // S-HVAC
+  { id: 'eco-schuur',   naam: 'ECO => SCHUUR',     photon: 'S-HVAC',    tag: 'sch' },
+  { id: 'eco-woning',   naam: 'ECO => WONING',     photon: 'S-HVAC',    tag: 'won' },
+  { id: 'hvac-home',    naam: 'HVAC Home',         photon: 'S-HVAC',    groep: 'hvac',           arg: 'home' },
+  { id: 'hvac-out',     naam: 'HVAC Out',          photon: 'S-HVAC',    groep: 'hvac',           arg: 'out' },
+];
+
+// Laatst gestuurde toestand per knop (alleen RAM; Photons melden niets terug)
+const knopStaat = {};
+
+function knopToestand(k) {
+  return { id: k.id, naam: k.naam, photon: k.photon, groep: k.groep || null, aan: !!knopStaat[k.id] };
+}
+
+app.get('/api/knoppen', (req, res) => {
+  if (!isEigenNetwerk(req.socket.remoteAddress))
+    return res.status(403).json({ error: 'Alleen vanaf eigen netwerk' });
+  res.json(KNOPPEN.map(knopToestand));
+});
+
+app.post('/api/photon/:knop', async (req, res) => {
+  if (!isEigenNetwerk(req.socket.remoteAddress))
+    return res.status(403).json({ error: 'Alleen vanaf eigen netwerk' });
+
+  const k = KNOPPEN.find(x => x.id === req.params.knop);
+  if (!k) return res.status(404).json({ error: 'Onbekende knop', beschikbaar: KNOPPEN.map(x => x.id) });
+
+  const aan = req.body ? req.body.aan : undefined;
+  if (typeof aan !== 'boolean') return res.status(400).json({ error: 'Body {"aan":true} of {"aan":false} verwacht' });
+
+  const leden = k.groep ? KNOPPEN.filter(x => x.groep === k.groep) : [k];
+
+  // Stand uitzetten kan niet: kies een andere stand. Niets versturen.
+  if (k.groep && !aan) return res.json({ ok: true, verstuurd: false, knoppen: leden.map(knopToestand) });
+
+  const token = (readJSON(PARTICLE_FILE) || {}).token;
+  if (!token) {
+    console.log('[KNOP] particle.json ontbreekt — commando geweigerd');
+    return res.status(503).json({ error: 'Particle-token niet geconfigureerd (particle.json)' });
+  }
+
+  const arg = k.groep ? k.arg : k.tag + (aan ? 'on' : 'off');
+  try {
+    const r = await fetch(`https://api.particle.io/v1/devices/${PHOTON_STUUR[k.photon]}/manual`, {
+      method:  'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    'args=' + encodeURIComponent(arg),
+      timeout: 8000,
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error_description || d.error || `HTTP ${r.status}`);
+
+    if (k.groep) leden.forEach(x => { knopStaat[x.id] = (x.id === k.id); });
+    else         knopStaat[k.id] = aan;
+
+    console.log(`[KNOP] ${k.naam} → ${k.photon} manual(${arg}) OK (return ${d.return_value})`);
+    res.json({ ok: true, verstuurd: true, return_value: d.return_value, knoppen: leden.map(knopToestand) });
+  } catch(e) {
+    console.log(`[KNOP] ${k.naam} → ${k.photon} manual(${arg}) mislukt: ${e.message}`);
+    res.status(502).json({ ok: false, error: 'Particle-commando mislukt', detail: e.message, knoppen: leden.map(knopToestand) });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MATRIX DATA  →  /api/matrix
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -542,7 +681,8 @@ app.get('/api/controllers', (req, res) => {
 
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✓ Zarlar Portal v2.1 draait op http://192.168.0.50:${PORT}`);
+  console.log(`✓ Zarlar Portal v2.4 draait op http://192.168.0.50:${PORT}`);
+  console.log(`  Knoppen:     ${KNOPPEN.length} op ${Object.keys(PHOTON_STUUR).length} Photons — token ${fs.existsSync(PARTICLE_FILE) ? 'aanwezig' : 'ONTBREEKT (particle.json)'}`);
   console.log(`  Controllers: ${Object.keys(CONTROLLERS).filter(k=>k!=='room1').join(', ')}`);
   console.log(`  Settings:    ${SETTINGS_FILE}`);
   console.log(`  Scenes:      ${SCENES_FILE}`);
