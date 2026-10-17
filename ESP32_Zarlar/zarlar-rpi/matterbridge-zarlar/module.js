@@ -1,8 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// matterbridge-zarlar v0.5 — Zarlar Photon-knoppen en rooms in Apple Home
+// matterbridge-zarlar v0.6 — Zarlar Photon-knoppen en rooms in Apple Home
 // Filip Delannoy — Portal Plan §16.9 (F4a)
 //
 // Apple Home ──► Matterbridge (deze plugin) ──► server.js (RPi) ──► Particle ──► Photon
+//
+// v0.6 (17 okt 2026): elk onderdeel van een room krijgt zijn naam als Matter-label
+//   (FixedLabel "name", max 16 bytes volgens Matter → langere namen worden ingekort).
+//   Test: toont Apple dat label? Zo niet, dan de onderdelen één keer zelf hernoemen.
 //
 // v0.5 (17 okt 2026): elke room = één samengesteld toestel (keuze B), zoals de ESP32 zelf:
 //   één accessoire "Eetplaats" met de functies als onderdelen. In Apple Home kies je dan zelf
@@ -47,7 +51,7 @@ import { MatterbridgeDynamicPlatform, MatterbridgeEndpoint, onOffLight, onOffPlu
 import { OnOff, LevelControl, ColorControl, Thermostat, RelativeHumidityMeasurement, OccupancySensing,
          BridgedDeviceBasicInformation } from 'matterbridge/matter/clusters';
 
-const VERSIE  = '0.5.0';
+const VERSIE  = '0.6.0';
 const POLL_MS = 10000;   // R5: rooms elke 10 s opvragen
 const PORTAL  = 'http://192.168.0.50:3000';
 const wacht   = ms => new Promise(r => setTimeout(r, ms));
@@ -71,6 +75,12 @@ function hsvNaarRgb(h, s, v) {
   return { r: Math.round((r + m) * 255), g: Math.round((g + m) * 255), b: Math.round((b + m) * 255) };
 }
 const kort = t => String(t).slice(0, 32);   // Matter-naam max 32 tekens
+// Label: max 16 bytes (UTF-8), zonder een teken half af te knippen
+function kort16(t) {
+  let s = String(t).trim();
+  while (Buffer.byteLength(s, 'utf8') > 16) s = s.slice(0, -1);
+  return s.trim();
+}
 
 // Matter XY (0-65535) → tint (graden) en verzadiging (%), via lineair sRGB
 function xyNaarHs(cx, cy) {
@@ -357,6 +367,11 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
         d.addCommandHandler('toggle', () => this.roomSet(R, { [key]: d.getAttribute(OnOff, 'onOff') ? 0 : 1 }));
         t[key] = d;
       }
+
+      // v0.6: naam van elk onderdeel als FixedLabel "name"
+      const namen = { thermo: 'Thermostaat', vocht: 'Vochtigheid', mov1: 'Beweging 1', mov2: 'Beweging 2', kleur: 'Kleur',
+                      sw1: naamPixel(0), sw2: naamPixel(1), sw3: `${room.naam} lampen` };
+      for (const [key, dev] of Object.entries(t)) await dev.addFixedLabel('name', kort16(namen[key]));
 
       await this.registerDevice(toestel);
       this.rooms.push({ id: R, naam: room.naam, mov2: !!room.mov2, n, toestel, tegels: t, kleurBusyTot: 0 });
