@@ -1,6 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Zarlar Dashboard Server v2.6 — Raspberry Pi
+// Zarlar Dashboard Server v2.7 — Raspberry Pi
 // Node.js + Express — draait op poort 3000
+//
+// v2.7 (17 okt 2026): meerstand-knoppen vereenvoudigen, stap 2 (§16.9)
+//   - Ramen (4 knoppen) en Klok helderheid (3 knoppen) → elk 1 dimbare lamp (soort "dimmer").
+//   - Dimmer: body {"aan":bool, "niveau":0-100}. Niveau wordt in gelijke banden verdeeld over
+//     de standen (bv. 3 standen: 1-33 / 34-66 / 67-100) en teruggezet op 33/67/100.
+//     Uit = argUit; zonder argUit (Klok) kan de dimmer niet uit: niets versturen.
+//   - 30 knoppen.
 //
 // v2.6 (17 okt 2026): meerstand-knoppen vereenvoudigen, stap 1 (§16.9)
 //   - Zomer/Winter (2 knoppen) → 1 schakelaar "Zomertijd": aan = summer, uit = winter.
@@ -330,15 +337,14 @@ const PHOTON_STUUR = {
 // Aan/uit-knop: tag   → args = tag + 'on' / tag + 'off'
 // Stand-knop:   groep → args = arg; binnen een groep is maar één stand "aan"
 // Twee-standen-knop (v2.6): argAan/argUit → args = argAan bij aan, argUit bij uit
+// Dimmer (v2.7): niveaus (laag→hoog) + optioneel argUit; toestand = { aan, niveau }
 // soort (v2.5): standaard 'lamp' voor aan/uit en 'schakelaar' voor standen; anders expliciet.
 const KNOPPEN = [
   // R7-ZITPL
   { id: 'muurspots',    naam: 'Muurspots',         photon: 'R7-ZITPL',  tag: 'muurspots' },
   { id: 'tvback',       naam: 'TV Backlight',      photon: 'R7-ZITPL',  tag: 'tvback' },
   { id: 'kloktijd',     naam: 'Zomertijd',         photon: 'R7-ZITPL',  argAan: 'summer', argUit: 'winter', soort: 'schakelaar' },
-  { id: 'klok-hoog',    naam: 'Klok hoog',         photon: 'R7-ZITPL',  groep: 'klokhelderheid', arg: 'h' },
-  { id: 'klok-midden',  naam: 'Klok midden',       photon: 'R7-ZITPL',  groep: 'klokhelderheid', arg: 'm' },
-  { id: 'klok-laag',    naam: 'Klok laag',         photon: 'R7-ZITPL',  groep: 'klokhelderheid', arg: 'l' },
+  { id: 'klok-helderheid', naam: 'Klok helderheid', photon: 'R7-ZITPL', soort: 'dimmer', niveaus: ['l', 'm', 'h'] },
   // R2-BADK
   { id: 'badkamer',     naam: 'Badkamerlicht',     photon: 'R2-BADK',   tag: 'badkamer' },
   { id: 'leeslampjes',  naam: 'Leeslampjes',       photon: 'R2-BADK',   tag: 'leeslampjes' },
@@ -360,10 +366,7 @@ const KNOPPEN = [
   { id: 'bib',          naam: 'Bib',               photon: 'R6-EETPL',  tag: 'bib' },
   { id: 'buro',         naam: 'Buro',              photon: 'R6-EETPL',  tag: 'buro' },
   { id: 'bed',          naam: 'Bed',               photon: 'R6-EETPL',  tag: 'bed' },
-  { id: 'ramen-uit',    naam: 'Ramen uit',         photon: 'R6-EETPL',  groep: 'ramen',          arg: 'ramenlowoff' },
-  { id: 'ramen-hoog',   naam: 'Ramen hoog',        photon: 'R6-EETPL',  groep: 'ramen',          arg: 'ramenhion' },
-  { id: 'ramen-midden', naam: 'Ramen midden',      photon: 'R6-EETPL',  groep: 'ramen',          arg: 'ramenmedon' },
-  { id: 'ramen-laag',   naam: 'Ramen laag',        photon: 'R6-EETPL',  groep: 'ramen',          arg: 'ramenlowon' },
+  { id: 'ramen',        naam: 'Ramen',             photon: 'R6-EETPL',  soort: 'dimmer', argUit: 'ramenlowoff', niveaus: ['ramenlowon', 'ramenmedon', 'ramenhion'] },
   // S-OUTSIDE
   { id: 'terras',       naam: 'Terras',            photon: 'S-OUTSIDE', tag: 'S' },
   { id: 'veldkant',     naam: 'Veldkant',          photon: 'S-OUTSIDE', tag: 'W2' },
@@ -378,11 +381,24 @@ const KNOPPEN = [
 ];
 
 // Laatst gestuurde toestand per knop (alleen RAM; Photons melden niets terug)
+// Dimmer: { aan, niveau }; andere knoppen: true/false
 const knopStaat = {};
 
+// Dimmer: niveau 1-100 → index van de stand, en het afgeronde niveau van die stand
+function dimStand(k, niveau) {
+  const n   = k.niveaus.length;
+  const idx = Math.min(n - 1, Math.max(0, Math.ceil(niveau * n / 100) - 1));
+  return { idx, niveau: Math.round((idx + 1) * 100 / n) };
+}
+
 function knopToestand(k) {
-  return { id: k.id, naam: k.naam, photon: k.photon, groep: k.groep || null,
-           soort: k.soort || (k.groep ? 'schakelaar' : 'lamp'), aan: !!knopStaat[k.id] };
+  const t = { id: k.id, naam: k.naam, photon: k.photon, groep: k.groep || null,
+             soort: k.soort || (k.groep ? 'schakelaar' : 'lamp') };
+  if (k.niveaus) {
+    const st = knopStaat[k.id] || { aan: false, niveau: 100 };
+    return { ...t, aan: !!st.aan, niveau: st.niveau };
+  }
+  return { ...t, aan: !!knopStaat[k.id] };
 }
 
 app.get('/api/knoppen', (req, res) => {
@@ -406,13 +422,24 @@ app.post('/api/photon/:knop', async (req, res) => {
   // Stand uitzetten kan niet: kies een andere stand. Niets versturen.
   if (k.groep && !aan) return res.json({ ok: true, verstuurd: false, knoppen: leden.map(knopToestand) });
 
+  // Dimmer (v2.7): gevraagd niveau → stand
+  let dim = null;
+  if (k.niveaus) {
+    const vorig = knopStaat[k.id] || { aan: false, niveau: 100 };
+    let niveau  = typeof req.body.niveau === 'number' ? Math.round(req.body.niveau) : vorig.niveau;
+    niveau      = Math.max(1, Math.min(100, niveau || 1));
+    if (!aan && !k.argUit) return res.json({ ok: true, verstuurd: false, knoppen: [knopToestand(k)] });
+    dim = aan ? { aan: true, ...dimStand(k, niveau) } : { aan: false, niveau: vorig.niveau };
+  }
+
   const token = (readJSON(PARTICLE_FILE) || {}).token;
   if (!token) {
     console.log('[KNOP] particle.json ontbreekt — commando geweigerd');
     return res.status(503).json({ error: 'Particle-token niet geconfigureerd (particle.json)' });
   }
 
-  const arg = k.groep  ? k.arg
+  const arg = dim      ? (dim.aan ? k.niveaus[dim.idx] : k.argUit)
+            : k.groep  ? k.arg
             : k.argAan ? (aan ? k.argAan : k.argUit)
             : k.tag + (aan ? 'on' : 'off');
   try {
@@ -425,8 +452,9 @@ app.post('/api/photon/:knop', async (req, res) => {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error_description || d.error || `HTTP ${r.status}`);
 
-    if (k.groep) leden.forEach(x => { knopStaat[x.id] = (x.id === k.id); });
-    else         knopStaat[k.id] = aan;
+    if (dim)          knopStaat[k.id] = { aan: dim.aan, niveau: dim.niveau };
+    else if (k.groep) leden.forEach(x => { knopStaat[x.id] = (x.id === k.id); });
+    else              knopStaat[k.id] = aan;
 
     console.log(`[KNOP] ${k.naam} → ${k.photon} manual(${arg}) OK (return ${d.return_value})`);
     res.json({ ok: true, verstuurd: true, return_value: d.return_value, knoppen: leden.map(knopToestand) });
@@ -694,7 +722,7 @@ app.get('/api/controllers', (req, res) => {
 
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✓ Zarlar Portal v2.6 draait op http://192.168.0.50:${PORT}`);
+  console.log(`✓ Zarlar Portal v2.7 draait op http://192.168.0.50:${PORT}`);
   console.log(`  Knoppen:     ${KNOPPEN.length} op ${Object.keys(PHOTON_STUUR).length} Photons — token ${fs.existsSync(PARTICLE_FILE) ? 'aanwezig' : 'ONTBREEKT (particle.json)'}`);
   console.log(`  Controllers: ${Object.keys(CONTROLLERS).filter(k=>k!=='room1').join(', ')}`);
   console.log(`  Settings:    ${SETTINGS_FILE}`);
