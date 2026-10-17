@@ -1,6 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Zarlar Dashboard Server v2.4 — Raspberry Pi
+// Zarlar Dashboard Server v2.5 — Raspberry Pi
 // Node.js + Express — draait op poort 3000
+//
+// v2.5 (17 okt 2026):
+//   - /api/knoppen geeft per knop ook "soort": "lamp" of "schakelaar" (keuze A, §16.9).
+//     Standen en ECO ⇒ SCHUUR/WONING = schakelaar (16 lampen + 21 schakelaars).
+//     De Matterbridge-plugin "zarlar" maakt daarmee een lamp of een stopcontact in Apple Home.
 //
 // v2.4 (17 okt 2026): F4a — Photon-knoppen voor Apple Home (Portal Plan §16.9)
 //   - KNOPPEN: 37 schakelaars op 8 Photons (18 aan/uit + 19 standen in 6 groepen).
@@ -319,6 +324,7 @@ const PHOTON_STUUR = {
 
 // Aan/uit-knop: tag   → args = tag + 'on' / tag + 'off'
 // Stand-knop:   groep → args = arg; binnen een groep is maar één stand "aan"
+// soort (v2.5): standaard 'lamp' voor aan/uit en 'schakelaar' voor standen; anders expliciet.
 const KNOPPEN = [
   // R7-ZITPL
   { id: 'muurspots',    naam: 'Muurspots',         photon: 'R7-ZITPL',  tag: 'muurspots' },
@@ -361,8 +367,8 @@ const KNOPPEN = [
   { id: 'sun-dag',      naam: 'Sunlight dag',      photon: 'S-OUTSIDE', groep: 'sunlight',       arg: 'day' },
   { id: 'sun-nacht',    naam: 'Sunlight nacht',    photon: 'S-OUTSIDE', groep: 'sunlight',       arg: 'night' },
   // S-HVAC
-  { id: 'eco-schuur',   naam: 'ECO => SCHUUR',     photon: 'S-HVAC',    tag: 'sch' },
-  { id: 'eco-woning',   naam: 'ECO => WONING',     photon: 'S-HVAC',    tag: 'won' },
+  { id: 'eco-schuur',   naam: 'ECO => SCHUUR',     photon: 'S-HVAC',    tag: 'sch', soort: 'schakelaar' },
+  { id: 'eco-woning',   naam: 'ECO => WONING',     photon: 'S-HVAC',    tag: 'won', soort: 'schakelaar' },
   { id: 'hvac-home',    naam: 'HVAC Home',         photon: 'S-HVAC',    groep: 'hvac',           arg: 'home' },
   { id: 'hvac-out',     naam: 'HVAC Out',          photon: 'S-HVAC',    groep: 'hvac',           arg: 'out' },
 ];
@@ -371,7 +377,8 @@ const KNOPPEN = [
 const knopStaat = {};
 
 function knopToestand(k) {
-  return { id: k.id, naam: k.naam, photon: k.photon, groep: k.groep || null, aan: !!knopStaat[k.id] };
+  return { id: k.id, naam: k.naam, photon: k.photon, groep: k.groep || null,
+           soort: k.soort || (k.groep ? 'schakelaar' : 'lamp'), aan: !!knopStaat[k.id] };
 }
 
 app.get('/api/knoppen', (req, res) => {
@@ -681,7 +688,7 @@ app.get('/api/controllers', (req, res) => {
 
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✓ Zarlar Portal v2.4 draait op http://192.168.0.50:${PORT}`);
+  console.log(`✓ Zarlar Portal v2.5 draait op http://192.168.0.50:${PORT}`);
   console.log(`  Knoppen:     ${KNOPPEN.length} op ${Object.keys(PHOTON_STUUR).length} Photons — token ${fs.existsSync(PARTICLE_FILE) ? 'aanwezig' : 'ONTBREEKT (particle.json)'}`);
   console.log(`  Controllers: ${Object.keys(CONTROLLERS).filter(k=>k!=='room1').join(', ')}`);
   console.log(`  Settings:    ${SETTINGS_FILE}`);
