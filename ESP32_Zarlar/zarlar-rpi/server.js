@@ -1,6 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Zarlar Dashboard Server v2.7 — Raspberry Pi
+// Zarlar Dashboard Server v2.8 — Raspberry Pi
 // Node.js + Express — draait op poort 3000
+//
+// v2.8 (17 okt 2026): meerstand-knoppen vereenvoudigen, stap 3 (§16.9)
+//   - Trap (5 knoppen) → 1 kleurenlamp (soort "kleur"). Body {"aan":bool, "hue":0-360, "sat":0-100}.
+//     Uit = trapoff. Verzadiging < 25 % = wit = trapon. Anders de dichtstbijzijnde tint:
+//     rood (0°) = traproodon, groen (120°) = trapgroenon, blauw (240°) = trapblauwon.
+//     Zonder hue/sat (gewoon aan) → laatst gekozen kleur. 26 knoppen.
 //
 // v2.7 (17 okt 2026): meerstand-knoppen vereenvoudigen, stap 2 (§16.9)
 //   - Ramen (4 knoppen) en Klok helderheid (3 knoppen) → elk 1 dimbare lamp (soort "dimmer").
@@ -338,6 +344,7 @@ const PHOTON_STUUR = {
 // Stand-knop:   groep → args = arg; binnen een groep is maar één stand "aan"
 // Twee-standen-knop (v2.6): argAan/argUit → args = argAan bij aan, argUit bij uit
 // Dimmer (v2.7): niveaus (laag→hoog) + optioneel argUit; toestand = { aan, niveau }
+// Kleur (v2.8): kleuren [{arg, hue|null=wit}] + argUit; toestand = { aan, kleur (index) }
 // soort (v2.5): standaard 'lamp' voor aan/uit en 'schakelaar' voor standen; anders expliciet.
 const KNOPPEN = [
   // R7-ZITPL
@@ -351,11 +358,8 @@ const KNOPPEN = [
   // R3-INKOM
   { id: 'inkom',        naam: 'Inkom',             photon: 'R3-INKOM',  tag: 'inkom' },
   { id: 'dressing',     naam: 'Dressing',          photon: 'R3-INKOM',  tag: 'dressing' },
-  { id: 'trap-uit',     naam: 'Trap uit',          photon: 'R3-INKOM',  groep: 'trap',           arg: 'trapoff' },
-  { id: 'trap-aan',     naam: 'Trap aan',          photon: 'R3-INKOM',  groep: 'trap',           arg: 'trapon' },
-  { id: 'trap-rood',    naam: 'Trap rood',         photon: 'R3-INKOM',  groep: 'trap',           arg: 'traproodon' },
-  { id: 'trap-groen',   naam: 'Trap groen',        photon: 'R3-INKOM',  groep: 'trap',           arg: 'trapgroenon' },
-  { id: 'trap-blauw',   naam: 'Trap blauw',        photon: 'R3-INKOM',  groep: 'trap',           arg: 'trapblauwon' },
+  { id: 'trap',         naam: 'Trap',              photon: 'R3-INKOM',  soort: 'kleur', argUit: 'trapoff',
+    kleuren: [ { arg: 'trapon', hue: null }, { arg: 'traproodon', hue: 0 }, { arg: 'trapgroenon', hue: 120 }, { arg: 'trapblauwon', hue: 240 } ] },
   // R4-KEUK
   { id: 'spots',        naam: 'Keuken Spots',      photon: 'R4-KEUK',   tag: 'spots' },
   // R5-WASPL
@@ -391,12 +395,29 @@ function dimStand(k, niveau) {
   return { idx, niveau: Math.round((idx + 1) * 100 / n) };
 }
 
+// Kleur: hue 0-360 / sat 0-100 → index in k.kleuren (wit bij lage verzadiging, anders dichtste tint)
+function kiesKleur(k, hue, sat) {
+  if (sat < 25) return Math.max(0, k.kleuren.findIndex(c => c.hue === null));
+  let best = -1, afstand = 999;
+  k.kleuren.forEach((c, i) => {
+    if (c.hue === null) return;
+    const d = Math.min(Math.abs(hue - c.hue), 360 - Math.abs(hue - c.hue));
+    if (d < afstand) { afstand = d; best = i; }
+  });
+  return best;
+}
+
 function knopToestand(k) {
   const t = { id: k.id, naam: k.naam, photon: k.photon, groep: k.groep || null,
              soort: k.soort || (k.groep ? 'schakelaar' : 'lamp') };
   if (k.niveaus) {
     const st = knopStaat[k.id] || { aan: false, niveau: 100 };
     return { ...t, aan: !!st.aan, niveau: st.niveau };
+  }
+  if (k.kleuren) {
+    const st = knopStaat[k.id] || { aan: false, kleur: 0 };
+    const c  = k.kleuren[st.kleur];
+    return { ...t, aan: !!st.aan, hue: c.hue ?? 0, sat: c.hue === null ? 0 : 100 };
   }
   return { ...t, aan: !!knopStaat[k.id] };
 }
@@ -432,13 +453,25 @@ app.post('/api/photon/:knop', async (req, res) => {
     dim = aan ? { aan: true, ...dimStand(k, niveau) } : { aan: false, niveau: vorig.niveau };
   }
 
+  // Kleur (v2.8): gevraagde tint → kleur
+  let kleur = null;
+  if (k.kleuren) {
+    const vorig = knopStaat[k.id] || { aan: false, kleur: 0 };
+    const hue = req.body.hue, sat = req.body.sat;
+    const idx = (typeof hue === 'number' || typeof sat === 'number')
+      ? kiesKleur(k, ((Math.round(hue ?? 0) % 360) + 360) % 360, Math.round(sat ?? 100))
+      : vorig.kleur;
+    kleur = { aan, kleur: aan ? idx : vorig.kleur };
+  }
+
   const token = (readJSON(PARTICLE_FILE) || {}).token;
   if (!token) {
     console.log('[KNOP] particle.json ontbreekt — commando geweigerd');
     return res.status(503).json({ error: 'Particle-token niet geconfigureerd (particle.json)' });
   }
 
-  const arg = dim      ? (dim.aan ? k.niveaus[dim.idx] : k.argUit)
+  const arg = kleur    ? (kleur.aan ? k.kleuren[kleur.kleur].arg : k.argUit)
+            : dim      ? (dim.aan ? k.niveaus[dim.idx] : k.argUit)
             : k.groep  ? k.arg
             : k.argAan ? (aan ? k.argAan : k.argUit)
             : k.tag + (aan ? 'on' : 'off');
@@ -452,7 +485,8 @@ app.post('/api/photon/:knop', async (req, res) => {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error_description || d.error || `HTTP ${r.status}`);
 
-    if (dim)          knopStaat[k.id] = { aan: dim.aan, niveau: dim.niveau };
+    if (kleur)        knopStaat[k.id] = kleur;
+    else if (dim)     knopStaat[k.id] = { aan: dim.aan, niveau: dim.niveau };
     else if (k.groep) leden.forEach(x => { knopStaat[x.id] = (x.id === k.id); });
     else              knopStaat[k.id] = aan;
 
@@ -722,7 +756,7 @@ app.get('/api/controllers', (req, res) => {
 
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✓ Zarlar Portal v2.7 draait op http://192.168.0.50:${PORT}`);
+  console.log(`✓ Zarlar Portal v2.8 draait op http://192.168.0.50:${PORT}`);
   console.log(`  Knoppen:     ${KNOPPEN.length} op ${Object.keys(PHOTON_STUUR).length} Photons — token ${fs.existsSync(PARTICLE_FILE) ? 'aanwezig' : 'ONTBREEKT (particle.json)'}`);
   console.log(`  Controllers: ${Object.keys(CONTROLLERS).filter(k=>k!=='room1').join(', ')}`);
   console.log(`  Settings:    ${SETTINGS_FILE}`);
