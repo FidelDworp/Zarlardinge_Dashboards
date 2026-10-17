@@ -152,7 +152,7 @@ fetch('/api/poll/eco')
 
 ---
 
-## 3. server.js v2.3 — API endpoints
+## 3. server.js v2.8 — API endpoints
 
 > **Toegang (v2.3):** LAN (`192.168.0.x`) en Tailscale (`100.64.0.0/10`) zonder login. Via **Funnel** (komt binnen als `127.0.0.1`) is voor alles een login nodig (HTTP Basic Auth). Gegevens in `/home/fidel/zarlar-dashboard/auth.json` op de Pi, niet in GitHub. Zonder dat bestand is Funnel volledig geblokkeerd. 10 foute pogingen geven 15 min blokkade.
 
@@ -168,6 +168,8 @@ fetch('/api/poll/eco')
 | `/api/scenes/:naam/run` | POST | Scène uitvoeren |
 | `/api/controllers` | GET | Lijst van controllers |
 | `/api/photon/:id` | GET | Photon-data via Cloudflare Worker (geen CORS) |
+| `/api/knoppen` | GET | v2.4+: de Photon-knoppen voor Apple Home (id, naam, Photon, soort, toestand). Alleen LAN/Tailscale. Zie §16.9 |
+| `/api/photon/:knop` | POST | v2.4+: knop schakelen via Particle. Body `{"aan":bool}`, dimmer ook `niveau` (0–100), kleur ook `hue`/`sat`. Token uit `particle.json` op de Pi. Alleen LAN/Tailscale |
 | `/api/matrix` | GET | Alle ESP32 + Photon data parallel — **kritiek, nooit verwijderen** |
 | `/api/history/:naam` | GET | Google Sheets historiek (read-only) — ⬜ gepland, nog niet in server.js |
 
@@ -580,9 +582,11 @@ Het veld `morgen_beschikbaar` bestaat al in de respons. Daarna eventueel een kle
 | ~~AP21~~ | ✅ `server.js` v2.3 live (16/10): login voor Funnel, `auth.json` op de Pi. Funnel-URL is nu `https://rpi-raspberrypi-zarlar.tail3c7f42.ts.net` (Pi hernoemd in Tailscale; oude naam bestond publiek niet meer, opgelost met `tailscale funnel reset`). iOS: beginscherm-icoon als web-app toont wit blad bij Basic Auth → icoon openen in Safari. Eventueel later: eigen loginpagina met cookie (v2.4). |
 | AP22 | Portal-Node upgraden van v18 (EOL) naar 22/24 LTS, met nieuwe NodeSource-bron. Apart traject, met backup en test van `server.js`. |
 | AP23 | `apt upgrade` van de 95 openstaande pakketten, apart en met verse backup |
-| AP24 | F4a: Photon-toestellen naar de RPi-bridge (§16.9). P1–P3 beslist op 17/10; volgende stap: `server.js` v2.4 |
-| AP25 | Particle-token vernieuwen na F4a; het oude token staat in de HomeSpan-sketch en in `Lights.html` (publiek) |
-| AP26 | Testwoning "Matter Home" verwijderen in de Woning-app. De openstaande uitnodiging voor Mireille intrekken: niet nodig, want FiDel en Mireille gebruiken dezelfde Apple-account. |
+| ~~AP24~~ | ✅ F4a afgewerkt (17/10): 26 Photon-knoppen in Apple Home via `server.js` v2.8 + plugin `matterbridge-zarlar` v0.3 (§16.9–16.10) |
+| ~~AP25~~ | Particle-token: **bewust behouden** (beslissing FiDel 17/10), want vernieuwen vraagt aanpassingen in te veel apps en pagina's. Risico gekend: het token staat leesbaar in `Lights.html` op de publieke GitHub Pages |
+| AP26 | Testwoning "Matter Home" verwijderen in de Woning-app. **Pas na F6:** de eigen Matter-tegels van room80 staan nog in "Matter Home" en dienen als vergelijking tijdens de parallelle test (§16.11). De openstaande uitnodiging voor Mireille intrekken: niet nodig, want FiDel en Mireille gebruiken dezelfde Apple-account. |
+| AP27 | Broncode plugin `matterbridge-zarlar` in de repo zetten: `ESP32_Zarlar/zarlar-rpi/matterbridge-zarlar/` (eenmalig met de hand, zie §16.10) |
+| AP28 | F4 rooms: `server.js` v2.9 → plugin v0.4 → 48 u parallel test → F6 room80 zonder Matter (§16.11) |
 | ~~AP20~~ | ✅ `deploy.sh` v2 (16/10): stopt bij Rosetta-, git- of SSH-fout, en ruimt Downloads alleen op als alles lukte |
 
 ---
@@ -1069,9 +1073,9 @@ Elke fase heeft een **meetpunt** (wanneer is ze geslaagd) en een **terugweg**. P
 | **F1** | Backup: SD-image (piclone naar USB/SD) + check dat de repo volledig in GitHub staat | Image opstartbaar getest | n.v.t. |
 | **F2** | Docker installeren (officiële Debian-instructies) | Portal, Tailscale en VNC werken nog; RAM gemeten | `apt purge docker-*` |
 | **F3** | Matterbridge in Docker (`network_mode: host`), zonder plugins; koppelen met Apple Home | Bridge zichtbaar in Woning-app; RAM < ±150 MB extra; 24 u stabiel | container stoppen, bridge uit Woning verwijderen |
-| **F4a** | **Photon-toestellen** naar de RPi-bridge (code pas na GO): de 26 knoppen van de gewiste HomeSpan-bridge terug in Apple Home via de Zarlar-plugin → `server.js` → Particle. Zie §16.9 | Alle knoppen zichtbaar in Zarlardinge en schakelen correct; ook buitenshuis | plugin uitschakelen |
-| **F4** | Zarlar-plugin v0.1 (code pas na GO): **1 room, alleen sensoren** (temp, vocht, motion) via `/api/poll` | Waarden in Apple Home gelijk aan portal, 48 u stabiel | plugin uitschakelen |
-| **F5** | Plugin v0.2: schakelaars van die room via `/api/set` (sw1/sw2/sw3) | Schakelen vanuit Woning-app werkt, status correct terug | plugin terug naar v0.1 |
+| **F4a** | **Photon-toestellen** naar de RPi-bridge (code pas na GO): de 26 knoppen van de gewiste HomeSpan-bridge terug in Apple Home via de Zarlar-plugin → `server.js` → Particle. Zie §16.9 | ✅ 17/10: 26 knoppen werken, ook via 4G | plugin uitschakelen |
+| **F4** | (herzien 17/10, §16.11) `server.js` v2.9 + plugin v0.4: **room80 met alle tegels** die de room nu zelf via Matter aanbiedt (thermostaat, vocht, beweging, kleur, SW1–SW3) | Tegels in Zarlardinge, waarden gelijk aan portal | plugin terug naar v0.3 |
+| **F5** | (herzien 17/10) **Parallelle test 48 u:** oude tegels van de ESP32 (woning "Matter Home") naast de nieuwe van de RPi (Zarlardinge) | Zelfde waarden, schakelen en status correct, 48 u stabiel | plugin terug naar v0.3 |
 | **F6** | Die ene ESP32 flashen **zonder Matter** (nieuwe sketchversie, na GO); oud accessoire uit Apple Home; scènes van die kamer opnieuw instellen | Heap-winst gemeten; kamer volledig bedienbaar via bridge | vorige sketch terugflashen |
 | **F7** | Opschalen 1 → 2 → 4 → alle rooms, telkens met dezelfde check | RAM, CPU, swap, mDNS en Apple Home stabiel na elke stap | laatste groep terugdraaien |
 | **F8** | Zigbee: USB-dongle + Mosquitto + Zigbee2MQTT (Docker) + matterbridge-zigbee2mqtt; 1 Opple koppelen, `operation_mode: event` | Alle 6 knoppen (single/double/long) zien in Z2M en Apple Home | containers stoppen |
@@ -1086,7 +1090,7 @@ Elke fase heeft een **meetpunt** (wanneer is ze geslaagd) en een **terugweg**. P
 |---|---|
 | B1 | Architectuur C (Matterbridge) akkoord, of toch HA (B) testen? (de richting "Matter naar RPi" zelf is beslist) |
 | B2 | Welke Zigbee-dongle (bv. Sonoff ZBDongle-E / SLZB-06)? |
-| B3 | Welke room eerst als testkamer (voorstel: room80, R-EETPL)? |
+| ~~B3~~ | ✅ room80 (R-EETPL), de enige room die nu online is (beslist 17/10) |
 | B4 | Google Home echt nodig, of enkel Apple Home? |
 
 ### 16.7 Werking bridge & dynamische kamers (toegevoegd 16 okt 2026)
@@ -1109,7 +1113,7 @@ Dashboard  ◄──────────────────────
 - **Eén toestand:** die zit op de ESP32. Een lamp in de portal schakelen is binnen enkele seconden zichtbaar in Apple Home (de plugin pollt), en omgekeerd.
 - Dashboard en 16×16-matrix blijven ongewijzigd.
 
-**Dynamische kamers**
+**Dynamische kamers** — ⚠️ *herzien 17/10 (§16.11, R2): géén automatische ontdekking, maar een **vaste lijst** in `server.js`. Een room die offline is bij het herstarten van de plugin zou anders uit Apple Home verdwijnen en scènes breken. Onderstaande tekst blijft als achtergrond.*
 - De plugin ontdekt rooms zoals `verlichting.html` dat doet: `/api/status` filteren op `online: true` voor `room*`. De namen komen uit `/capabilities` (pixel-nicknames uit NVS van de room).
 - Een nieuwe room op het wifi wordt een nieuw accessoire in Apple Home, met de namen uit `/settings` van die room.
 - **Een offline room wordt NIET verwijderd** uit Apple Home, maar getoond als "geen reactie". Verwijderen zou scènes en automaties (o.a. van Mireille) breken. Er worden alleen rooms toegevoegd, nooit automatisch verwijderd.
@@ -1135,6 +1139,7 @@ Dashboard  ◄──────────────────────
 | **F2** Docker | 16/10/2026 | ✅ Docker **29.9.1** + Compose **v5.6.0** uit de officiële Debian-bron (trixie/arm64). `hello-world` OK. zarlar/tailscaled/docker actief, portal 200. RAM beschikbaar **544 MiB** (−97 MiB), schijf 4,4 GB vrij. |
 | **F3** Matterbridge | 16/10/2026 | ✅ Matterbridge **3.10.14** in Docker (`~/matterbridge/docker-compose.yml`, image `luligu/matterbridge:latest`, host-netwerk, loglimiet 3×10 MB). Interne Node 24. Frontend `http://192.168.0.50:8283` met wachtwoord. **Gekoppeld met Apple Home** (2 fabrics = Woning + sleutelhanger, normaal). Extra RAM ±80 MiB → 462 MiB beschikbaar. "Virtual mode" uitgezet. 24-uurstest: 17 u healthy, daarna onderbroken door de Pi-herstart en het Tailscale-probleem (zie 17/10). Stabiliteit voldoende bevonden. |
 | **F3b** verhuis | 17/10/2026 | ✅ Bridge verwijderd uit de testwoning "Matter Home" en opnieuw gekoppeld in **Zarlardinge** als **"Testkamer RPi Matter Bridge"**. Hub: Keuken Geel Bolleke. |
+| **F4a** Photons | 17/10/2026 | ✅ 26 Photon-knoppen in Apple Home: `server.js` v2.4 → v2.8 + plugin `matterbridge-zarlar` v0.1 → v0.3 (§16.9–16.10). De ESP32-WROOM-32D met HomeSpan is niet meer nodig. |
 
 **Lessen F3 (16/10):**
 - **Nooit updaten via de virtuele "Update"-schakelaar of via de webpagina.** In Docker brak dat de container (`matterbridge: not found`, herstartlus). Herstel: `docker compose up -d --force-recreate`. De koppeling bleef intact (staat in `~/.matterbridge`).
@@ -1150,64 +1155,133 @@ Dashboard  ◄──────────────────────
 - **De HomeSpan-bridge voor de Photons is per vergissing gewist** uit Apple Home ("Testkamer Zarlardinge Bridge", ESP32-WROOM-32D, `Full_Particle_Bridge_Compliant.ino`), nadat Claude die verkeerd aangeduid had als room80. Beslissing (FiDel): **niet opnieuw koppelen, maar meteen migreren naar de RPi-bridge** (F4a, §16.9). De scènes worden daarna opnieuw gemaakt.
 - De testwoning "Matter Home" is nu leeg en kan verwijderd worden.
 
+**Lessen F4a (17/10):**
+- **Na elke wijziging in de knoppenlijst (nieuwe of verdwenen tegels): de woninghub Keuken Geel Bolleke herstarten** (stekker uit/in). Matterbridge meldt nieuwe toestellen correct, maar Apple Home verwerkt verdwenen tegels meteen en nieuwe pas na een herstart van de hub.
+- De Woning-app heeft **geen zoekveld**. Nieuwe tegels vind je via de bridge (tandwiel → lijst accessoires) of in de kamer van de bridge.
+- **Apple Home toont geen meerstandenschakelaar** (Matter Mode Select wordt niet getoond). Oplossing: dimbare lamp voor standen met een volgorde, kleurenlamp voor kleuren, één schakelaar voor twee standen.
+- De plugin praat met `http://192.168.0.50:3000`, **niet met localhost**: voor `server.js` is `127.0.0.1` Funnel-verkeer (login vereist).
+- Elke tegel heeft een vaste id (bv. `trap`). Een nieuwe id = een nieuwe tegel: kamer en scènes opnieuw instellen.
+
 **Bijvangst (los van Matter):**
 - De NodeSource-bron `node_18.x` wordt door apt geweigerd (SHA1-sleutel ongeldig sinds 02/2026). Geen gevolg voor de werking, maar Node 18 is EOL → zie AP22.
 - `apt` meldt 95 upgradebare pakketten. Bewust uitgesteld: later apart, met verse backup (AP23).
 - Aanbeveling: netwerkkabel naar de Pi vóór F3/F4 (stabielere mDNS/multicast voor Matter). IP `192.168.0.50` moet dan behouden blijven.
 
-### 16.9 F4a — Photon-toestellen naar de RPi-bridge (plan 17/10/2026)
+### 16.9 F4a — Photon-toestellen naar de RPi-bridge (✅ 17/10/2026)
 
-**Bron:** `Full_Particle_Bridge_Compliant.ino` (HomeSpan 2.1.5 op ESP32-WROOM-32D). Hij stuurt alleen, en leest geen toestand terug. Elke knop roept de Particle-functie `manual` aan op de Photon (`POST /v1/devices/<id>/manual`, `args=<tag>on` of `<tag>off`, of de naam van een stand).
+**Status:** ✅ afgewerkt op 17/10/2026. Vervangt `Full_Particle_Bridge_Compliant.ino` (HomeSpan 2.1.5 op ESP32-WROOM-32D), die per vergissing uit Apple Home gewist was.
 
-**Doel:** dezelfde knoppen terug in Apple Home (woning Zarlardinge), maar via de RPi:
+**Weg van een klik:**
 ```
-Apple Home ──► Matterbridge (plugin "zarlar") ──► server.js ──► Particle Cloud ──► Photon
+Apple Home ──► Matterbridge (plugin "zarlar") ──► server.js /api/photon/:knop ──► Particle Cloud ──► Photon (functie "manual")
 ```
-- **Het Particle-token komt nooit in de plugin, de browser of de repo.**
-- Na de migratie: **een nieuw Particle-token aanmaken en het oude intrekken.** Het oude stond ook in de sketch en in `Lights.html` op de publieke GitHub Pages.
+- De plugin heeft **geen eigen lijst**: hij leest `GET /api/knoppen` uit `server.js` (constante `KNOPPEN`). Eén bron.
+- Het Particle-token staat alleen in `/home/fidel/zarlar-dashboard/particle.json` op de Pi (`{"token":"..."}`, chmod 600, niet in GitHub). `deploy.sh` en `update.sh` raken het niet aan. Ontbreekt het, dan antwoordt `/api/photon/:knop` met 503. Het token wordt bewust niet vernieuwd (AP25).
+- De Photons melden hun stand niet terug. `server.js` onthoudt de laatst gestuurde toestand **in RAM**: na een herstart van de Pi staat alles op "uit" tot je iets kiest.
+- Mislukt een commando (Photon offline, timeout), dan springt de tegel in Apple Home terug.
+- Het getal dat de Photon terugstuurt (bv. 100) wordt niet geïnterpreteerd (beslist 17/10: niet nodig).
 
 **Beslissingen (17/10/2026, FiDel):**
 | # | Beslissing |
 |---|---|
-| P1 | Device-ID's zoals in console.particle.io (17/10). De ID's in de HomeSpan-sketch voor Zitplaats, Inkom, Eetplaats, Buiten, Outside en HVAC waren achterhaald (Photons vervangen op 02/04/2026). **BandB vervalt** (Photon defect, wordt later een ESP32). Slaapkamer is geen aparte controller: Buro en Bed lopen via R6-EETPL. ECO ⇒ SCHUUR/WONING lopen via S-HVAC. |
-| P2 | **Eén schakelaar per stand, onderling exclusief.** Een stand aanzetten zet de andere standen van die groep uit. De actieve stand kan je niet uitzetten: kies een andere stand. Zet je hem toch uit, dan springt hij terug aan. De Photons melden hun stand niet; de RPi onthoudt de laatst gekozen stand. Na een herstart van de Pi staan alle standen van een groep op "uit" tot je er één kiest. |
-| P3 | **Token in een geheim bestand op de Pi:** `/home/fidel/zarlar-dashboard/particle.json`, naast `server.js` en `auth.json`, niet in de repo. Nagekeken: `deploy.sh` kopieert geen `.json` uit Downloads, en `update.sh` synchroniseert alleen `public/` (rsync zonder `--delete`) en kopieert `server.js` apart. Het bestand blijft dus ongemoeid. |
+| P1 | Device-ID's zoals in console.particle.io. **BandB vervalt** (Photon defect, wordt later een ESP32). Buro en Bed via R6-EETPL; ECO ⇒ SCHUUR/WONING via S-HVAC |
+| P2 | Eerst één schakelaar per stand, daarna vereenvoudigd: dimmer voor standen met een volgorde, kleurenlamp voor de Trap, één schakelaar voor twee standen |
+| P3 | Token in `particle.json` op de Pi |
+| — | Weergave: lampen als **lamp**, de rest als **stopcontact** (schakelaar), zodat "alle lampen uit" de HVAC en ECO niet raakt |
 
 **Photons (8):**
-| Photon (console) | ID | In `PHOTON_IDS` (server.js v2.3)? |
+| Photon (console) | ID | Ook in `PHOTON_IDS` (matrix)? |
 |---|---|---|
-| R7-ZITPL | `200033000547373336323230` | ja (P-Zitpl) |
-| R2-BADK | `5600420005504b464d323520` | ja (P-Badkamer) |
-| R3-INKOM | `2c0026000747343232363230` | ja (P-Inkom) |
-| R4-KEUK | `310017001647373335333438` | ja (P-Keuken) |
-| R5-WASPL | `33004f000e504b464d323520` | ja (P-Waspl) |
-| R6-EETPL | `3c0030000a47353138383138` | ja (P-Eetpl) |
-| S-OUTSIDE | `3e003f001447343338333633` | **nee** |
-| S-HVAC | `290044000147353138383138` | **nee** |
+| R7-ZITPL | `200033000547373336323230` | ja |
+| R2-BADK | `5600420005504b464d323520` | ja |
+| R3-INKOM | `2c0026000747343232363230` | ja |
+| R4-KEUK | `310017001647373335333438` | ja |
+| R5-WASPL | `33004f000e504b464d323520` | ja |
+| R6-EETPL | `3c0030000a47353138383138` | ja |
+| S-OUTSIDE | `3e003f001447343338333633` | nee |
+| S-HVAC | `290044000147353138383138` | nee |
 
-`PHOTON_IDS` bevat nog P-BandB (`30002c…3032`, defect). Niet gebruikt in F4a.
+**Knoppen (26, server.js v2.8):** 16 lampen, 7 schakelaars, 2 dimmers, 1 kleurenlamp.
+| Photon | Lampen (aan/uit → `<tag>on` / `<tag>off`) | Schakelaars | Dimmer / kleur |
+|---|---|---|---|
+| R7-ZITPL | Muurspots (`muurspots`), TV Backlight (`tvback`) | Zomertijd: aan = `summer`, uit = `winter` | **Klok helderheid** (dimmer): 1–33 % `l`, 34–66 % `m`, 67–100 % `h`; kan niet uit |
+| R2-BADK | Badkamerlicht (`badkamer`), Leeslampjes (`leeslampjes`) | — | — |
+| R3-INKOM | Inkom (`inkom`), Dressing (`dressing`) | — | **Trap** (kleur): uit `trapoff`, wit `trapon`, rood `traproodon`, groen `trapgroenon`, blauw `trapblauwon` (dichtste tint; verzadiging < 25 % = wit; helderheid genegeerd) |
+| R4-KEUK | Keuken Spots (`spots`) | — | — |
+| R5-WASPL | Wasplaats (`wasplaats`), Toilet/Vestiaire (`toilet`) | — | — |
+| R6-EETPL | Tafel (`tafel`), Bib (`bib`), Buro (`buro`), Bed (`bed`) | — | **Ramen** (dimmer): uit `ramenlowoff`, 1–33 % `ramenlowon`, 34–66 % `ramenmedon`, 67–100 % `ramenhion` |
+| S-OUTSIDE | Terras (`S`), Veldkant (`W2`), Voordeur (`W1`) | Sunlight auto/dag/nacht (`auto`/`day`/`night`, onderling exclusief) | — |
+| S-HVAC | — | ECO => SCHUUR (`sch`), ECO => WONING (`won`), HVAC Home: aan = `home`, uit = `out` | — |
 
-**Schakelaars (37):** weergavenamen van de standen zijn een voorstel, aan te passen vóór stap 3.
-| Photon | Aan/uit (tag → `<tag>on` / `<tag>off`) | Standen (exclusief, arg = stand) |
+- De schuif van een dimmer springt na een keuze naar het midden van de stand (33/67/100 %), zodat je ziet wat actief is. De Trap springt naar zuiver wit/rood/groen/blauw.
+- Sunlight blijft drie exclusieve schakelaars: drie standen zonder volgorde passen in geen enkel Apple-type. De actieve stand uitzetten doet niets.
+
+**Versies `server.js` (17/10):** v2.4 knoppen + Particle · v2.5 soort lamp/schakelaar · v2.6 Zomertijd en HVAC als één schakelaar · v2.7 Ramen en Klok als dimmer · v2.8 Trap als kleurenlamp.
+
+### 16.10 Plugin `matterbridge-zarlar`
+
+| | |
+|---|---|
+| Versie | v0.3 (17/10/2026): lampen, schakelaars, dimmers, kleurenlamp |
+| Bestanden | `package.json`, `module.js`, `matterbridge-zarlar.config.json` — gewoon JavaScript, geen buildstap |
+| Op de Pi | `/home/fidel/Matterbridge/matterbridge-zarlar/` (in de container: `/root/Matterbridge/...`, gekoppeld volume → overleeft updates en `--force-recreate`) |
+| In de repo | `ESP32_Zarlar/zarlar-rpi/matterbridge-zarlar/` (AP27) |
+| Portal-adres | config `portal`, standaard `http://192.168.0.50:3000` |
+
+**Werking:**
+- Bij de start: `GET /api/knoppen` → één Matter-toestel per knop, met de knop-id als vaste id (Apple Home houdt kamer en naam).
+- Portal onbereikbaar bij de start → elke 10 s opnieuw. Er wordt **nooit een lege lijst** geregistreerd (anders verdwijnen de tegels en scènes).
+- Commando's worden niet afgewacht in Matter (Apple krijgt meteen antwoord). Dimmer en kleur: 400 ms verzamelen (Apple stuurt vaak `on` + `moveToLevel`/kleur kort na elkaar), dan één commando.
+- Het antwoord van `server.js` bevat de toestand van de knop (of de hele groep); die wordt overgenomen.
+
+**Eerste installatie (17/10, gebeurd):**
+```
+scp ~/Downloads/matterbridge-zarlar.tar.gz fidel@100.123.74.113:/tmp/ && ssh -t fidel@100.123.74.113 'sudo tar -xzf /tmp/matterbridge-zarlar.tar.gz -C /home/fidel/Matterbridge && sudo docker exec -w /root/Matterbridge/matterbridge-zarlar matterbridge npm link matterbridge'
+ssh -t fidel@100.123.74.113 'sudo docker exec matterbridge matterbridge -add /root/Matterbridge/matterbridge-zarlar; cd ~/matterbridge && sudo docker compose restart'
+```
+- `npm link matterbridge` maakt `node_modules/matterbridge` → `/usr/local/lib/node_modules/matterbridge` in de container. Eenmalig; blijft staan bij updates van de plugin.
+
+**Plugin bijwerken (nu):** `.tar.gz` in Downloads (nooit via `deploy.sh`: die zou `module.js` in `public/` zetten), dan:
+```
+scp ~/Downloads/matterbridge-zarlar.tar.gz fidel@100.123.74.113:/tmp/ && ssh -t fidel@100.123.74.113 'sudo tar -xzf /tmp/matterbridge-zarlar.tar.gz -C /home/fidel/Matterbridge && cd ~/matterbridge && sudo docker compose restart && sleep 40 && sudo docker logs --since 1m matterbridge 2>&1 | grep -iE "Zarlar v|knoppen geregistreerd|error"'
+```
+Daarna **Keuken Geel Bolleke herstarten** als er tegels bijkomen of verdwijnen.
+
+**Plugin in de repo zetten (AP27, eenmalig, op de Mac):**
+```
+cd ~/Zarlardinge_Dashboards/ESP32_Zarlar/zarlar-rpi && tar -xzf ~/Downloads/matterbridge-zarlar.tar.gz && git add matterbridge-zarlar && git commit -m "Plugin matterbridge-zarlar v0.3" && git pull --rebase && git push && rm ~/Downloads/matterbridge-zarlar.tar.gz
+```
+Daarna staat de plugin via `update.sh` ook in `/home/fidel/repo/ESP32_Zarlar/zarlar-rpi/matterbridge-zarlar/` op de Pi. Een latere update kan dan: bestanden in de repo-map op de Mac zetten → committen/pushen → op de Pi kopiëren uit `~/repo` en Matterbridge herstarten.
+
+### 16.11 F4–F6 — Rooms naar de RPi-bridge (plan 17/10/2026)
+
+**Beslissingen (17/10/2026, FiDel):**
+| # | Beslissing |
+|---|---|
+| R1 | Testkamer: **room80** (R-EETPL, 192.168.0.80), de enige room die nu online is |
+| R2 | De rooms in Apple Home staan in een **vaste lijst in `server.js`**, niet automatisch ontdekt (zie §16.7) |
+| R3 | Kamernaam uit diezelfde lijst (room80 = "Eetplaats"). De lampnamen komen uit de pixel-nicknames (`/capabilities`) |
+| R4 | **Eerst parallel testen:** de oude tegels van de ESP32 blijven in de woning "Matter Home", de nieuwe van de RPi komen in Zarlardinge. Pas na 48 u stabiel: Matter uit de room-sketch (F6) |
+| R5 | Toestand opvragen om de **10 s** (om te beginnen) |
+
+**Tegels per room** — dezelfde als room80 nu zelf via Matter aanbiedt (ROOM-sketch v2.24, nagekeken in repo `ESP32C6_ROOMS`):
+| # | Apple Home-tegel | Bron in de room (`/json`-key, endpoint) |
 |---|---|---|
-| R7-ZITPL | Muurspots (`muurspots`), TV Backlight (`tvback`) | Klok tijd: Zomertijd (`summer`), Wintertijd (`winter`) · Klok helderheid: Klok hoog (`h`), Klok midden (`m`), Klok laag (`l`) |
-| R2-BADK | Badkamerlicht (`badkamer`), Leeslampjes (`leeslampjes`) | — |
-| R3-INKOM | Inkom (`inkom`), Dressing (`dressing`) | Trap: Trap uit (`trapoff`), Trap aan (`trapon`), Trap rood (`traproodon`), Trap groen (`trapgroenon`), Trap blauw (`trapblauwon`) |
-| R4-KEUK | Keuken Spots (`spots`) | — |
-| R5-WASPL | Wasplaats (`wasplaats`), Toilet/Vestiaire (`toilet`) | — |
-| R6-EETPL | Tafel (`tafel`), Bib (`bib`), Buro (`buro`), Bed (`bed`) | Ramen: Ramen uit (`ramenlowoff`), Ramen hoog (`ramenhion`), Ramen midden (`ramenmedon`), Ramen laag (`ramenlowon`) |
-| S-OUTSIDE | Terras (`S`), Veldkant (`W2`), Voordeur (`W1`) | Sunlight: Sunlight auto (`auto`), Sunlight dag (`day`), Sunlight nacht (`night`) |
-| S-HVAC | ECO ⇒ SCHUUR (`sch`), ECO ⇒ WONING (`won`) | HVAC: HVAC Home (`home`), HVAC Out (`out`) |
-
-Totaal: 18 aan/uit + 19 standen in 6 groepen = 37.
+| 1 | Thermostaat: temperatuur, setpoint, Verwarmen = Thuis / Uit = Weg | temp `f` (DS18B20, reserve `e`), setpoint `c`, thuis `v`; `/set_setpoint?setpoint=`, `/set_home?v=` |
+| 2 | Vochtigheid | `h` |
+| 3 | Beweging MOV1 | `y` |
+| 4 | Beweging MOV2 (alleen als ingeschakeld) | `z` |
+| 5 | Kleurpicker alle pixels (altijd aan) | `q`/`r`/`s`; `/setcolor?r=&g=&b=` |
+| 6–8 | SW1 (pixel 0), SW2 (pixel 1), SW3 (pixels 2+) | `t` (`P=...`); `/toggle_pixel_mode?idx=`, `/toggle_pixel?idx=` |
 
 **Stappen (elk na GO):**
-1. ✅ P1–P3 beslist (17/10/2026).
-2. `server.js` v2.4: endpoint `POST /api/photon/:knop` met body `on` of `off`. De server zoekt in een configuratielijst de Photon en het argument (aan/uit-tag of stand), houdt per standgroep de laatst gekozen stand bij, en stuurt het commando naar Particle. Alleen bereikbaar vanaf localhost en het eigen netwerk. Het token wordt gelezen uit `particle.json`; ontbreekt dat bestand, dan weigert het endpoint (zoals bij `auth.json`).
-3. Zarlar-plugin v0.1 voor Matterbridge: 37 schakelaars uit dezelfde configuratielijst. Ze verschijnen als één groep achter de bridge.
-4. Test: elke schakelaar in de Woning-app, ook via 4G.
-5. FiDel maakt de scènes opnieuw.
-6. Nieuw Particle-token, het oude intrekken, en `Lights.html` aanpassen zodat het via de RPi werkt.
+1. **`server.js` v2.9:** room-proxy `/api/set/roomNN` aanvullen. SW1/SW2 gebruiken nu een *toggle*: als Apple "aan" stuurt terwijl de pixel al aan is, gaat hij uit. Nieuw: eerst de toestand lezen en alleen schakelen als het nodig is (zoals SW3 al doet; ook beter voor `verlichting.html`). Setpoint en Thuis/Weg erbij. Vaste lijst `ROOMS_APPLE` met kamernamen.
+2. **Plugin v0.4:** room-tegels. Elke 10 s `/api/poll/room80`, klikken via `/api/set/room80`.
+3. **Parallelle test 48 u** (F5).
+4. **F6:** room80 zonder Matter flashen (ROOM-sketch v2.25, repo `ESP32C6_ROOMS`), oude tegels verdwijnen, scènes opnieuw instellen, heapwinst meten. Daarna AP26 (testwoning "Matter Home" verwijderen).
+5. **F7:** volgende rooms = één regel in de lijst, geen nieuwe code.
+
+HVAC (9 tegels) en de HOME/UIT-knop van het Dashboard hebben ook nog eigen Matter; die volgen in latere fasen.
 
 ---
 
