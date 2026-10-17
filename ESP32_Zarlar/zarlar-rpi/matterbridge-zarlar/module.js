@@ -1,8 +1,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// matterbridge-zarlar v0.3 — Zarlar Photon-knoppen in Apple Home
+// matterbridge-zarlar v0.4 — Zarlar Photon-knoppen en rooms in Apple Home
 // Filip Delannoy — Portal Plan §16.9 (F4a)
 //
 // Apple Home ──► Matterbridge (deze plugin) ──► server.js (RPi) ──► Particle ──► Photon
+//
+// v0.4 (17 okt 2026): rooms (Portal Plan §16.11, server.js ≥ v2.9)
+//   - Rooms uit GET /api/rooms-apple (vaste lijst in server.js). Per room dezelfde tegels als
+//     de room nu zelf via Matter aanbiedt: thermostaat (verwarmen = Thuis, uit = Weg),
+//     vochtigheid, beweging MOV1 (+ MOV2 als ingeschakeld), kleur, SW1/SW2/SW3.
+//   - Elke 10 s /api/poll/roomNN → tegels bijwerken. Room offline → tegels "geen reactie".
+//   - Klikken → POST /api/set/roomNN (sw1/sw2/sw3, setpoint, home, r/g/b), daarna meteen opnieuw pollen.
+//   - Wijzigingen van Apple Home herkend aan context.fabric; eigen updates worden niet teruggestuurd.
 //
 // v0.3 (17 okt 2026):
 //   - soort "kleur" → Matter extendedColorLight (server.js ≥ v2.8). Tint en verzadiging gaan als
@@ -29,16 +37,35 @@
 //   - Portal-adres: config "portal", standaard http://192.168.0.50:3000
 //     (niet localhost: dat behandelt server.js als Funnel-verkeer).
 // ─────────────────────────────────────────────────────────────────────────────
-import { MatterbridgeDynamicPlatform, MatterbridgeEndpoint, onOffLight, onOffPlugInUnit, dimmableLight, extendedColorLight } from 'matterbridge';
-import { OnOff, LevelControl, ColorControl } from 'matterbridge/matter/clusters';
+import { MatterbridgeDynamicPlatform, MatterbridgeEndpoint, onOffLight, onOffPlugInUnit, dimmableLight, extendedColorLight,
+         thermostat, humiditySensor, occupancySensor } from 'matterbridge';
+import { OnOff, LevelControl, ColorControl, Thermostat, RelativeHumidityMeasurement, OccupancySensing,
+         BridgedDeviceBasicInformation } from 'matterbridge/matter/clusters';
 
-const VERSIE  = '0.3.0';
+const VERSIE  = '0.4.0';
+const POLL_MS = 10000;   // R5: rooms elke 10 s opvragen
 const PORTAL  = 'http://192.168.0.50:3000';
 const wacht   = ms => new Promise(r => setTimeout(r, ms));
 const naarPct = lvl => Math.max(1, Math.min(100, Math.round((lvl ?? 254) * 100 / 254)));   // Matter 1-254 → %
 const naarLvl = pct => Math.max(1, Math.min(254, Math.round((pct ?? 100) * 254 / 100)));   // % → Matter 1-254
 const hueGr   = h => Math.round((h ?? 0) * 360 / 254);    // Matter tint 0-254 → graden
 const satPct  = s => Math.round((s ?? 0) * 100 / 254);    // Matter verzadiging 0-254 → %
+
+// RGB (0-255) ↔ HSV (tint 0-360, verzadiging 0-100, waarde 0-100)
+function rgbNaarHsv(r, g, b) {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  let h = 0;
+  if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = Math.round(h * 60); if (h < 0) h += 360;
+  return { hue: h, sat: max ? Math.round(d / max * 100) : 0, val: Math.round(max / 255 * 100) };
+}
+function hsvNaarRgb(h, s, v) {
+  s /= 100; v /= 100;
+  const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return { r: Math.round((r + m) * 255), g: Math.round((g + m) * 255), b: Math.round((b + m) * 255) };
+}
+const kort = t => String(t).slice(0, 32);   // Matter-naam max 32 tekens
 
 // Matter XY (0-65535) → tint (graden) en verzadiging (%), via lineair sRGB
 function xyNaarHs(cx, cy) {
@@ -68,6 +95,8 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
     this.dimmers    = new Set();   // knop-id's van dimmers
     this.kleuren    = new Set();   // knop-id's van kleurenlampen
     this.wachtrij   = new Map();   // dimmer/kleur-id → { aan, niveau|hue|sat, timer }
+    this.rooms      = [];          // [{ id, naam, mov2, n (aantal pixels), tegels: {soort → endpoint} }]
+    this.pollTimer  = null;
     this.gestopt    = false;
     this.log.info(`Zarlar v${VERSIE} — portal ${this.portal}`);
   }
@@ -142,6 +171,8 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
       this.toestellen.set(k.id, dev);
     }
     this.log.info(`${this.toestellen.size} knoppen geregistreerd`);
+
+    await this.maakRooms();
   }
 
   async onConfigure() {
@@ -153,6 +184,9 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
     } catch (e) {
       this.log.warn(`Toestand niet opgehaald: ${e.message}`);
     }
+    // Rooms: meteen een eerste keer, daarna elke POLL_MS
+    await this.pollRooms();
+    this.pollTimer = setInterval(() => this.pollRooms().catch(e => this.log.warn(`Poll rooms: ${e.message}`)), POLL_MS);
   }
 
   // Niet wachten in de command handler: Apple Home krijgt meteen antwoord,
@@ -224,8 +258,205 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  // ═══ ROOMS (v0.4) ═══════════════════════════════════════════════════════════
+
+  // Lijst ophalen bij server.js; blijft proberen (nooit registreren zonder lijst)
+  async haalRooms() {
+    for (let poging = 1; !this.gestopt; poging++) {
+      try {
+        const r = await fetch(this.portal + '/api/rooms-apple', { signal: AbortSignal.timeout(15000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return await r.json();
+      } catch (e) {
+        this.log.warn(`Rooms niet opgehaald (poging ${poging}): ${e.message} — opnieuw over 10 s`);
+        await wacht(10000);
+      }
+    }
+    return [];
+  }
+
+  // Basis van elke room-tegel: identify + bridged-info + voeding
+  roomTegel(type, id, naam, model) {
+    return new MatterbridgeEndpoint(type, { id })
+      .createDefaultIdentifyClusterServer()
+      .createDefaultBridgedDeviceBasicInformationClusterServer(kort(naam), 'ZARLAR-' + id, this.matterbridge.aggregatorVendorId, 'Delannoy', model, 1, VERSIE);
+  }
+
+  async maakRooms() {
+    const lijst = await this.haalRooms();
+    for (const room of lijst) {
+      const R = room.id, n = (room.pixels || []).length, t = {};
+      const naamPixel = i => (room.pixels[i] || `${room.naam} pixel ${i}`);
+
+      // 1. Thermostaat: temperatuur + setpoint; verwarmen = Thuis, uit = Weg
+      t.thermo = this.roomTegel(thermostat, `${R}-thermostaat`, room.naam, 'Zarlar room thermostaat')
+        .createDefaultHeatingThermostatClusterServer(20, 20, 10, 30)
+        .createDefaultPowerSourceWiredClusterServer().addRequiredClusters();
+      t.thermo.subscribeAttribute(Thermostat, 'occupiedHeatingSetpoint', (nw, oud, ctx) => {
+        if (ctx?.fabric === undefined) return;                      // eigen update
+        this.roomSet(R, { setpoint: nw / 100 });
+      });
+      t.thermo.subscribeAttribute(Thermostat, 'systemMode', (nw, oud, ctx) => {
+        if (ctx?.fabric === undefined) return;
+        this.roomSet(R, { home: nw === Thermostat.SystemMode.Off ? 0 : 1 });
+      });
+
+      // 2. Vochtigheid
+      t.vocht = this.roomTegel(humiditySensor, `${R}-vocht`, `${room.naam} vochtigheid`, 'Zarlar room vochtigheid')
+        .createDefaultRelativeHumidityMeasurementClusterServer(null)
+        .createDefaultPowerSourceWiredClusterServer().addRequiredClusters();
+
+      // 3-4. Beweging MOV1 (+ MOV2)
+      t.mov1 = this.roomTegel(occupancySensor, `${R}-mov1`, `${room.naam} beweging 1`, 'Zarlar room beweging')
+        .createDefaultOccupancySensingClusterServer(false)
+        .createDefaultPowerSourceWiredClusterServer().addRequiredClusters();
+      if (room.mov2) {
+        t.mov2 = this.roomTegel(occupancySensor, `${R}-mov2`, `${room.naam} beweging 2`, 'Zarlar room beweging')
+          .createDefaultOccupancySensingClusterServer(false)
+          .createDefaultPowerSourceWiredClusterServer().addRequiredClusters();
+      }
+
+      // 5. Kleurpicker voor alle pixels (altijd aan, zoals op de room)
+      t.kleur = this.roomTegel(extendedColorLight, `${R}-kleur`, `${room.naam} kleur`, 'Zarlar room kleur')
+        .createDefaultOnOffClusterServer(true)
+        .createDefaultLevelControlClusterServer(254)
+        .createDefaultColorControlClusterServer()
+        .createDefaultPowerSourceWiredClusterServer().addRequiredClusters();
+      const k = t.kleur;
+      const hs = () => ({ hue: hueGr(k.getAttribute(ColorControl, 'currentHue')), sat: satPct(k.getAttribute(ColorControl, 'currentSaturation')) });
+      k.addCommandHandler('on',     () => {});
+      k.addCommandHandler('off',    () => this.roomAltijdAan(R));
+      k.addCommandHandler('toggle', () => this.roomAltijdAan(R));
+      k.addCommandHandler('moveToLevel',            ({ request: { level } }) => this.roomKleur(R, { val: naarPct(level) }));
+      k.addCommandHandler('moveToLevelWithOnOff',   ({ request: { level } }) => level > 0 ? this.roomKleur(R, { val: naarPct(level) }) : this.roomAltijdAan(R));
+      k.addCommandHandler('moveToHueAndSaturation', ({ request: { hue, saturation } }) => this.roomKleur(R, { hue: hueGr(hue), sat: satPct(saturation) }));
+      k.addCommandHandler('moveToHue',              ({ request: { hue } }) => this.roomKleur(R, { ...hs(), hue: hueGr(hue) }));
+      k.addCommandHandler('moveToSaturation',       ({ request: { saturation } }) => this.roomKleur(R, { ...hs(), sat: satPct(saturation) }));
+      k.addCommandHandler('moveToColor',            ({ request: { colorX, colorY } }) => this.roomKleur(R, xyNaarHs(colorX, colorY)));
+      k.addCommandHandler('moveToColorTemperature', () => this.roomKleur(R, { hue: 0, sat: 0 }));
+
+      // 6-8. SW1 (pixel 0), SW2 (pixel 1), SW3 (pixels 2+)
+      const sw = [['sw1', 1, naamPixel(0)], ['sw2', 2, naamPixel(1)], ['sw3', 3, `${room.naam} lampen`]];
+      for (const [key, nodig, naam] of sw) {
+        if (n < nodig) continue;
+        const d = this.roomTegel(onOffLight, `${R}-${key}`, naam, 'Zarlar room lamp')
+          .createDefaultOnOffClusterServer(false)
+          .createDefaultPowerSourceWiredClusterServer().addRequiredClusters();
+        d.addCommandHandler('on',     () => this.roomSet(R, { [key]: 1 }));
+        d.addCommandHandler('off',    () => this.roomSet(R, { [key]: 0 }));
+        d.addCommandHandler('toggle', () => this.roomSet(R, { [key]: d.getAttribute(OnOff, 'onOff') ? 0 : 1 }));
+        t[key] = d;
+      }
+
+      for (const dev of Object.values(t)) await this.registerDevice(dev);
+      this.rooms.push({ id: R, naam: room.naam, mov2: !!room.mov2, n, tegels: t, kleurBusyTot: 0 });
+      this.log.info(`Room ${R} (${room.naam}): ${Object.keys(t).length} tegels geregistreerd${room.online ? '' : ' — room nu offline'}`);
+    }
+  }
+
+  // Commando naar de room (niet afwachten in Matter), daarna meteen opnieuw pollen
+  roomSet(R, body) {
+    (async () => {
+      try {
+        const r = await fetch(`${this.portal}/api/set/${R}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body), signal: AbortSignal.timeout(10000),
+        });
+        if (r.ok) this.log.info(`${R} ← ${JSON.stringify(body)}`);
+        else      this.log.warn(`${R} ← ${JSON.stringify(body)} mislukt: HTTP ${r.status}`);
+      } catch (e) {
+        this.log.warn(`${R} ← ${JSON.stringify(body)}: portal niet bereikbaar (${e.message})`);
+      }
+      await wacht(800);
+      await this.pollRooms(R);
+    })().catch(e => this.log.error(`${R}: ${e.message}`));
+  }
+
+  // Kleurpicker van de room: altijd aan houden
+  roomAltijdAan(R) {
+    const room = this.rooms.find(x => x.id === R);
+    setTimeout(() => room?.tegels.kleur.setAttribute(OnOff, 'onOff', true, this.log).catch(() => {}), 300);
+  }
+
+  // Kleur: 400 ms verzamelen, dan één r/g/b naar de room
+  roomKleur(R, wens) {
+    const room = this.rooms.find(x => x.id === R);
+    if (!room) return;
+    const k = room.tegels.kleur;
+    const sleutel = 'kleur:' + R;
+    const w = this.wachtrij.get(sleutel) || {
+      hue: hueGr(k.getAttribute(ColorControl, 'currentHue')),
+      sat: satPct(k.getAttribute(ColorControl, 'currentSaturation')),
+      val: naarPct(k.getAttribute(LevelControl, 'currentLevel')),
+    };
+    Object.assign(w, wens);
+    room.kleurBusyTot = Date.now() + 5000;      // poll overschrijft de kleur even niet
+    clearTimeout(w.timer);
+    w.timer = setTimeout(() => {
+      this.wachtrij.delete(sleutel);
+      this.roomSet(R, hsvNaarRgb(w.hue, w.sat, w.val));
+    }, 400);
+    this.wachtrij.set(sleutel, w);
+  }
+
+  // Alle rooms (of één) opvragen en de tegels bijwerken
+  async pollRooms(alleen) {
+    for (const room of this.rooms) {
+      if (alleen && room.id !== alleen) continue;
+      const t = room.tegels;
+      let j = null;
+      try {
+        const r = await fetch(`${this.portal}/api/poll/${room.id}`, { signal: AbortSignal.timeout(5000) });
+        j = r.ok ? await r.json() : null;
+      } catch { j = null; }
+
+      const online = !!(j && j.online !== false);
+      if (room.online !== online) {
+        room.online = online;
+        for (const dev of Object.values(t)) await dev.setAttribute(BridgedDeviceBasicInformation, 'reachable', online, this.log).catch(() => {});
+        this.log.info(`Room ${room.id} ${online ? 'online' : 'OFFLINE — tegels "geen reactie"'}`);
+      }
+      if (!online) continue;
+
+      const zet = async (dev, cl, attr, v) => {
+        if (dev && v !== undefined && v !== null && dev.getAttribute(cl, attr) !== v) await dev.setAttribute(cl, attr, v, this.log);
+      };
+      const ds  = Number(j.f), dht = Number(j.e);
+      const temp = ds > 0 ? ds : dht > 0 ? dht : null;
+      if (temp !== null) await zet(t.thermo, Thermostat, 'localTemperature', Math.round(temp * 100));
+      if (Number(j.c) > 0) await zet(t.thermo, Thermostat, 'occupiedHeatingSetpoint', Math.round(Number(j.c) * 100));
+      await zet(t.thermo, Thermostat, 'systemMode', Number(j.v) ? Thermostat.SystemMode.Heat : Thermostat.SystemMode.Off);
+      const rs = t.thermo.getAttribute(Thermostat, 'thermostatRunningState');
+      if (rs && !!rs.heat !== !!Number(j.b)) await t.thermo.setAttribute(Thermostat, 'thermostatRunningState', { ...rs, heat: !!Number(j.b) }, this.log);
+
+      if (Number(j.h) > 0) await zet(t.vocht, RelativeHumidityMeasurement, 'measuredValue', Math.round(Number(j.h) * 100));
+
+      for (const [key, veld] of [['mov1', 'y'], ['mov2', 'z']]) {
+        const dev = t[key]; if (!dev) continue;
+        const bezet = !!Number(j[veld]);
+        const nu = dev.getAttribute(OccupancySensing, 'occupancy');
+        if (!nu || !!nu.occupied !== bezet) await dev.setAttribute(OccupancySensing, 'occupancy', { occupied: bezet }, this.log);
+      }
+
+      const px = String(j.t || '').replace('P=', '');
+      await zet(t.sw1, OnOff, 'onOff', px[0] === '1');
+      await zet(t.sw2, OnOff, 'onOff', px[1] === '1');
+      await zet(t.sw3, OnOff, 'onOff', px.slice(2).includes('1'));
+
+      if (Date.now() > room.kleurBusyTot && j.q !== undefined) {
+        const { hue, sat, val } = rgbNaarHsv(Number(j.q), Number(j.r), Number(j.s));
+        await zet(t.kleur, ColorControl, 'colorMode', ColorControl.ColorMode.CurrentHueAndCurrentSaturation);
+        await zet(t.kleur, ColorControl, 'currentHue', Math.round(hue * 254 / 360));
+        await zet(t.kleur, ColorControl, 'currentSaturation', Math.round(sat * 254 / 100));
+        if (val > 0) await zet(t.kleur, LevelControl, 'currentLevel', naarLvl(val));
+        await zet(t.kleur, OnOff, 'onOff', true);
+      }
+    }
+  }
+
   async onShutdown(reason) {
     this.gestopt = true;
+    clearInterval(this.pollTimer);
     for (const w of this.wachtrij.values()) clearTimeout(w.timer);
     await super.onShutdown(reason);
     this.log.info(`Stop (${reason ?? '-'})`);
