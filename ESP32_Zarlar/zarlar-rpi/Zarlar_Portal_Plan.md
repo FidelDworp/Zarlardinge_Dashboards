@@ -580,7 +580,7 @@ Het veld `morgen_beschikbaar` bestaat al in de respons. Daarna eventueel een kle
 | ~~AP21~~ | ✅ `server.js` v2.3 live (16/10): login voor Funnel, `auth.json` op de Pi. Funnel-URL is nu `https://rpi-raspberrypi-zarlar.tail3c7f42.ts.net` (Pi hernoemd in Tailscale; oude naam bestond publiek niet meer, opgelost met `tailscale funnel reset`). iOS: beginscherm-icoon als web-app toont wit blad bij Basic Auth → icoon openen in Safari. Eventueel later: eigen loginpagina met cookie (v2.4). |
 | AP22 | Portal-Node upgraden van v18 (EOL) naar 22/24 LTS, met nieuwe NodeSource-bron. Apart traject, met backup en test van `server.js`. |
 | AP23 | `apt upgrade` van de 95 openstaande pakketten, apart en met verse backup |
-| AP24 | F4a: Photon-toestellen naar de RPi-bridge (§16.9), eerst P1–P3 beslissen |
+| AP24 | F4a: Photon-toestellen naar de RPi-bridge (§16.9). P1–P3 beslist op 17/10; volgende stap: `server.js` v2.4 |
 | AP25 | Particle-token vernieuwen na F4a; het oude token staat in de HomeSpan-sketch en in `Lights.html` (publiek) |
 | AP26 | Testwoning "Matter Home" verwijderen in de Woning-app; Mireille's uitnodiging in Zarlardinge aanvaarden |
 | ~~AP20~~ | ✅ `deploy.sh` v2 (16/10): stopt bij Rosetta-, git- of SSH-fout, en ruimt Downloads alleen op als alles lukte |
@@ -1157,50 +1157,55 @@ Dashboard  ◄──────────────────────
 
 ### 16.9 F4a — Photon-toestellen naar de RPi-bridge (plan 17/10/2026)
 
-**Bron:** `Full_Particle_Bridge_Compliant.ino` (HomeSpan 2.1.5 op ESP32-WROOM-32D). Hij stuurt alleen, en leest geen toestand terug. Elke knop roept de Particle-functie `manual` aan op de Photon (`POST /v1/devices/<id>/manual`, `args=<tag>on` of `<tag>off`).
+**Bron:** `Full_Particle_Bridge_Compliant.ino` (HomeSpan 2.1.5 op ESP32-WROOM-32D). Hij stuurt alleen, en leest geen toestand terug. Elke knop roept de Particle-functie `manual` aan op de Photon (`POST /v1/devices/<id>/manual`, `args=<tag>on` of `<tag>off`, of de naam van een stand).
 
-**Doel:** dezelfde knoppen, met dezelfde namen, terug in Apple Home (woning Zarlardinge), maar via de RPi:
+**Doel:** dezelfde knoppen terug in Apple Home (woning Zarlardinge), maar via de RPi:
 ```
 Apple Home ──► Matterbridge (plugin "zarlar") ──► server.js ──► Particle Cloud ──► Photon
 ```
-- **Het Particle-token komt nooit in de plugin, de browser of de repo.** Het blijft server-side: in een geheim bestand op de Pi naast `server.js` (zoals `auth.json`), of in de Cloudflare Worker.
+- **Het Particle-token komt nooit in de plugin, de browser of de repo.**
 - Na de migratie: **een nieuw Particle-token aanmaken en het oude intrekken.** Het oude stond ook in de sketch en in `Lights.html` op de publieke GitHub Pages.
 
-**Knoppen (26 accessoires op 11 Photon-groepen):**
-| Groep | Knoppen (weergavenaam) | Type |
-|---|---|---|
-| Zitplaats | Muurspots, TV Backlight, Zomer/Winter*, Klok Helderheid* | aan/uit, *meerstand |
-| BandB | BandB licht, Buitentrap | aan/uit |
-| Badkamer | Badkamerlicht, Leeslampjes | aan/uit |
-| Inkom | Inkom, Dressing, Trap kleur* | aan/uit, *meerstand |
-| Keuken | Keuken Spots | aan/uit |
-| Wasplaats | Wasplaats, Toilet/Vestiaire | aan/uit |
-| Eetplaats | Ramen Intensiteit*, Tafel, Bib | aan/uit, *meerstand |
-| Slaapkamer | Buro, Bed | aan/uit |
-| Buiten | Terras (S), Veldkant (W2), Voordeur (W1) | aan/uit |
-| Outside | Sunlight Mode* | meerstand |
-| HVAC | HVAC Mode*, ECO => SCHUUR, ECO => WONING | aan/uit, *meerstand |
-
-**Meerstand-knoppen:** bij elke "aan" gaat de knop naar de volgende stand, waarna de schakelaar vanzelf terug op "uit" springt. Dat is hetzelfde gedrag als nu.
-- Zomer/Winter: summer → winter
-- Klok Helderheid: h → m → l
-- Trap kleur: trapoff → trapon → traproodon → trapgroenon → trapblauwon
-- Ramen Intensiteit: ramenlowoff → ramenhion → ramenmedon → ramenlowon
-- Sunlight Mode: auto → day → night
-- HVAC Mode: home → out
-
-**Open punten vóór code:**
-| # | Vraag |
+**Beslissingen (17/10/2026, FiDel):**
+| # | Beslissing |
 |---|---|
-| P1 | **Device-ID's** van Zitplaats, Inkom en Eetplaats verschillen tussen de sketch (`410038…`, `420035…`, `210042…`) en `PHOTON_IDS` in `server.js` (`200033…`, `2c0026…`, `3c0030…`). Welke zijn juist? Eetplaats en Slaapkamer delen in de sketch hetzelfde ID. Buiten, Outside en HVAC staan nog niet in `server.js`. |
-| P2 | Meerstand-knoppen: zoals nu (cyclen per klik), of **één schakelaar per stand** (bv. "Trap rood", "Trap groen"), wat handiger is in scènes? |
-| P3 | Token: in een geheim bestand op de Pi (eenvoudig) of via de Worker? |
+| P1 | Device-ID's zoals in console.particle.io (17/10). De ID's in de HomeSpan-sketch voor Zitplaats, Inkom, Eetplaats, Buiten, Outside en HVAC waren achterhaald (Photons vervangen op 02/04/2026). **BandB vervalt** (Photon defect, wordt later een ESP32). Slaapkamer is geen aparte controller: Buro en Bed lopen via R6-EETPL. ECO ⇒ SCHUUR/WONING lopen via S-HVAC. |
+| P2 | **Eén schakelaar per stand, onderling exclusief.** Een stand aanzetten zet de andere standen van die groep uit. De actieve stand kan je niet uitzetten: kies een andere stand. Zet je hem toch uit, dan springt hij terug aan. De Photons melden hun stand niet; de RPi onthoudt de laatst gekozen stand. Na een herstart van de Pi staan alle standen van een groep op "uit" tot je er één kiest. |
+| P3 | **Token in een geheim bestand op de Pi:** `/home/fidel/zarlar-dashboard/particle.json`, naast `server.js` en `auth.json`, niet in de repo. Nagekeken: `deploy.sh` kopieert geen `.json` uit Downloads, en `update.sh` synchroniseert alleen `public/` (rsync zonder `--delete`) en kopieert `server.js` apart. Het bestand blijft dus ongemoeid. |
+
+**Photons (8):**
+| Photon (console) | ID | In `PHOTON_IDS` (server.js v2.3)? |
+|---|---|---|
+| R7-ZITPL | `200033000547373336323230` | ja (P-Zitpl) |
+| R2-BADK | `5600420005504b464d323520` | ja (P-Badkamer) |
+| R3-INKOM | `2c0026000747343232363230` | ja (P-Inkom) |
+| R4-KEUK | `310017001647373335333438` | ja (P-Keuken) |
+| R5-WASPL | `33004f000e504b464d323520` | ja (P-Waspl) |
+| R6-EETPL | `3c0030000a47353138383138` | ja (P-Eetpl) |
+| S-OUTSIDE | `3e003f001447343338333633` | **nee** |
+| S-HVAC | `290044000147353138383138` | **nee** |
+
+`PHOTON_IDS` bevat nog P-BandB (`30002c…3032`, defect). Niet gebruikt in F4a.
+
+**Schakelaars (37):** weergavenamen van de standen zijn een voorstel, aan te passen vóór stap 3.
+| Photon | Aan/uit (tag → `<tag>on` / `<tag>off`) | Standen (exclusief, arg = stand) |
+|---|---|---|
+| R7-ZITPL | Muurspots (`muurspots`), TV Backlight (`tvback`) | Klok tijd: Zomertijd (`summer`), Wintertijd (`winter`) · Klok helderheid: Klok hoog (`h`), Klok midden (`m`), Klok laag (`l`) |
+| R2-BADK | Badkamerlicht (`badkamer`), Leeslampjes (`leeslampjes`) | — |
+| R3-INKOM | Inkom (`inkom`), Dressing (`dressing`) | Trap: Trap uit (`trapoff`), Trap aan (`trapon`), Trap rood (`traproodon`), Trap groen (`trapgroenon`), Trap blauw (`trapblauwon`) |
+| R4-KEUK | Keuken Spots (`spots`) | — |
+| R5-WASPL | Wasplaats (`wasplaats`), Toilet/Vestiaire (`toilet`) | — |
+| R6-EETPL | Tafel (`tafel`), Bib (`bib`), Buro (`buro`), Bed (`bed`) | Ramen: Ramen uit (`ramenlowoff`), Ramen hoog (`ramenhion`), Ramen midden (`ramenmedon`), Ramen laag (`ramenlowon`) |
+| S-OUTSIDE | Terras (`S`), Veldkant (`W2`), Voordeur (`W1`) | Sunlight: Sunlight auto (`auto`), Sunlight dag (`day`), Sunlight nacht (`night`) |
+| S-HVAC | ECO ⇒ SCHUUR (`sch`), ECO ⇒ WONING (`won`) | HVAC: HVAC Home (`home`), HVAC Out (`out`) |
+
+Totaal: 18 aan/uit + 19 standen in 6 groepen = 37.
 
 **Stappen (elk na GO):**
-1. P1–P3 beslissen.
-2. `server.js` v2.4: endpoint `POST /api/photon/:groep/:tag` met body `on`, `off` of de volgende stand. Alleen bereikbaar vanaf localhost en het eigen netwerk. Het token wordt gelezen uit het geheime bestand.
-3. Zarlar-plugin v0.1 voor Matterbridge: 26 accessoires uit een configuratielijst. Ze verschijnen als één groep achter de bridge.
-4. Test: elke knop in de Woning-app, ook via 4G.
+1. ✅ P1–P3 beslist (17/10/2026).
+2. `server.js` v2.4: endpoint `POST /api/photon/:knop` met body `on` of `off`. De server zoekt in een configuratielijst de Photon en het argument (aan/uit-tag of stand), houdt per standgroep de laatst gekozen stand bij, en stuurt het commando naar Particle. Alleen bereikbaar vanaf localhost en het eigen netwerk. Het token wordt gelezen uit `particle.json`; ontbreekt dat bestand, dan weigert het endpoint (zoals bij `auth.json`).
+3. Zarlar-plugin v0.1 voor Matterbridge: 37 schakelaars uit dezelfde configuratielijst. Ze verschijnen als één groep achter de bridge.
+4. Test: elke schakelaar in de Woning-app, ook via 4G.
 5. FiDel maakt de scènes opnieuw.
 6. Nieuw Particle-token, het oude intrekken, en `Lights.html` aanpassen zodat het via de RPi werkt.
 
