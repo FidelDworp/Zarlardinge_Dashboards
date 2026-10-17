@@ -582,7 +582,7 @@ Het veld `morgen_beschikbaar` bestaat al in de respons. Daarna eventueel een kle
 | AP23 | `apt upgrade` van de 95 openstaande pakketten, apart en met verse backup |
 | AP24 | F4a: Photon-toestellen naar de RPi-bridge (§16.9). P1–P3 beslist op 17/10; volgende stap: `server.js` v2.4 |
 | AP25 | Particle-token vernieuwen na F4a; het oude token staat in de HomeSpan-sketch en in `Lights.html` (publiek) |
-| AP26 | Testwoning "Matter Home" verwijderen in de Woning-app; Mireille's uitnodiging in Zarlardinge aanvaarden |
+| AP26 | Testwoning "Matter Home" verwijderen in de Woning-app. De openstaande uitnodiging voor Mireille intrekken: niet nodig, want FiDel en Mireille gebruiken dezelfde Apple-account. |
 | ~~AP20~~ | ✅ `deploy.sh` v2 (16/10): stopt bij Rosetta-, git- of SSH-fout, en ruimt Downloads alleen op als alles lukte |
 
 ---
