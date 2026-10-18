@@ -1,5 +1,5 @@
 # Zarlar Portal — Projectdocument
-*Bijgewerkt 17 oktober 2026 — Filip Delannoy (FiDel)*
+*Bijgewerkt 18 oktober 2026 — Filip Delannoy (FiDel)*
 
 > **Rolverdeling documenten:**
 > - Dit document: alles op de **RPi** (server, pagina's, deploy, Tailscale, Matter-bridge §16, energiebeslissingen §17, tarieven, afrekening, batterij).
@@ -14,6 +14,8 @@
 > Nieuw: §17 Energiebeslissingen + Tesla bridge.
 >
 > **17 oktober 2026:** Tailscale-sleutel verlopen en hersteld; de Matterbridge is verhuisd naar de woning **Zarlardinge**; de oude HomeSpan-bridge voor de Photons is gewist. Daarom start F4 nu met de **Photon-toestellen** (§16.8, §16.9).
+>
+> **18 oktober 2026:** de **ECO-boiler heeft wél Matter** (5 endpoints sinds v1.18) — rechtgezet in §16.1, §16.3 en §16.11 (bron: sketch v1.23, Master §5.4). HVAC-plan zonder Matter staat in `ESP32-HVAC/Productie/README.md` §10.
 
 ---
 
@@ -110,7 +112,7 @@ cp ~/Downloads/deploy.sh ~/deploy.sh && chmod +x ~/deploy.sh && bash ~/deploy.sh
 192.168.0.71  → ESP32 ECO Boiler v1.23
 192.168.0.73  → ESP32 Smart Energy (S-ENERGY v1.29 + Tesla bridge, zie §11)
 (LAN)         → tesla-key-esp32 (BLE-proxy naar Tesla1, host in S-ENERGY NVS)
-192.168.0.80  → ESP32 Room v2.21 (Eetplaats/Testroom)
+192.168.0.80  → ESP32 Room v2.24 (Eetplaats/Testroom)
 192.168.0.75–.81 → Room controllers (in server.js v2.1):
                    .75 B&B · .76 Badkamer · .77 Inkomhal · .78 Keuken
                    .79 Wasplaats · .80 Eetplaats · .81 Zitplaats
@@ -587,7 +589,7 @@ Het veld `morgen_beschikbaar` bestaat al in de respons. Daarna eventueel een kle
 | ~~AP25~~ | Particle-token: **bewust behouden** (beslissing FiDel 17/10), want vernieuwen vraagt aanpassingen in te veel apps en pagina's. Risico gekend: het token staat leesbaar in `Lights.html` op de publieke GitHub Pages |
 | AP26 | Testwoning "Matter Home" verwijderen in de Woning-app. **Pas na F6:** de eigen Matter-tegels van room80 staan nog in "Matter Home" en dienen als vergelijking tijdens de parallelle test (§16.11). De openstaande uitnodiging voor Mireille intrekken: niet nodig, want FiDel en Mireille gebruiken dezelfde Apple-account. |
 | ~~AP27~~ | ✅ Plugin `matterbridge-zarlar` staat in de repo (17/10), nu v0.6 |
-| AP28 | F4 rooms: ✅ `server.js` v2.9 + plugin v0.6 (17/10). Volgende: F6 room80 zonder Matter (ROOM-sketch v2.25), §16.11 |
+| AP28 | F4 rooms: ✅ `server.js` v2.9 + plugin v0.6 (17/10). Volgende: F6 room80 zonder Matter (ROOM-sketch v3.0), §16.11 |
 | AP29 | Onderdelen van "Eetplaats" één keer hernoemen in Apple Home (Apple toont geen namen voor onderdelen, §16.11); daarna Matterbridge herstarten en controleren dat de namen blijven |
 | AP30 | room80: nickname pixel 0 "TV achtergrondverlichting" is te lang voor het Matter-label (16 tekens) — eventueel inkorten in de room-instellingen (alleen van belang voor Google Home, F10) |
 | ~~AP20~~ | ✅ `deploy.sh` v2 (16/10): stopt bij Rosetta-, git- of SSH-fout, en ruimt Downloads alleen op als alles lukte |
@@ -995,7 +997,7 @@ for (const room of onlineRooms) {
 
 ### 16.1 Doel
 
-- Matter verdwijnt uit de ESP32-C6-controllers (ROOM, HVAC, Dashboard; beslist okt 2026, zie Master §16). Dat bespaart 80 tot 120 KB heap per controller (zie §15) en maakt de sketches eenvoudiger.
+- Matter verdwijnt uit de ESP32-C6-controllers (ROOM, HVAC, ECO, Dashboard; beslist okt 2026, zie Master §16). Dat bespaart 80 tot 120 KB heap per controller (zie §15) en maakt de sketches eenvoudiger.
 - De ESP32's doen alleen nog I/O, lokale realtime-berekeningen, JSON serveren en de matrix aansturen, volgens de bestaande architectuurregel.
 - De RPi wordt de enige Matter-laag naar Apple Home, en later eventueel naar Google Home.
 - De 4 Aqara Opple 6-knops schakelaars (WXCJKG13LM, Zigbee 3.0) worden lokaal bruikbaar. De Chinese cloud-hub werkt niet meer.
@@ -1034,7 +1036,7 @@ Het voorlopige voorstel daar was B.
 2. **Het startmechanisme van zarlar-dashboard is al bekend.** Volgens §1.1 is dat systemd `zarlar.service`. `systemctl status zarlar-dashboard` vond niets omdat de unit anders heet. Dit moet bevestigd worden met `systemctl status zarlar` (zie F0).
 3. **Node-versie.** De portal draait op Node.js v18. Matterbridge vraagt Node 20.19+, 22 of 24 (24 LTS aanbevolen). De systeem-Node mag niet blind geüpgraded worden, want dat raakt `server.js`. Daarom draait Matterbridge in Docker, of met een eigen Node, apart van de portal.
 4. **Home Assistant op een Pi 3B+.** Home Assistant ondersteunt alleen nog OS- en Container-installaties. aarch64 blijft ondersteund, maar 1 GB RAM is krap voor HA + Matter Server samen. Voor dashboards en historiek heeft Zarlar al de eigen portal, dus HA is voor het doel niet nodig.
-5. **Welke controllers hebben Matter?** Volgens de Master (§16): ROOM (8 endpoints), HVAC (9 endpoints) en Dashboard (1 endpoint HOME/UIT). ECO en S-ENERGY hebben geen Matter. Het overnamedocument sprak van ±12 controllers, inclusief de geplande rooms .75–.81. Die krijgen meteen een sketch zonder Matter.
+5. **Welke controllers hebben Matter?** Volgens de Master (§16): ROOM (8 endpoints), HVAC (9 endpoints), **ECO (5 endpoints: zonnecollector, boiler top, boiler bodem, vulling %, pomp)** en Dashboard (1 endpoint HOME/UIT). Alleen S-ENERGY heeft geen Matter. *(Rechtgezet 18 okt 2026: hier stond eerst dat ook ECO geen Matter had; de ECO-sketch heeft Matter sinds v1.18.)* Het overnamedocument sprak van ±12 controllers, inclusief de geplande rooms .75–.81. Die krijgen meteen een sketch zonder Matter.
 6. **Apple Home-scènes.** Zodra een ESP32 zonder Matter geflasht wordt, verdwijnt zijn oude accessoire uit Apple Home. Scènes en automaties die daarnaar verwijzen (o.a. die van Mireille) moeten dan opnieuw ingesteld worden op het bridge-accessoire. Dit gebeurt dus per kamer en gepland.
 
 ### 16.4 Voorgestelde architectuur (C): Matterbridge + Zarlar-plugin
@@ -1299,12 +1301,12 @@ Daarna staat de plugin via `update.sh` ook in `/home/fidel/repo/ESP32_Zarlar/zar
 1. ✅ **`server.js` v2.9:** room-proxy `/api/set/roomNN` aanvullen. SW1/SW2 gebruiken nu een *toggle*: als Apple "aan" stuurt terwijl de pixel al aan is, gaat hij uit. Nieuw: eerst de toestand lezen en alleen schakelen als het nodig is (zoals SW3 al doet; ook beter voor `verlichting.html`). Setpoint en Thuis/Weg erbij. Vaste lijst `ROOMS_APPLE` met kamernamen.
 2. ✅ **Plugin v0.4 → v0.6:** room-tegels. Elke 10 s `/api/poll/room80`, klikken via `/api/set/room80`.
 3. **Parallelle test** (F5): gestart 17/10 ±20:15. Duur: FiDel beslist.
-4. **F6:** room80 zonder Matter flashen (ROOM-sketch v2.25, repo `ESP32C6_ROOMS`), oude tegels verdwijnen, scènes opnieuw instellen, heapwinst meten. Daarna AP26 (testwoning "Matter Home" verwijderen). Zie plan hieronder.
+4. **F6:** room80 zonder Matter flashen (ROOM-sketch v3.0, repo `ESP32C6_ROOMS`), oude tegels verdwijnen, scènes opnieuw instellen, heapwinst meten. Daarna AP26 (testwoning "Matter Home" verwijderen). Zie plan hieronder.
 5. **F7:** volgende rooms = één regel in de lijst, geen nieuwe code.
 
-HVAC (9 tegels) en de HOME/UIT-knop van het Dashboard hebben ook nog eigen Matter; die volgen in latere fasen.
+HVAC (9 tegels), ECO (5 tegels) en de HOME/UIT-knop van het Dashboard hebben ook nog eigen Matter; die volgen in latere fasen. Volgorde per controller zoals bij room80: heap meten → bridge biedt de controller aan → parallelle test → pas dan een sketch zonder Matter (HVAC: `ESP32-HVAC/Productie/README.md` §10).
 
-**Plan F6: ROOM-sketch v2.25 zonder Matter (code pas na GO):**
+**Plan F6: ROOM-sketch v3.0 zonder Matter (code pas na GO; zelfde plan als Master §7.9):**
 | | |
 |---|---|
 | Vertrekpunt | `TESTROOM/ESP32_C6_ROOM.ino` v2.24 (8 mei 2026), repo `ESP32C6_ROOMS`. **Open: FiDel bevestigt dat v2.24 de versie op room80 is** |
