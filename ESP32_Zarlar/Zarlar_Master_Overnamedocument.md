@@ -1,7 +1,12 @@
 
 # Zarlar Thuisautomatisering — Master Overnamedocument
 **ESP32-C6 · Arduino IDE · Google Sheets · Node.js · Matter (op RPi) · Tailscale**
-*Filip Delannoy — Zarlardinge (BE) — bijgewerkt 16 oktober 2026*
+*Filip Delannoy — Zarlardinge (BE) — bijgewerkt 18 oktober 2026*
+
+> **Aanvulling 18 oktober 2026:**
+> - **Google Sheets-logging enkel via het Dashboard** is nu een vaste regel (§3.15). De HVAC post vandaag nog zelf (v1.19); dat verdwijnt in HVAC v2.1 (§4.7).
+> - **HVAC:** plan zonder Matter (v2.0) en README herschreven, zie `ESP32-HVAC/Productie/README.md` (§4.7, §11.0).
+> - **ECO heeft wél Matter** (5 endpoints sinds v1.18) — §5.4 en §16 rechtgezet. ECO en S-ENERGY posten niet zelf naar Google (§3.15).
 
 > **Review 16 oktober 2026:**
 > - **Matter** verhuist volledig van de ESP32's naar de RPi; Apple Home praat enkel nog met de RPi (§1.1, §16).
@@ -24,9 +29,9 @@
 ### 1.1 Architectuur en dataflow
 Een volledig zelfgebouwd thuisautomatiseringssysteem op basis van ESP32-C6 controllers,
 elk met een eigen webserver. **Matter/Apple Home wordt gecentraliseerd op de RPi** (beslist oktober 2026, §16).
-Tijdens de migratie hebben ROOM, HVAC en Dashboard nog hun eigen Matter-endpoints. Het **Zarlar Dashboard (192.168.0.60)**
+Tijdens de migratie hebben ROOM, HVAC, ECO en Dashboard nog hun eigen Matter-endpoints. Het **Zarlar Dashboard (192.168.0.60)**
 fungeert als centrale dataverzamelaar: het ontvangt JSON van alle controllers en POST de data
-naar Google Sheets via Google Apps Script. Controllers doen nooit zelf HTTPS-calls naar Google.
+naar Google Sheets via Google Apps Script. Controllers doen nooit zelf HTTPS-calls naar Google (regel §3.15).
 
 De **Raspberry Pi (192.168.0.50)** vormt de rijke portaallaag, de Matter-bridge naar Apple Home en de plek waar energiebeslissingen genomen worden. Ze is overal bereikbaar via Tailscale.
 
@@ -59,7 +64,7 @@ Elke controller publiceert enkel zijn `/json` endpoint — het Dashboard doet de
 | **ECO Boiler** | ESP32_ECO Boiler | 192.168.0.71 | 58:8C:81:32:2B:D4 | 32-pin clone | v1.23 | ✅ Productie stabiel |
 | **Smart Energy** | ESP32_C6_ENERGY | 192.168.0.73 | — | 32-pin clone | v1.29 | ✅ Actief, incl. Tesla bridge (sep 2026) |
 | **Tesla-proxy** | tesla-key-esp32 | via NVS `t1_host` | — | ESP32-C6 30-pin P4 (4 MB), apart board, niet op het Zarlar shield | — | ✅ BLE-proxy naar Tesla1 (§6.10) |
-| **ROOM / Eetplaats** | ESP32_EETPLAATS | 192.168.0.80 | 58:8C:81:32:2F:48 | 32-pin clone | v2.21 | ✅ Matter + heap stabiel |
+| **ROOM / Eetplaats** | ESP32_EETPLAATS | 192.168.0.80 | 58:8C:81:32:2F:48 | 32-pin clone | v2.24 | ✅ Matter (→ v3.0 zonder Matter, §7.9) |
 | **Zarlar Dashboard** | ESP32_ZARLAR | 192.168.0.60 | A8:42:E3:4B:FA:BC | 32-pin DevKitM-1 | v5.9 | ✅ Matter + Matrix 16×16 |
 | **RPi Portal** | zarlar-rpi | 192.168.0.50 | — | Raspberry Pi 3B+ | server.js v2.1 | ✅ Actief (Tailscale) |
 
@@ -369,6 +374,35 @@ Bij elke JSON-structuurwijziging meteen nalopen:
 
 > mDNS werd in v2.9 enkel verwijderd wegens het conflict met de mDNS-stack van Matter (§3.4). Na de Matter-migratie (§16) mag het terug, volgens de regel hierboven.
 
+### 3.15 Google Sheets — enkel via het Dashboard (vaste regel, 18 okt 2026)
+
+**Regel:** een controller post **nooit zelf** naar Google (geen `WiFiClientSecure`, geen Apps Script-URL in de controller). Hij publiceert enkel zijn `/json`. Het **Zarlar Dashboard (.60)** haalt die op en stuurt ze door naar het juiste Apps Script.
+
+```
+controller /json  ──►  Dashboard .60 (pollt; POST om de SHEETS_POST_EVERY = 5 cycli)  ──►  Apps Script  ──►  Sheet
+```
+
+**Waarom:**
+- HTTPS (TLS) vraagt veel en versnipperd geheugen; vanuit de controllers mislukte dat structureel door heap-druk (§1.1).
+- Eén plek voor alle logging: één instelling per controller, één throttle, één plek om te debuggen.
+- De controllers blijven eenvoudig en volgen de architectuurregel "meten, regelen, `/json` publiceren".
+
+**Waar ingesteld:** in `http://192.168.0.60/settings` — `room_script` voor alle ROOM-controllers, `c{N}_url` per S-controller (§8.3). Het Dashboard zet `"room":"<naam>"` vooraan in de POST; de scripts mogen dat veld negeren.
+
+**Een controller die nog zelf post, ombouwen — altijd in deze volgorde:**
+1. **Instellingen, geen code:** URL van het script invullen bij die controller in de Dashboard-`/settings` → nagaan dat er rijen binnenkomen → pas dan het eigen URL-veld in de controller **leegmaken**. Meetpunt: geen dubbele rijen, Sheet blijft gevuld.
+2. **Code, in een eigen versie** (nooit samen met een andere grote wijziging zoals Matter weghalen): push-functie, timer, URL-variabele + NVS-key + `/settings`-veld en `WiFiClientSecure` weg. De functie die `/json` opbouwt **blijft**, en de JSON-keys veranderen niet (§3.10).
+
+**Status per controller:**
+
+| Controller | Post zelf naar Google? | Actie |
+|---|---|---|
+| HVAC (.70) | ⚠️ Ja, sinds v1.13 (`gas_url`, elke 5 min) | Stap 1 nu; code weg in **v2.1** (§4.7) |
+| ROOM (.80) | ✅ Nee (v2.24 nagekeken 18 okt 2026) | — |
+| ECO (.71) | ✅ Nee — verwijderd in v1.21 (11 mrt 2026), v1.23 nagekeken 18 okt 2026 | — (zie wel §5.7: POST naar HVAC `/eco_energy`) |
+| S-ENERGY (.73) | ✅ Nee — v1.29 nagekeken 18 okt 2026 (enkel lokale HomeWizard-API) | — |
+| Dashboard (.60) | — Dit **is** de logger | — |
+
 ---
 
 ## 4. HVAC Controller (192.168.0.70)
@@ -451,6 +485,11 @@ Runtime: largest_block stabiel >35 KB  ✅
 | v1.18 | ECO JSON keys hernoemd: ETopH→b, EBotL→g, EAv→h, EQtot→i |
 
 ### 4.7 Openstaande punten
+- **Stappenplan zonder Matter + Sheets enkel via Dashboard** — volledig uitgewerkt in `ESP32-HVAC/Productie/README.md` §10 (opgesteld 18 okt 2026):
+  1. heap-baseline v1.19 noteren → 2. RPi-bridge biedt de HVAC aan (H-F4/H-F5) → 3. **v2.0** alleen Matter weg + bestandsnaam `ESP32C6_HVAC.ino` → 4. heap-rapport v2.0 → 5. **v2.1** eigen Sheets-push weg (§3.15)
+  - daarna, elk apart: v2.2 `Serial0`-keuze · v2.3 mDNS terug · v2.4 AP-mode zonder polling · v2.5 ventilatie-PWM 1 kHz → ~20 kHz (AnaBoX v2.0)
+- **Ventilatie:** Begetube 350 R hangt nu nog aan een Photon + oude AnaBoX (op-amp). Overstap naar IO20 + AnaBoX v2.0 na meting ingangsweerstand klem 7-8 (README §6).
+- **Kleine rechtzettingen voor v2.0:** opstarttekst toont nog "v1.10"; header vermeldt `partitions_16mb.csv` (§2.2).
 - **kWh-berekening**: echte `Q = m × Cp × ΔT / 3600` per pompbeurt implementeren
 - **HTML compressie**: witte pagina op iPhone bij ventilatieslider → heap-krapte bij page reload
 
@@ -507,7 +546,15 @@ Runtime: largest_block stabiel >35 KB  ✅
 | `s` | T | MinFreeHeap | KB |
 
 ### 5.4 Matter endpoints
-Matter is **niet geïntegreerd** in de ECO-boiler sketch.
+> ⚠️ **Rechtgezet 18 okt 2026:** hier stond "niet geïntegreerd". Dat klopt niet: Matter zit in de ECO-sketch sinds **v1.18** (1 mrt 2026) en is actief in v1.23 (`ESP32-C6_MATTER_ECO-boiler.ino`). ⏳ Te migreren naar de RPi-bridge (§16).
+
+| # | Type | Variabele | Opmerking |
+|---|---|---|---|
+| EP1 | MatterTemperatureSensor | `matter_tsun` | Zonnecollector (PT-sensor) |
+| EP2 | MatterTemperatureSensor | `matter_etoph` | Boiler top |
+| EP3 | MatterTemperatureSensor | `matter_eboth` | Boiler bodem |
+| EP4 | MatterHumiditySensor | `matter_eqpct` | Boilervulling (%), "vocht" als proxy |
+| EP5 | MatterFan | `matter_pomp` | Circulatiepomp |
 
 ### 5.5 Heap-baseline
 Nog te meten — zie openstaande punten §5.7.
@@ -522,6 +569,9 @@ Nog te meten — zie openstaande punten §5.7.
 - **kWh-berekening**: echte `Q = m × Cp × ΔT / 3600` per pompbeurt
 - **Reactietijden**: IO-pinnen direct aansturen vanuit webUI-handlers
 - **Versieheader**: `* /` met spatie in commentaar
+- **Matter → RPi-bridge** (§16): zelfde volgorde als ROOM/HVAC — heap meten, bridge biedt ECO aan, dan pas een versie zonder Matter
+- **Dode POST naar HVAC:** `publishHVAC()` stuurt `eqtot` naar `http://<hvac>/eco_energy` zodra EQtot > `hvac_threshold` (`hvac_enabled` staat standaard aan). HVAC v1.19 heeft geen `/eco_energy`: de HVAC **pollt** zelf de ECO-`/json` (§4). Te bevestigen in de serial log (`HVAC publish: 404`), daarna `hvac_enabled` uitzetten en de functie later in een eigen versie weghalen
+- **Header** vermeldt nog `partitions_16mb.csv` (§2.2)
 
 ---
 
@@ -1086,8 +1136,10 @@ De volledige schimmelbeschermingslogica zit in de room controllers — de HVAC i
 |---|---|---|
 | **`ZarlarApp`** (oude namen `Zarlardinge_Dashboards`, `Zarlar` verwijzen hierheen) | GitHub Pages-dashboards · `ESP32_Zarlar/`: dit document, Dashboard-sketch v5.9, `partitions.csv`, `worker-status.js` · `zarlar-rpi/`: RPi portal + `Zarlar_Portal_Plan.md` | ✅ |
 | `ESP32C6_ROOMS` | `TESTROOM/`: ROOM-sketch v2.24, `ROOM_GoogleScript.gs`, `partitions.csv`, `old/` (v2.8 zonder Matter) | ⬜ te vernieuwen (dec 2025) |
-| `ESP32-HVAC` (oude naam `ESP32C6_HVAC`) | `Productie/`: HVAC-sketch, GAS, `partitions.csv` · oude Photon- en niet-Matter-versies | ✅ (na te kijken) |
-| ECO, S-ENERGY, Sjalay, … | *nog aan te vullen door FiDel* | ? |
+| `ESP32-HVAC` (oude naam `ESP32C6_HVAC`) | `Productie/`: HVAC-sketch v1.19, GAS v5, `partitions.csv`, **`README.md`** · root: oude Photon- en niet-Matter-versies | ✅ herschreven 18 okt 2026 (in `Productie/`) |
+| `ESP32C6_ECO-boiler` | `Productie/`: ECO-sketch v1.23 (`ESP32-C6_MATTER_ECO-boiler.ino`), `ECO_GoogleScript.gs` · `S-ECO_SOLAR_Photon/` · `CHANGELOG.md` | ✅ (na te kijken) |
+| `ESP32C6_Smart-Energy` | `Productie/`: S-ENERGY-sketch v1.29 (`ESP32_C6_ENERGY.ino`), `ENERGY_GoogleScript_v1.gs`, `partitions.csv` · `Tesla/TeslaChargeTest.ino` · `Energy_Management_System (Zarlardinge).md`, `Smart_Energy_Zarlardinge (Maarten).md` | ✅ (na te kijken) |
+| Sjalay, … | *nog aan te vullen door FiDel* | ? |
 
 > Regel: per repo één `README.md` (wat, actieve versie, bestanden, verwijzing naar dit document). Dit Master-document blijft de enige systeembrede referentie; kopieën of verwijzingsbestanden in andere repo's (bv. `ESP32-HVAC/Productie/-Zarlar_Overnamedocument.md`) worden vervangen door een link in de README.
 
@@ -1095,16 +1147,16 @@ De volledige schimmelbeschermingslogica zit in de room controllers — de HVAC i
 | Bestand | Beschrijving |
 |---|---|
 | `ESP32_C6_MATTER_HVAC_v1.19.ino` | HVAC productieversie |
-| `ESP32_C6_MATTER_ECO-boiler_22mar_2200.ino` | ECO Boiler v1.23 productieversie |
+| `ESP32C6_ECO-boiler/Productie/ESP32-C6_MATTER_ECO-boiler.ino` | ECO Boiler v1.23 productieversie (met Matter, §5.4) |
 | `ESP32C6_ROOMS/TESTROOM/ESP32_C6_ROOM.ino` | **ROOM v2.24** actief (8 mei 2026) — basis voor v3.0 (§7.9) |
 | `ESP32_C6_Zarlar_Dashboard-Matrix_MATTER.ino` | **Dashboard v5.9** (staat in de repo onder `ESP32_Zarlar/`) |
-| `ESP32_C6_ENERGY_v1_29.ino` | **Smart Energy v1.29**: Tesla1-bridge + heap-robuustheid (24 sep 2026) |
+| `ESP32C6_Smart-Energy/Productie/ESP32_C6_ENERGY.ino` | **Smart Energy v1.29**: Tesla1-bridge + heap-robuustheid (24 sep 2026) |
 | `Oude_MATTER_ROOM_3mar.ino` | Referentie: werkende Matter endpoint-volgorde |
 
 ### 11.2 Google Apps Scripts
 | Bestand | Beschrijving |
 |---|---|
-| `HVAC_GoogleScript_v4.gs` | GAS HVAC: 31 kolommen A–AE |
+| `ESP32-HVAC/Productie/HVAC_GoogleScript.gs` | GAS HVAC **v5** (18 mrt 2026): 32 kolommen A–AF, `MAX_ROWS` (default 1000) |
 | `ECO_GoogleScript_v2.gs` | GAS ECO: 20 kolommen A–T |
 | `ESP32C6_ROOMS/TESTROOM/ROOM_GoogleScript.gs` | GAS ROOM **v1.5** (18 mrt 2026): 37 kolommen A–AK, `MAX_ROWS` (default 1000) |
 | `ENERGY_GoogleScript_v1.gs` | GAS ENERGY: 19 kolommen A–S, sim-vlaggen gelogd |
@@ -1152,7 +1204,7 @@ Verhuisd naar `Zarlar_Portal_Plan.md` §14.
 | ROOM controllers | ✅ 8 endpoints (§7.4) | ❌ Verwijderd. Rooms verschijnen via de RPi-bridge. |
 | HVAC | ✅ 9 endpoints (§4.4) | ❌ Verwijderd. Kringen en ventilatie via de RPi-bridge. |
 | Dashboard | ✅ 1 endpoint HOME/UIT (§8.5) | ❌ Verwijderd. HOME/UIT via de RPi-bridge. |
-| ECO Boiler | ❌ (§5.4) | ❌ |
+| ECO Boiler | ✅ 5 endpoints (§5.4) — *rechtgezet 18 okt 2026* | ❌ Verwijderd. Temperaturen, vulling en pomp via de RPi-bridge. |
 | S-ENERGY | ❌ | ❌ |
 
 **Waarom:**
@@ -1172,6 +1224,7 @@ Verhuisd naar `Zarlar_Portal_Plan.md` §14.
    | `ZarlarApp/ESP32_Zarlar/ESP32_C6_Zarlar_Dashboard-Matrix_MATTER.ino` (v5.9) | `ESP32_C6_Zarlar_Dashboard_Matrix.ino` (v6.0) |
    | `ESP32-HVAC/Productie/ESP32C6_MATTER_HVAC.ino` | `ESP32C6_HVAC.ino` |
    | `ESP32C6_ROOMS/TESTROOM/ESP32_C6_ROOM.ino` | ongewijzigd (heeft al geen "MATTER" in de naam), v3.0 |
+   | `ESP32C6_ECO-boiler/Productie/ESP32-C6_MATTER_ECO-boiler.ino` (v1.23) | `ESP32-C6_ECO-boiler.ino` (v2.0) |
 4. Het oude accessoire uit Apple Home verwijderen. Scènes en automaties (o.a. van Mireille) opnieuw koppelen aan het bridge-accessoire.
 5. §3.4, het Matter-gedeelte van §3.6 en de Matter-sectie van die controller in dit document laten vervallen.
 
@@ -1205,6 +1258,7 @@ Verhuisd naar `Zarlar_Portal_Plan.md` §14.
 - **SIM_S0 / SIM_P1 nooit automatisch omschakelen**, altijd een bewuste handeling
 - **LED matrix 12×4 SENRG op IO4** (48 pixels, via 330 Ω, Pixel-line connector, bevestigd in sketch v1.29)
 - **Matter:** geen nieuwe Matter-code op ESP32's. Alles verhuist naar de RPi (§16).
+- **Google Sheets:** controllers posten nooit zelf; enkel het Dashboard (§3.15).
 - **Tesla:** geen automatische sturing in de sketch. Beslissingen komen van de RPi (§6.10).
 
-*Zarlar project — Filip Delannoy — bijgewerkt 16 oktober 2026*
+*Zarlar project — Filip Delannoy — bijgewerkt 18 oktober 2026*
