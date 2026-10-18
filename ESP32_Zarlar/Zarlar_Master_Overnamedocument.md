@@ -487,7 +487,7 @@ Runtime: largest_block stabiel >35 KB  ✅
 ### 4.7 Openstaande punten
 - **Stappenplan zonder Matter + Sheets enkel via Dashboard** — volledig uitgewerkt in `ESP32-HVAC/Productie/README.md` §10 (opgesteld 18 okt 2026):
   1. heap-baseline v1.19 noteren → 2. RPi-bridge biedt de HVAC aan (H-F4/H-F5) → 3. **v2.0** alleen Matter weg + bestandsnaam `ESP32C6_HVAC.ino` → 4. heap-rapport v2.0 → 5. **v2.1** eigen Sheets-push weg (§3.15)
-  - daarna, elk apart: v2.2 `Serial0`-keuze · v2.3 mDNS terug · v2.4 AP-mode zonder polling · v2.5 ventilatie-PWM 1 kHz → ~20 kHz (AnaBoX v2.0)
+  - daarna, elk apart: v2.2 `Serial0`-keuze · v2.3 mDNS terug · v2.4 AP-mode zonder polling · v2.5 ventilatie-PWM 1 kHz → ~20 kHz (AnaBoX v2.0) · v2.6 firmwareversie zichtbaar op de statuspagina (bij laden, niet in `/json`)
 - **Ventilatie:** Begetube 350 R hangt nu nog aan een Photon + oude AnaBoX (op-amp). Overstap naar IO20 + AnaBoX v2.0 na meting ingangsweerstand klem 7-8 (README §6).
 - **Kleine rechtzettingen voor v2.0:** opstarttekst toont nog "v1.10"; header vermeldt `partitions_16mb.csv` (§2.2).
 - **kWh-berekening**: echte `Q = m × Cp × ΔT / 3600` per pompbeurt implementeren
@@ -956,7 +956,8 @@ als sensor niet leest — samen met DS18B20 delay: main loop elke minuut ~1.150m
 | v3.1 | `#define Serial Serial0` beslissen: "UART"- of "USB"-poort (§3.9, §16) | Serial zichtbaar op de gekozen poort |
 | v3.2 | Sensor reads uit in AP-mode (§3.14) | `/settings` in AP-mode blijft responsief |
 | v3.3 | mDNS terug (`<room>.local`), alleen in STA-mode na geldig IP (§3.14) | `eetplaats.local` bereikbaar |
-| v3.4+ | Sjalay-punten, één per versie: live-JSON vs. page-load-velden scheiden, `.icring`-statuscirkels, korte sectietitels, volgorde knoppen in `/settings` | — |
+| v3.4 | **Firmwareversie zichtbaar** onderaan de statuspagina (en in `/settings`), enkel bij het laden van de pagina — **niet** in `/json` (geen nieuwe key, §3.10). Eén `#define ROOM_VERSION` bovenaan, gebruikt in de header-commentaar, de webpagina en een korte versieregel bij het opstarten. Reden: sinds v2.24 is de versie nergens meer te zien (serial-versieregel verwijderd), waardoor niet na te gaan is wat op room80 draait | Versie leesbaar op `http://192.168.0.80/` |
+| v3.5+ | Sjalay-punten, één per versie: live-JSON vs. page-load-velden scheiden, `.icring`-statuscirkels, korte sectietitels, volgorde knoppen in `/settings` | — |
 | later | Ideeën uit de TESTROOM-README (dec 2025): sensor-nicknames op de hoofdpagina (`<room> <sensor>`), `/reset_runtime` (wist alleen runtime-states, geen factory reset), CO2 non-blocking i.p.v. `pulseIn()` | — |
 
 **Bewust NIET overnemen uit Sjalay:** WOLF-ketellogica, SWW/boilerrelais, gasten-landingspagina (enkel als idee).
@@ -1242,7 +1243,7 @@ Verhuisd naar `Zarlar_Portal_Plan.md` §14.
 
 **Kritische herinneringen:**
 - `#define Serial Serial0` bovenaan, verplicht voor ESP32-C6 RISC-V met Matter (zie §16 voor zonder Matter)
-- Versieheader aanpassen bij elke wijziging
+- Versieheader aanpassen bij elke wijziging — en de **firmwareversie zichtbaar** houden op de statuspagina (één `#define …_VERSION`, enkel bij het laden van de pagina, niet in `/json`)
 - Bij een JSON-structuurwijziging: GAS-script + Dashboard + RPi portal nalopen (§3.10)
 - IO-pins altijd onmiddellijk aansturen (§3.6)
 - `* /` met spatie in commentaar (nooit `*/` in tekst, dat geeft een compileerfout)
