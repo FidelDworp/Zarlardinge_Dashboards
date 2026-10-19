@@ -1309,7 +1309,7 @@ HVAC (9 tegels), ECO (5 tegels) en de HOME/UIT-knop van het Dashboard hebben ook
 **Plan F6: ROOM-sketch v3.0 zonder Matter (code pas na GO; zelfde plan als Master §7.9):**
 | | |
 |---|---|
-| Vertrekpunt | `TESTROOM/ESP32_C6_ROOM.ino` v2.24 (8 mei 2026), repo `ESP32C6_ROOMS`. **Open: FiDel bevestigt dat v2.24 de versie op room80 is** |
+| Vertrekpunt | `TESTROOM/ESP32_C6_ROOM.ino` v2.24 (8 mei 2026), repo `ESP32C6_ROOMS`. ✅ 19/10: room80 antwoordt op `/capabilities` (5 pixelnamen) → **minstens v2.22**. De exacte versie (v2.22/23/24) is niet zichtbaar in de UI; niet nodig voor F6, terugweg = v2.24 uit de repo. Versie zichtbaar maken = ROOM v3.4 (Master §7.9) |
 | Eruit | Matter-includes en de 8 endpoints, `Matter.begin()`, callbacks en het doorgeven van waarden naar Matter, `/matter`, `/matter_reset`, `matterNuclearReset()`, Matter-links in de menu's, seriële Matter-commando's |
 | Erbij | `"mov2":true/false` in `/capabilities` (`server.js` v2.9 gebruikt dat dan i.p.v. de HTML) |
 | Blijft | Alle endpoints die `server.js` gebruikt, webpagina's, NVS-instellingen, heapmeting aan het einde van `setup()`, partitietabel |
