@@ -474,9 +474,12 @@ Circuitnamen instelbaar via `/settings`. Default: C1–C7. Productie: BB, WP, BK
 
 ### 4.5 Heap-baseline
 ```
-Setup:   free=~180 KB  largest=~55 KB
-Runtime: largest_block stabiel >35 KB  ✅
+Setup:   free=~180 KB  largest=~55 KB   (oude notitie — opnieuw te meten bij volgende opstart)
+Runtime v1.19 met Matter (Sheet 26 mei – 4 okt 2026, 1006 rijen):
+         vrij 17-18 %  ·  largest mediaan 30 KB, bereik 25-32 KB  ⚠️ zone "LAAG"
+         4× op de crash-log-drempel (25 KB) · 3 herstarts na 23-30 dagen uptime
 ```
+> Rechtgezet 19 okt 2026: hier stond "runtime largest_block stabiel > 35 KB ✅". De logdata tonen dat dit niet klopt. Details en interpretatie: `ESP32-HVAC/Productie/README.md` §10 stap 1.
 
 ### 4.6 Versiehistorie
 | Versie | Wijziging |
@@ -491,7 +494,8 @@ Runtime: largest_block stabiel >35 KB  ✅
 - **Ventilatie:** Begetube 350 R hangt nu nog aan een Photon + oude AnaBoX (op-amp). Overstap naar IO20 + AnaBoX v2.0 na meting ingangsweerstand klem 7-8 (README §6).
 - **Kleine rechtzettingen voor v2.0:** opstarttekst toont nog "v1.10"; header vermeldt `partitions_16mb.csv` (§2.2).
 - **kWh-berekening**: echte `Q = m × Cp × ΔT / 3600` per pompbeurt implementeren
-- **HTML compressie**: witte pagina op iPhone bij ventilatieslider → heap-krapte bij page reload
+- **HTML compressie**: witte pagina op iPhone bij ventilatieslider → heap-krapte bij page reload (past bij largest block ~30 KB, §4.5)
+- **Sheets-logging HVAC onbetrouwbaar**: mei–okt slechts 2-45 rijen/dag i.p.v. 288; meeste HTTPS-posts mislukken. Bron van de posts (HVAC of Dashboard) nagaan in stap 5a van het HVAC-plan (§3.15)
 
 ---
 
