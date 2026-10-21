@@ -1,8 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// matterbridge-zarlar v0.6 — Zarlar Photon-knoppen en rooms in Apple Home
+// matterbridge-zarlar v0.7 — Zarlar Photon-knoppen, rooms en HVAC in Apple Home
 // Filip Delannoy — Portal Plan §16.9 (F4a)
 //
 // Apple Home ──► Matterbridge (deze plugin) ──► server.js (RPi) ──► Particle ──► Photon
+//
+// v0.7 (21 okt 2026): HVAC (ESP32 .70) als één toestel "HVAC" (Portal Plan §16.12, server.js ≥ v2.10)
+//   - Gegevens uit GET /api/hvac-apple (naam, online, 7 kringnamen uit de HVAC-instellingen).
+//   - Onderdelen: Boiler boven/gem./onder (temperatuur, /json b/h/g), 7 kringen (stopcontact,
+//     p…v), Ventilatie (ventilator %, x), ECO => SCHUUR / ECO => WONING (stopcontact, y/aa).
+//   - Klikken → POST /api/set/hvac: kN 1/0 (override 10 min), vent 0-100 (minimum 3 u,
+//     0 = automatisch; aan zonder % = 30 %), sch/won 1 (60 s geforceerd) / 0 (automatisch).
+//   - Elke 10 s /api/poll/hvac → tegels bijwerken. HVAC offline → "geen reactie".
+//   - Vaste id's ("hvac", "Kring 1" … ): de namen uit de HVAC staan in het label, zodat een
+//     nieuwe kringnaam (bv. Een → BB) het toestel niet opnieuw aanmaakt.
+//   - Photon-knoppen en rooms: ongewijzigd.
 //
 // v0.6 (17 okt 2026): elk onderdeel van een room krijgt zijn naam als Matter-label
 //   (FixedLabel "name", max 16 bytes volgens Matter → langere namen worden ingekort).
@@ -47,11 +58,11 @@
 //     (niet localhost: dat behandelt server.js als Funnel-verkeer).
 // ─────────────────────────────────────────────────────────────────────────────
 import { MatterbridgeDynamicPlatform, MatterbridgeEndpoint, onOffLight, onOffPlugInUnit, dimmableLight, extendedColorLight,
-         thermostat, humiditySensor, occupancySensor, bridgedNode, powerSource } from 'matterbridge';
+         thermostat, humiditySensor, occupancySensor, bridgedNode, powerSource, temperatureSensor, fan } from 'matterbridge';
 import { OnOff, LevelControl, ColorControl, Thermostat, RelativeHumidityMeasurement, OccupancySensing,
-         BridgedDeviceBasicInformation } from 'matterbridge/matter/clusters';
+         BridgedDeviceBasicInformation, TemperatureMeasurement, FanControl } from 'matterbridge/matter/clusters';
 
-const VERSIE  = '0.6.0';
+const VERSIE  = '0.7.0';
 const POLL_MS = 10000;   // R5: rooms elke 10 s opvragen
 const PORTAL  = 'http://192.168.0.50:3000';
 const wacht   = ms => new Promise(r => setTimeout(r, ms));
@@ -111,6 +122,7 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
     this.kleuren    = new Set();   // knop-id's van kleurenlampen
     this.wachtrij   = new Map();   // dimmer/kleur-id → { aan, niveau|hue|sat, timer }
     this.rooms      = [];          // [{ id, naam, mov2, n (aantal pixels), tegels: {soort → endpoint} }]
+    this.hvac       = null;        // { id, naam, toestel, tegels: {sleutel → endpoint}, online } (v0.7)
     this.pollTimer  = null;
     this.gestopt    = false;
     this.log.info(`Zarlar v${VERSIE} — portal ${this.portal}`);
@@ -188,6 +200,7 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
     this.log.info(`${this.toestellen.size} knoppen geregistreerd`);
 
     await this.maakRooms();
+    await this.maakHvac();
   }
 
   async onConfigure() {
@@ -201,7 +214,11 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
     }
     // Rooms: meteen een eerste keer, daarna elke POLL_MS
     await this.pollRooms();
-    this.pollTimer = setInterval(() => this.pollRooms().catch(e => this.log.warn(`Poll rooms: ${e.message}`)), POLL_MS);
+    await this.pollHvac();
+    this.pollTimer = setInterval(() => {
+      this.pollRooms().catch(e => this.log.warn(`Poll rooms: ${e.message}`));
+      this.pollHvac().catch(e => this.log.warn(`Poll HVAC: ${e.message}`));
+    }, POLL_MS);
   }
 
   // Niet wachten in de command handler: Apple Home krijgt meteen antwoord,
@@ -479,9 +496,180 @@ export class ZarlarPlatform extends MatterbridgeDynamicPlatform {
     }
   }
 
+  // ═══ HVAC (v0.7, Portal Plan §16.12) ═══════════════════════════════════════
+
+  // Gegevens ophalen bij server.js; blijft proberen (nooit registreren zonder gegevens)
+  async haalHvac() {
+    for (let poging = 1; !this.gestopt; poging++) {
+      try {
+        const r = await fetch(this.portal + '/api/hvac-apple', { signal: AbortSignal.timeout(15000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return await r.json();
+      } catch (e) {
+        this.log.warn(`HVAC niet opgehaald (poging ${poging}): ${e.message} — opnieuw over 10 s`);
+        await wacht(10000);
+      }
+    }
+    return null;
+  }
+
+  async maakHvac() {
+    const h = await this.haalHvac();
+    if (!h) return;
+    const H = h.id, t = {}, namen = {};
+    const kringen = Array.isArray(h.kringen) ? h.kringen : [];
+
+    const toestel = new MatterbridgeEndpoint([bridgedNode, powerSource], { id: H })
+      .createDefaultBridgedDeviceBasicInformationClusterServer(kort(h.naam), 'ZARLAR-' + H, this.matterbridge.aggregatorVendorId, 'Delannoy', 'Zarlar HVAC', 1, VERSIE)
+      .createDefaultPowerSourceWiredClusterServer()
+      .addRequiredClusterServers();
+
+    // 1-3. Boilertemperaturen (B-H1: boven, gemiddeld, onder)
+    for (const [key, naam] of [['tBoven', 'Boiler boven'], ['tGem', 'Boiler gem.'], ['tOnder', 'Boiler onder']]) {
+      t[key] = toestel.addChildDeviceType(naam, temperatureSensor)
+        .createDefaultIdentifyClusterServer()
+        .createDefaultTemperatureMeasurementClusterServer(null)
+        .addRequiredClusterServers();
+      namen[key] = naam;
+    }
+
+    // 4-10. Kringen 1-7: vaste id "Kring N", naam uit de HVAC-instellingen in het label (B-H2)
+    for (let k = 1; k <= 7; k++) {
+      const key = 'k' + k;
+      const d = toestel.addChildDeviceType(`Kring ${k}`, onOffPlugInUnit)
+        .createDefaultIdentifyClusterServer()
+        .createDefaultOnOffClusterServer(false)
+        .addRequiredClusterServers();
+      d.addCommandHandler('on',     () => this.hvacSet({ [key]: 1 }));
+      d.addCommandHandler('off',    () => this.hvacSet({ [key]: 0 }));
+      d.addCommandHandler('toggle', () => this.hvacSet({ [key]: d.getAttribute(OnOff, 'onOff') ? 0 : 1 }));
+      t[key] = d;
+      namen[key] = kringen[k - 1] || `Kring ${k}`;
+    }
+
+    // 11. Ventilatie: ventilator Uit/Hoog met percentage (zoals de ESP32 nu)
+    t.vent = toestel.addChildDeviceType('Ventilatie', fan)
+      .createDefaultIdentifyClusterServer()
+      .createBaseFanControlClusterServer(FanControl.FanMode.Off, FanControl.FanModeSequence.OffHigh, 0, 0)
+      .addRequiredClusterServers();
+    t.vent.subscribeAttribute(FanControl, 'percentSetting', (nw, oud, ctx) => {
+      if (ctx?.fabric === undefined) return;                       // eigen update
+      this.hvacVent({ pct: nw, oud: oud ?? 0 });
+    });
+    t.vent.subscribeAttribute(FanControl, 'fanMode', (nw, oud, ctx) => {
+      if (ctx?.fabric === undefined) return;
+      this.hvacVent({ mode: nw });
+    });
+    namen.vent = 'Ventilatie';
+
+    // 12-13. ECO-pompen: aan = 60 s geforceerd, uit = terug naar automatisch
+    for (const [key, naam] of [['sch', 'ECO => SCHUUR'], ['won', 'ECO => WONING']]) {
+      const d = toestel.addChildDeviceType(naam, onOffPlugInUnit)
+        .createDefaultIdentifyClusterServer()
+        .createDefaultOnOffClusterServer(false)
+        .addRequiredClusterServers();
+      d.addCommandHandler('on',     () => this.hvacSet({ [key]: 1 }));
+      d.addCommandHandler('off',    () => this.hvacSet({ [key]: 0 }));
+      d.addCommandHandler('toggle', () => this.hvacSet({ [key]: d.getAttribute(OnOff, 'onOff') ? 0 : 1 }));
+      t[key] = d;
+      namen[key] = naam;
+    }
+
+    for (const [key, dev] of Object.entries(t)) await dev.addFixedLabel('name', kort16(namen[key]));
+
+    await this.registerDevice(toestel);
+    this.hvac = { id: H, naam: h.naam, toestel, tegels: t, online: undefined, ventWacht: null };
+    this.log.info(`HVAC (${h.naam}): 1 toestel met ${Object.keys(t).length} onderdelen geregistreerd${h.online ? '' : ' — HVAC nu offline'}`);
+  }
+
+  // Commando naar de HVAC (niet afwachten in Matter), daarna meteen opnieuw pollen
+  hvacSet(body) {
+    const H = this.hvac?.id || 'hvac';
+    (async () => {
+      try {
+        const r = await fetch(`${this.portal}/api/set/${H}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body), signal: AbortSignal.timeout(10000),
+        });
+        if (r.ok) this.log.info(`${H} ← ${JSON.stringify(body)}`);
+        else      this.log.warn(`${H} ← ${JSON.stringify(body)} mislukt: HTTP ${r.status}`);
+      } catch (e) {
+        this.log.warn(`${H} ← ${JSON.stringify(body)}: portal niet bereikbaar (${e.message})`);
+      }
+      await wacht(800);
+      await this.pollHvac();
+    })().catch(e => this.log.error(`${H}: ${e.message}`));
+  }
+
+  // Ventilatie: Apple stuurt modus en percentage vaak vlak na elkaar → 400 ms verzamelen
+  hvacVent(wens) {
+    const hv = this.hvac;
+    if (!hv) return;
+    const w = hv.ventWacht || { begin: Number(hv.tegels.vent.getAttribute(FanControl, 'percentCurrent')) || 0 };
+    if (wens.pct !== undefined) w.pct = wens.pct;
+    if (wens.mode !== undefined) w.mode = wens.mode;
+    clearTimeout(w.timer);
+    w.timer = setTimeout(() => {
+      hv.ventWacht = null;
+      let pct;
+      if (w.mode === FanControl.FanMode.Off) pct = 0;
+      else if (typeof w.pct === 'number') pct = w.pct;
+      else pct = 0;                                                 // null = automatisch
+      // Aan zonder eigen percentage (van uit naar Hoog = 100 %) → 30 %, zoals de ESP32
+      if (w.mode !== undefined && w.mode !== FanControl.FanMode.Off && w.begin === 0 && (pct === 0 || pct === 100)) pct = 30;
+      this.hvacSet({ vent: Math.max(0, Math.min(100, Math.round(pct))) });
+    }, 400);
+    hv.ventWacht = w;
+  }
+
+  // HVAC opvragen en de tegels bijwerken
+  async pollHvac() {
+    const hv = this.hvac;
+    if (!hv) return;
+    if (hv.ventWacht) return;                                       // gebruiker is de ventilatie aan het instellen
+    const t = hv.tegels;
+    let j = null;
+    try {
+      const r = await fetch(`${this.portal}/api/poll/${hv.id}`, { signal: AbortSignal.timeout(5000) });
+      j = r.ok ? await r.json() : null;
+    } catch { j = null; }
+
+    const online = !!(j && j.online !== false);
+    if (hv.online !== online) {
+      hv.online = online;
+      await hv.toestel.setAttribute(BridgedDeviceBasicInformation, 'reachable', online, this.log).catch(() => {});
+      this.log.info(`HVAC ${online ? 'online' : 'OFFLINE — tegels "geen reactie"'}`);
+    }
+    if (!online) return;
+
+    const zet = async (dev, cl, attr, v) => {
+      if (dev && v !== undefined && v !== null && dev.getAttribute(cl, attr) !== v) await dev.setAttribute(cl, attr, v, this.log);
+    };
+
+    // Temperaturen (°C → 1/100 °C); sensorfout (−127) niet tonen
+    for (const [key, veld] of [['tBoven', 'b'], ['tGem', 'h'], ['tOnder', 'g']]) {
+      const v = Number(j[veld]);
+      if (Number.isFinite(v) && v > -50) await zet(t[key], TemperatureMeasurement, 'measuredValue', Math.round(v * 100));
+    }
+
+    // Kringen p…v
+    const velden = ['p', 'q', 'r', 's', 't', 'u', 'v'];
+    for (let k = 1; k <= 7; k++) await zet(t['k' + k], OnOff, 'onOff', !!Number(j[velden[k - 1]]));
+
+    // Ventilatie: werkelijk percentage (max van kamers en minimum)
+    const x = Math.max(0, Math.min(100, Math.round(Number(j.x) || 0)));
+    await zet(t.vent, FanControl, 'percentSetting', x);
+    await zet(t.vent, FanControl, 'percentCurrent', x);
+
+    // ECO-pompen
+    await zet(t.sch, OnOff, 'onOff', !!Number(j.y));
+    await zet(t.won, OnOff, 'onOff', !!Number(j.aa));
+  }
+
   async onShutdown(reason) {
     this.gestopt = true;
     clearInterval(this.pollTimer);
+    clearTimeout(this.hvac?.ventWacht?.timer);
     for (const w of this.wachtrij.values()) clearTimeout(w.timer);
     await super.onShutdown(reason);
     this.log.info(`Stop (${reason ?? '-'})`);
