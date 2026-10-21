@@ -1144,7 +1144,7 @@ De volledige schimmelbeschermingslogica zit in de room controllers — de HVAC i
 |---|---|---|
 | **`ZarlarApp`** (oude namen `Zarlardinge_Dashboards`, `Zarlar` verwijzen hierheen) | GitHub Pages-dashboards · `ESP32_Zarlar/`: dit document, Dashboard-sketch v5.9, `partitions.csv`, `worker-status.js` · `zarlar-rpi/`: RPi portal + `Zarlar_Portal_Plan.md` | ✅ |
 | `ESP32C6_ROOMS` | `TESTROOM/`: ROOM-sketch v2.24, `ROOM_GoogleScript.gs`, `partitions.csv`, `old/` (v2.8 zonder Matter) | ⬜ te vernieuwen (dec 2025) |
-| `ESP32-HVAC` (oude naam `ESP32C6_HVAC`) | root: **`README.md`** · `Productie/`: HVAC-sketch v1.19, GAS v5, `partitions.csv` · root: oude Photon- en niet-Matter-versies | ✅ herschreven 18 okt 2026, naar de root verplaatst 21 okt 2026 |
+| `ESP32-HVAC` (oude naam `ESP32C6_HVAC`) | root: **`README.md`** · `Productie/`: HVAC-sketch v1.19, GAS v5, `partitions.csv` · `Old/`: Photon-sketch (nog in productie op S-HVAC), oude niet-Matter-versie, oud GAS | ✅ herschreven 18 okt 2026, naar de root verplaatst 21 okt 2026 |
 | `ESP32C6_ECO-boiler` | `Productie/`: ECO-sketch v1.23 (`ESP32-C6_MATTER_ECO-boiler.ino`), `ECO_GoogleScript.gs` · `S-ECO_SOLAR_Photon/` · `CHANGELOG.md` | ✅ (na te kijken) |
 | `ESP32C6_Smart-Energy` | `Productie/`: S-ENERGY-sketch v1.29 (`ESP32_C6_ENERGY.ino`), `ENERGY_GoogleScript_v1.gs`, `partitions.csv` · `Tesla/TeslaChargeTest.ino` · `Energy_Management_System (Zarlardinge).md`, `Smart_Energy_Zarlardinge (Maarten).md` | ✅ (na te kijken) |
 | Sjalay, … | *nog aan te vullen door FiDel* | ? |
