@@ -1,5 +1,5 @@
 # Zarlar Portal — Projectdocument
-*Bijgewerkt 18 oktober 2026 — Filip Delannoy (FiDel)*
+*Bijgewerkt 21 oktober 2026 — Filip Delannoy (FiDel)*
 
 > **Rolverdeling documenten:**
 > - Dit document: alles op de **RPi** (server, pagina's, deploy, Tailscale, Matter-bridge §16, energiebeslissingen §17, tarieven, afrekening, batterij).
@@ -14,6 +14,8 @@
 > Nieuw: §17 Energiebeslissingen + Tesla bridge.
 >
 > **17 oktober 2026:** Tailscale-sleutel verlopen en hersteld; de Matterbridge is verhuisd naar de woning **Zarlardinge**; de oude HomeSpan-bridge voor de Photons is gewist. Daarom start F4 nu met de **Photon-toestellen** (§16.8, §16.9).
+>
+> **21 oktober 2026:** **HVAC (ESP32 .70) via de RPi-bridge** — `server.js` v2.10 (H1) en plugin v0.7 (H2): toestel "HVAC" met 13 onderdelen in Zarlardinge (§16.8, §16.10, §16.12). Merge-conflict bij de deploy: het Portal Plan was via de website opgeladen → regel §15.3 herbevestigd.
 >
 > **18 oktober 2026:** de **ECO-boiler heeft wél Matter** (5 endpoints sinds v1.18) — rechtgezet in §16.1, §16.3 en §16.11 (bron: sketch v1.23, Master §5.4). HVAC-plan zonder Matter staat in `ESP32-HVAC/README.md` §10.
 
@@ -1145,6 +1147,7 @@ Dashboard  ◄──────────────────────
 | **F3** Matterbridge | 16/10/2026 | ✅ Matterbridge **3.10.14** in Docker (`~/matterbridge/docker-compose.yml`, image `luligu/matterbridge:latest`, host-netwerk, loglimiet 3×10 MB). Interne Node 24. Frontend `http://192.168.0.50:8283` met wachtwoord. **Gekoppeld met Apple Home** (2 fabrics = Woning + sleutelhanger, normaal). Extra RAM ±80 MiB → 462 MiB beschikbaar. "Virtual mode" uitgezet. 24-uurstest: 17 u healthy, daarna onderbroken door de Pi-herstart en het Tailscale-probleem (zie 17/10). Stabiliteit voldoende bevonden. |
 | **F3b** verhuis | 17/10/2026 | ✅ Bridge verwijderd uit de testwoning "Matter Home" en opnieuw gekoppeld in **Zarlardinge** als **"Testkamer RPi Matter Bridge"**. Hub: Keuken Geel Bolleke. |
 | **F4** room80 | 17/10/2026 | ✅ `server.js` v2.9 + plugin v0.6: room80 als één samengesteld toestel "Eetplaats" (8 onderdelen) in Zarlardinge; oude tegels van de ESP32 blijven ter vergelijking in "Matter Home" (F5). Heap room80 **vóór F6**: vrij 17 %, grootste blok 31 KB, minimum ooit 7 KB. |
+| **H1-H2** HVAC | 21/10/2026 | ✅ `server.js` v2.10 + plugin v0.7: ESP32-HVAC als één samengesteld toestel "HVAC" (13 onderdelen) in Zarlardinge, onderdelen door FiDel hernoemd. Photon S-HVAC-knoppen ongewijzigd (§16.12) |
 | **F4a** Photons | 17/10/2026 | ✅ 26 Photon-knoppen in Apple Home: `server.js` v2.4 → v2.8 + plugin `matterbridge-zarlar` v0.1 → v0.3 (§16.9–16.10). De ESP32-WROOM-32D met HomeSpan is niet meer nodig. |
 
 **Lessen F3 (16/10):**
