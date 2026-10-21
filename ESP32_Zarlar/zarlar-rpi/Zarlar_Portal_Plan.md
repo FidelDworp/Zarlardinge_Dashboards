@@ -1304,7 +1304,7 @@ Daarna staat de plugin via `update.sh` ook in `/home/fidel/repo/ESP32_Zarlar/zar
 4. **F6:** room80 zonder Matter flashen (ROOM-sketch v3.0, repo `ESP32C6_ROOMS`), oude tegels verdwijnen, scènes opnieuw instellen, heapwinst meten. Daarna AP26 (testwoning "Matter Home" verwijderen). Zie plan hieronder.
 5. **F7:** volgende rooms = één regel in de lijst, geen nieuwe code.
 
-HVAC (9 tegels), ECO (5 tegels) en de HOME/UIT-knop van het Dashboard hebben ook nog eigen Matter; die volgen in latere fasen. Volgorde per controller zoals bij room80: heap meten → bridge biedt de controller aan → parallelle test → pas dan een sketch zonder Matter (HVAC: `ESP32-HVAC/Productie/README.md` §10).
+HVAC (9 tegels), ECO (5 tegels) en de HOME/UIT-knop van het Dashboard hebben ook nog eigen Matter; die volgen in latere fasen. **HVAC: plan in §16.12.** Volgorde per controller zoals bij room80: heap meten → bridge biedt de controller aan → parallelle test → pas dan een sketch zonder Matter (HVAC: `ESP32-HVAC/Productie/README.md` §10).
 
 **Plan F6: ROOM-sketch v3.0 zonder Matter (code pas na GO; zelfde plan als Master §7.9):**
 | | |
@@ -1319,6 +1319,63 @@ HVAC (9 tegels), ECO (5 tegels) en de HOME/UIT-knop van het Dashboard hebben ook
 | Daarna | Oude tegels in "Matter Home" verdwijnen → AP26 (testwoning verwijderen) |
 
 ---
+
+### 16.12 HVAC (ESP32 .70) naar de RPi-bridge — plan (19 okt 2026)
+
+*Status: **H1 (`server.js` v2.10) code klaar, nog te deployen**. Code pas na GO, één stap tegelijk.*
+
+**Vertrekpunt**
+- De **Photon S-HVAC stuurt nog de echte verwarming**. De ESP32-HVAC (.70, sketch v1.19) is een **testopstelling** (kringen met testinstellingen, alle op room80).
+- De drie Photon-knoppen van S-HVAC (§16.9) **blijven ongewijzigd**: *ECO => SCHUUR*, *ECO => WONING* en *HVAC Home*. FiDel hernoemt *HVAC Home* zelf in de Woning-app naar **"HOME"** en zet ze in de kamer **Inkom** (id `hvac-mode` blijft, geen code).
+- De ESP32-HVAC staat met zijn eigen Matter (9 tegels) in de woning **"Matter Home"**. Die blijft tijdens de test.
+- `server.js` v2.9 kent de HVAC al (`CONTROLLERS.hvac`), `/api/poll/hvac` werkt. **Schakelen werkt nog niet:** de algemene tak stuurt `POST /set`, maar de HVAC heeft enkel GET-endpoints.
+
+**Doel:** één **gecombineerd toestel "HVAC"** in de woning **Zarlardinge**, zoals room80 — met alle onderdelen en metingen van de controller. Daarna parallel testen met de oude ESP32-tegels.
+
+**Onderdelen van het toestel "HVAC"**
+
+| Onderdeel (label, max 16 bytes) | Matter-type | Uit `/json` | Klikken → HVAC (GET) |
+|---|---|---|---|
+| Boiler boven | temperatuursensor | `b` | — |
+| Boiler gem. | temperatuursensor | `h` | — |
+| Boiler onder | temperatuursensor | `g` | — |
+| 7 kringnamen uit de HVAC-instellingen (B-H2) | 7× stopcontact (`onOffPlugInUnit`) | `p` … `v` | aan → `/circuit_override_on?circuit=N`, uit → `/circuit_override_off?circuit=N` (override 10 min, daarna weer automatisch) |
+| Ventilatie | ventilator (FanControl, %) | `x` | % → `/set_vent?vent=%` (minimum 3 u); 0 % of modus uit → `/set_vent?vent=0` (automatisch); aan zonder % → 30 % (zoals de ESP32 nu) |
+| ECO => SCHUUR | stopcontact | `y` | aan → `/pump_sch_on` (60 s geforceerd, daarna vanzelf uit); uit → `/pump_sch_cancel` (terug naar automatisch) |
+| ECO => WONING | stopcontact | `aa` | aan → `/pump_won_on`; uit → `/pump_won_cancel` |
+
+Gedrag om te weten: de tegel toont altijd de **werkelijke** toestand uit `/json`. Draait een pomp of kring automatisch, dan staat de tegel aan; "uit" tikken tijdens een automatische pompbeurt heft enkel een geforceerde stand op — bij de volgende poll springt de tegel weer aan zolang de automatiek pompt.
+
+**Werkverdeling**
+
+*`server.js` v2.10*
+- `HVAC_APPLE = { id: 'hvac', naam: 'HVAC' }` (vaste definitie, zoals `ROOMS_APPLE`).
+- `GET /api/hvac-apple` → `{ id, naam, online, kringen: [7 namen] }`. Namen uit `/json_settings` van de HVAC (**enkel** `circuits[].name` overnemen), laatst gekende waarden in `hvac-info.json`, 6 u cache — zodat een offline HVAC zijn tegels en namen houdt. Alleen vanaf het eigen netwerk (zoals `/api/rooms-apple`).
+- `POST /api/set/hvac` (nieuwe tak vóór de algemene `/set`-tak): `{k1..k7: 1|0}`, `{vent: 0-100}`, `{sch: 1|0}`, `{won: 1|0}` → de GET-endpoints hierboven.
+
+*Plugin `matterbridge-zarlar` v0.7*
+- `maakHvac()`: één toestel (`bridgedNode` + `powerSource`) met de onderdelen als kinderen, vaste id `hvac` → Apple onthoudt kamer en namen.
+- Elke 10 s `/api/poll/hvac` → tegels bijwerken; HVAC offline → "geen reactie".
+- Klikken → `POST /api/set/hvac`, daarna meteen opnieuw pollen. Eigen updates niet terugsturen (zelfde `context.fabric`-aanpak als bij de rooms).
+
+**Stappenplan**
+
+| Stap | Wat | Meetpunt | Terugweg |
+|---|---|---|---|
+| **H1** | `server.js` v2.10 — ✅ code klaar 19/10 (GO gegeven, lokaal getest met een nagebootste HVAC); ⏳ deploy + test op de RPi | Vanaf de Mac: `curl` naar `/api/hvac-apple` geeft 7 namen; `POST /api/set/hvac {"k1":1}` → relais 1 klikt, `/json` `p=1`; `{"k1":0}`; `{"vent":40}` → `x=40`; `{"vent":0}`; `{"sch":1}` → `y=1`, na 60 s weer 0 | vorige `server.js` (git) |
+| **H2** | Plugin v0.7 (na GO) | Toestel "HVAC" in Zarlardinge; elke tegel getest; waarden gelijk aan de webpagina van de HVAC; HVAC uit → "geen reactie" | plugin v0.6 |
+| **H3** | Parallelle test met de ESP32-tegels in "Matter Home" | Duur beslist FiDel | plugin v0.6 |
+| daarna | HVAC-sketch **v2.0 zonder Matter** (`ESP32-HVAC/Productie/README.md` §10 stap 3); oude tegels uit "Matter Home" verwijderen | heap-winst gemeten | v1.19 terugflashen |
+| later | Overgang naar productie (ESP32 vervangt Photon S-HVAC): Photon-knoppen ECO => SCHUUR/WONING uit `KNOPPEN`; "HOME" naar de HOME/UIT van het Dashboard (§16, aparte fase) | — | — |
+
+**Beslissingen**
+
+| # | Vraag | Beslissing (FiDel, 19 okt 2026) |
+|---|---|---|
+| B-H1 | Boilertemperaturen: 3 (boven, gem., onder) of alle 6 lagen? | ✅ **3** |
+| B-H2 | Kringnamen: vast "Kring 1-7" of uit de HVAC-instellingen (nu "Een"-"Zeven", later BB, WP, …)? | ✅ **uit de HVAC-instellingen** |
+
+**Aandachtspunt:** `/json_settings` van de HVAC geeft ook het WiFi-wachtwoord leesbaar terug. De RPi neemt daar enkel de kringnamen uit over. Het wachtwoord uit dat endpoint halen = aparte, kleine HVAC-versie later (geen nieuwe JSON-key, wel één veld minder).
 
 ## 17. Energiebeslissingen op de RPi (+ Tesla bridge)
 

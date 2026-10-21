@@ -1,6 +1,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Zarlar Dashboard Server v2.9 — Raspberry Pi
+// Zarlar Dashboard Server v2.10 — Raspberry Pi
 // Node.js + Express — draait op poort 3000
+//
+// v2.10 (19 okt 2026): HVAC (ESP32 .70) naar de RPi-bridge, stap H1 (§16.12)
+//   - HVAC_APPLE: één toestel "HVAC" in Apple Home (testopstelling; de Photon S-HVAC-knoppen blijven).
+//   - GET /api/hvac-apple → { id, naam, online, kringen: [7 namen] }. Namen uit /json_settings
+//     van de HVAC — ALLEEN circuits[].name wordt overgenomen (dat endpoint bevat ook het
+//     WiFi-wachtwoord). Laatst gekende namen in hvac-info.json, 6 u cache.
+//   - POST /api/set/hvac → GET-endpoints van de HVAC (die heeft geen /set):
+//       {k1..k7: 1|0|"auto"} → /circuit_override_on|off|cancel?circuit=0..6 (override 10 min)
+//       {vent: 0-100}        → /set_vent?vent=  (minimum 3 u; 0 = automatisch)
+//       {sch|won: 1|0}       → /pump_sch|won_on (60 s geforceerd) of _cancel (automatisch)
+//   - Geen andere wijzigingen.
 //
 // v2.9 (17 okt 2026): rooms naar de RPi-bridge, stap 1 (§16.11)
 //   - ROOMS_APPLE: vaste lijst van rooms in Apple Home (R2), met kamernaam (R3).
@@ -173,6 +184,11 @@ const PHOTON_IDS = {
 const ROOMS_APPLE = [
   { id: 'room80', naam: 'Eetplaats' },
 ];
+
+// ── HVAC in Apple Home (v2.10, §16.12) ───────────────────────────────────────
+// Eén toestel met boilertemperaturen, 7 kringen, ventilatie en de ECO-pompen.
+const HVAC_APPLE = { id: 'hvac', naam: 'HVAC' };
+const HVAC_INFO  = path.join(__dirname, 'hvac-info.json');   // laatst gekende kringnamen
 
 // ── Standaard instellingen ────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
@@ -633,6 +649,48 @@ app.get('/api/rooms-apple', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// HVAC IN APPLE HOME (v2.10)  →  GET /api/hvac-apple
+// Kringnamen uit /json_settings van de HVAC (alleen circuits[].name). 6 u in cache;
+// laatst gekende namen in hvac-info.json, zodat een offline HVAC zijn namen houdt.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const HVAC_KRINGEN = 7;   // vaste relais op de MCP23017 (pin 0-6)
+let hvacInfoMem = null;
+
+async function hvacInfo() {
+  if (hvacInfoMem && Date.now() - hvacInfoMem._ts < ROOM_INFO_MS) return hvacInfoMem;
+
+  const standaard = Array.from({ length: HVAC_KRINGEN }, (_, i) => `Kring ${i + 1}`);
+  let kringen = (readJSON(HVAC_INFO, {}).kringen) || standaard;
+  let gelukt = false;
+  try {
+    const s = await (await fetch(CONTROLLERS[HVAC_APPLE.id] + '/json_settings', { timeout: 3000 })).json();
+    if (Array.isArray(s.circuits)) {
+      kringen = standaard.map((std, i) => {
+        const n = s.circuits[i] && typeof s.circuits[i].name === 'string' ? s.circuits[i].name.trim() : '';
+        return n || std;
+      });
+      writeJSON(HVAC_INFO, { kringen });   // bewust enkel de namen bewaren
+      gelukt = true;
+    }
+  } catch(e) {
+    console.log(`[HVAC] kringnamen niet gelezen (${e.message}) — laatst gekende namen`);
+  }
+  // Gelukt → 6 u geldig; mislukt → na 1 min opnieuw proberen
+  hvacInfoMem = { kringen, _ts: gelukt ? Date.now() : Date.now() - ROOM_INFO_MS + 60000 };
+  return hvacInfoMem;
+}
+
+app.get('/api/hvac-apple', async (req, res) => {
+  if (!isEigenNetwerk(req.socket.remoteAddress))
+    return res.status(403).json({ error: 'Alleen vanaf eigen netwerk' });
+  let online = false;
+  try { online = (await fetch(CONTROLLERS[HVAC_APPLE.id] + '/json', { timeout: 2000 })).ok; } catch {}
+  const info = await hvacInfo();
+  res.json({ id: HVAC_APPLE.id, naam: HVAC_APPLE.naam, online, kringen: info.kringen });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // STUUR COMMANDO NAAR CONTROLLER  →  /set
 // v2.1: ROOM controllers proxy (sw1/sw2/sw3 → GET endpoints)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -733,6 +791,44 @@ app.post('/api/set/:controller', async (req, res) => {
     }
   }
   
+  // ─── HVAC PROXY (v2.10, §16.12) ────────────────────────────────────────────
+  // De HVAC heeft geen /set POST endpoint, alleen GET endpoints.
+  if (naam === 'hvac') {
+    try {
+      const results = [];
+      const get = async url => { const r = await fetch(url, { timeout: 3000 }); return r.ok; };
+
+      // Kringen k1..k7: 1 = override aan, 0 = override uit (10 min), "auto" = override opheffen
+      for (let k = 1; k <= HVAC_KRINGEN; k++) {
+        const v = body['k' + k];
+        if (v === undefined) continue;
+        const ep = v === 'auto' ? 'circuit_override_cancel'
+                 : Number(v)     ? 'circuit_override_on'
+                 :                 'circuit_override_off';
+        results.push({ ['k' + k]: await get(`${baseUrl}/${ep}?circuit=${k - 1}`), actie: ep });
+      }
+
+      // Ventilatie 0-100 %: > 0 = minimum (3 u), 0 = terug naar automatisch
+      if (body.vent !== undefined) {
+        const pct = Math.max(0, Math.min(100, Math.round(Number(body.vent) || 0)));
+        results.push({ vent: await get(`${baseUrl}/set_vent?vent=${pct}`), waarde: pct });
+      }
+
+      // ECO-pompen: 1 = 60 s geforceerd aan, 0 = terug naar automatisch
+      for (const pomp of ['sch', 'won']) {
+        if (body[pomp] === undefined) continue;
+        const ep = Number(body[pomp]) ? `pump_${pomp}_on` : `pump_${pomp}_cancel`;
+        results.push({ [pomp]: await get(`${baseUrl}/${ep}`), actie: ep });
+      }
+
+      if (!results.length) return res.status(400).json({ error: 'Geen geldig HVAC-commando', verwacht: 'k1..k7, vent, sch, won' });
+      return res.json({ ok: true, controller: naam, results });
+
+    } catch(e) {
+      return res.status(503).json({ error: 'HVAC commando mislukt', detail: e.message });
+    }
+  }
+
   // ─── ANDERE CONTROLLERS (origineel gedrag) ─────────────────────────────────
   // HVAC, ECO, SENRG hebben wel een /set POST endpoint
   try {
