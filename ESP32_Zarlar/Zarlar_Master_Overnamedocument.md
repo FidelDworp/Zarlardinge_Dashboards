@@ -1,8 +1,14 @@
 
 # Zarlar Thuisautomatisering — Master Overnamedocument
 **ESP32-C6 · Arduino IDE · Google Sheets · Node.js · Matter (op RPi) · Tailscale**
-*Filip Delannoy — Zarlardinge (BE) — bijgewerkt 18 oktober 2026*
+*Filip Delannoy — Zarlardinge (BE) — bijgewerkt 21 oktober 2026*
 
+> **Aanvulling 21 oktober 2026:**
+> - **HVAC is een testopstelling** (kringen met testinstellingen, alle op room80); de **Photon S-HVAC stuurt nog de echte verwarming** (§1.2, §4.7).
+> - **Heap-nulmeting HVAC v1.19** (Sheet mei–okt + opstartlog 19/10): Matter kost 61 KB, runtime grootste blok ~30 KB (§4.5).
+> - **HVAC in Apple Home via de RPi:** `server.js` v2.10 + plugin v0.7, toestel "HVAC" met 13 onderdelen in Zarlardinge (Portal Plan §16.12).
+> - **HVAC-README** staat nu in de root van de repo; oude bestanden in `Old/` (§11.0).
+>
 > **Aanvulling 18 oktober 2026:**
 > - **Google Sheets-logging enkel via het Dashboard** is nu een vaste regel (§3.15). De HVAC post vandaag nog zelf (v1.19); dat verdwijnt in HVAC v2.1 (§4.7).
 > - **HVAC:** plan zonder Matter (v2.0) en README herschreven, zie `ESP32-HVAC/README.md` (§4.7, §11.0).
@@ -1269,4 +1275,4 @@ Verhuisd naar `Zarlar_Portal_Plan.md` §14.
 - **Google Sheets:** controllers posten nooit zelf; enkel het Dashboard (§3.15).
 - **Tesla:** geen automatische sturing in de sketch. Beslissingen komen van de RPi (§6.10).
 
-*Zarlar project — Filip Delannoy — bijgewerkt 18 oktober 2026*
+*Zarlar project — Filip Delannoy — bijgewerkt 21 oktober 2026*
