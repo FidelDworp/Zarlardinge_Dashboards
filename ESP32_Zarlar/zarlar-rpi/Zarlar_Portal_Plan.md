@@ -15,7 +15,7 @@
 >
 > **17 oktober 2026:** Tailscale-sleutel verlopen en hersteld; de Matterbridge is verhuisd naar de woning **Zarlardinge**; de oude HomeSpan-bridge voor de Photons is gewist. Daarom start F4 nu met de **Photon-toestellen** (§16.8, §16.9).
 >
-> **18 oktober 2026:** de **ECO-boiler heeft wél Matter** (5 endpoints sinds v1.18) — rechtgezet in §16.1, §16.3 en §16.11 (bron: sketch v1.23, Master §5.4). HVAC-plan zonder Matter staat in `ESP32-HVAC/Productie/README.md` §10.
+> **18 oktober 2026:** de **ECO-boiler heeft wél Matter** (5 endpoints sinds v1.18) — rechtgezet in §16.1, §16.3 en §16.11 (bron: sketch v1.23, Master §5.4). HVAC-plan zonder Matter staat in `ESP32-HVAC/README.md` §10.
 
 ---
 
@@ -1235,7 +1235,7 @@ Apple Home ──► Matterbridge (plugin "zarlar") ──► server.js /api/pho
 
 | | |
 |---|---|
-| Versie | v0.6 (17/10/2026): Photon-knoppen (lampen, schakelaars, dimmers, kleurenlamp) + rooms als samengesteld toestel. Historiek: v0.1 lampen/schakelaars · v0.2 dimmers · v0.3 kleurenlamp · v0.4 room-tegels (los) · v0.5 room = één toestel · v0.6 namen als FixedLabel |
+| Versie | **v0.7** (21/10/2026): + HVAC als samengesteld toestel (§16.12). Historiek: v0.1 lampen/schakelaars · v0.2 dimmers · v0.3 kleurenlamp · v0.4 room-tegels (los) · v0.5 room = één toestel · v0.6 namen als FixedLabel (Apple toont ze niet: onderdelen één keer zelf hernoemen) · v0.7 HVAC-toestel |
 | Bestanden | `package.json`, `module.js`, `matterbridge-zarlar.config.json` — gewoon JavaScript, geen buildstap |
 | Op de Pi | `/home/fidel/Matterbridge/matterbridge-zarlar/` (in de container: `/root/Matterbridge/...`, gekoppeld volume → overleeft updates en `--force-recreate`) |
 | In de repo | `ESP32_Zarlar/zarlar-rpi/matterbridge-zarlar/` ✅ |
@@ -1304,7 +1304,7 @@ Daarna staat de plugin via `update.sh` ook in `/home/fidel/repo/ESP32_Zarlar/zar
 4. **F6:** room80 zonder Matter flashen (ROOM-sketch v3.0, repo `ESP32C6_ROOMS`), oude tegels verdwijnen, scènes opnieuw instellen, heapwinst meten. Daarna AP26 (testwoning "Matter Home" verwijderen). Zie plan hieronder.
 5. **F7:** volgende rooms = één regel in de lijst, geen nieuwe code.
 
-HVAC (9 tegels), ECO (5 tegels) en de HOME/UIT-knop van het Dashboard hebben ook nog eigen Matter; die volgen in latere fasen. **HVAC: plan in §16.12.** Volgorde per controller zoals bij room80: heap meten → bridge biedt de controller aan → parallelle test → pas dan een sketch zonder Matter (HVAC: `ESP32-HVAC/Productie/README.md` §10).
+HVAC (9 tegels), ECO (5 tegels) en de HOME/UIT-knop van het Dashboard hebben ook nog eigen Matter; die volgen in latere fasen. **HVAC: plan in §16.12.** Volgorde per controller zoals bij room80: heap meten → bridge biedt de controller aan → parallelle test → pas dan een sketch zonder Matter (HVAC: `ESP32-HVAC/README.md` §10).
 
 **Plan F6: ROOM-sketch v3.0 zonder Matter (code pas na GO; zelfde plan als Master §7.9):**
 | | |
@@ -1322,7 +1322,7 @@ HVAC (9 tegels), ECO (5 tegels) en de HOME/UIT-knop van het Dashboard hebben ook
 
 ### 16.12 HVAC (ESP32 .70) naar de RPi-bridge — plan (19 okt 2026)
 
-*Status: **H1 (`server.js` v2.10) code klaar, nog te deployen**. Code pas na GO, één stap tegelijk.*
+*Status: **H1 ✅ en H2 ✅ (21/10/2026)** — toestel "HVAC" staat in Zarlardinge. Volgende: tegels één voor één testen, dan H3 (parallelle test). Code pas na GO, één stap tegelijk.*
 
 **Vertrekpunt**
 - De **Photon S-HVAC stuurt nog de echte verwarming**. De ESP32-HVAC (.70, sketch v1.19) is een **testopstelling** (kringen met testinstellingen, alle op room80).
@@ -1362,10 +1362,10 @@ Gedrag om te weten: de tegel toont altijd de **werkelijke** toestand uit `/json`
 
 | Stap | Wat | Meetpunt | Terugweg |
 |---|---|---|---|
-| **H1** | `server.js` v2.10 — ✅ code klaar 19/10 (GO gegeven, lokaal getest met een nagebootste HVAC); ⏳ deploy + test op de RPi | Vanaf de Mac: `curl` naar `/api/hvac-apple` geeft 7 namen; `POST /api/set/hvac {"k1":1}` → relais 1 klikt, `/json` `p=1`; `{"k1":0}`; `{"vent":40}` → `x=40`; `{"vent":0}`; `{"sch":1}` → `y=1`, na 60 s weer 0 | vorige `server.js` (git) |
-| **H2** | Plugin v0.7 (na GO) | Toestel "HVAC" in Zarlardinge; elke tegel getest; waarden gelijk aan de webpagina van de HVAC; HVAC uit → "geen reactie" | plugin v0.6 |
+| **H1** | `server.js` v2.10 — ✅ 21/10: gedeployed; `curl`-test geslaagd (7 namen "Een"…"Zeven", `k1:1` → `p=1`, `"auto"` → cancel) | Vanaf de Mac: `curl` naar `/api/hvac-apple` geeft 7 namen; `POST /api/set/hvac {"k1":1}` → relais 1 klikt, `/json` `p=1`; `{"k1":0}`; `{"vent":40}` → `x=40`; `{"vent":0}`; `{"sch":1}` → `y=1`, na 60 s weer 0 | vorige `server.js` (git) |
+| **H2** | Plugin v0.7 — ✅ 21/10: toestel "HVAC" met 13 onderdelen geregistreerd, HVAC online, alles verschenen in Zarlardinge (zonder herstart van de hub). Apple toont de FixedLabel-namen **niet**: alle onderdelen kregen dezelfde naam en zijn door FiDel **eenmalig zelf hernoemd** (blijft bewaard dankzij de vaste id's). ⏳ Nog: elke tegel één keer schakelen | Toestel "HVAC" in Zarlardinge; elke tegel getest; waarden gelijk aan de webpagina van de HVAC; HVAC uit → "geen reactie" | plugin v0.6 |
 | **H3** | Parallelle test met de ESP32-tegels in "Matter Home" | Duur beslist FiDel | plugin v0.6 |
-| daarna | HVAC-sketch **v2.0 zonder Matter** (`ESP32-HVAC/Productie/README.md` §10 stap 3); oude tegels uit "Matter Home" verwijderen | heap-winst gemeten | v1.19 terugflashen |
+| daarna | HVAC-sketch **v2.0 zonder Matter** (`ESP32-HVAC/README.md` §10 stap 3); oude tegels uit "Matter Home" verwijderen | heap-winst gemeten | v1.19 terugflashen |
 | later | Overgang naar productie (ESP32 vervangt Photon S-HVAC): Photon-knoppen ECO => SCHUUR/WONING uit `KNOPPEN`; "HOME" naar de HOME/UIT van het Dashboard (§16, aparte fase) | — | — |
 
 **Beslissingen**
