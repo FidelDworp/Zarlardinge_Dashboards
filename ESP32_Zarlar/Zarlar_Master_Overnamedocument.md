@@ -5,7 +5,7 @@
 
 > **Aanvulling 18 oktober 2026:**
 > - **Google Sheets-logging enkel via het Dashboard** is nu een vaste regel (§3.15). De HVAC post vandaag nog zelf (v1.19); dat verdwijnt in HVAC v2.1 (§4.7).
-> - **HVAC:** plan zonder Matter (v2.0) en README herschreven, zie `ESP32-HVAC/Productie/README.md` (§4.7, §11.0).
+> - **HVAC:** plan zonder Matter (v2.0) en README herschreven, zie `ESP32-HVAC/README.md` (§4.7, §11.0).
 > - **ECO heeft wél Matter** (5 endpoints sinds v1.18) — §5.4 en §16 rechtgezet. ECO en S-ENERGY posten niet zelf naar Google (§3.15).
 
 > **Review 16 oktober 2026:**
@@ -60,7 +60,7 @@ Elke controller publiceert enkel zijn `/json` endpoint — het Dashboard doet de
 
 | Controller | Naam | IP | MAC | Board | Versie | Status |
 |---|---|---|---|---|---|---|
-| **HVAC** | ESP32_HVAC | 192.168.0.70 | 58:8C:81:32:2B:90 | 32-pin clone | v1.19 | ✅ Productie stabiel |
+| **HVAC** | ESP32_HVAC | 192.168.0.70 | 58:8C:81:32:2B:90 | 32-pin clone | v1.19 | 🧪 Testopstelling (kringen met testinstellingen, alle op room80) |
 | **ECO Boiler** | ESP32_ECO Boiler | 192.168.0.71 | 58:8C:81:32:2B:D4 | 32-pin clone | v1.23 | ✅ Productie stabiel |
 | **Smart Energy** | ESP32_C6_ENERGY | 192.168.0.73 | — | 32-pin clone | v1.29 | ✅ Actief, incl. Tesla bridge (sep 2026) |
 | **Tesla-proxy** | tesla-key-esp32 | via NVS `t1_host` | — | ESP32-C6 30-pin P4 (4 MB), apart board, niet op het Zarlar shield | — | ✅ BLE-proxy naar Tesla1 (§6.10) |
@@ -474,12 +474,13 @@ Circuitnamen instelbaar via `/settings`. Default: C1–C7. Productie: BB, WP, BK
 
 ### 4.5 Heap-baseline
 ```
-Setup:   free=~180 KB  largest=~55 KB   (oude notitie — opnieuw te meten bij volgende opstart)
+Boot v1.19 (19 okt 2026): pre-Matter  free=139 KB  largest=124 KB
+                          post-Matter free= 78 KB  largest= 62 KB   → Matter kost 61 KB
 Runtime v1.19 met Matter (Sheet 26 mei – 4 okt 2026, 1006 rijen):
          vrij 17-18 %  ·  largest mediaan 30 KB, bereik 25-32 KB  ⚠️ zone "LAAG"
          4× op de crash-log-drempel (25 KB) · 3 herstarts na 23-30 dagen uptime
 ```
-> Rechtgezet 19 okt 2026: hier stond "runtime largest_block stabiel > 35 KB ✅". De logdata tonen dat dit niet klopt. Details en interpretatie: `ESP32-HVAC/Productie/README.md` §10 stap 1.
+> Rechtgezet 19 okt 2026: hier stond "runtime largest_block stabiel > 35 KB ✅". De logdata tonen dat dit niet klopt. Details en interpretatie: `ESP32-HVAC/README.md` §10 stap 1.
 
 ### 4.6 Versiehistorie
 | Versie | Wijziging |
@@ -488,13 +489,15 @@ Runtime v1.19 met Matter (Sheet 26 mei – 4 okt 2026, 1006 rijen):
 | v1.18 | ECO JSON keys hernoemd: ETopH→b, EBotL→g, EAv→h, EQtot→i |
 
 ### 4.7 Openstaande punten
-- **Stappenplan zonder Matter + Sheets enkel via Dashboard** — volledig uitgewerkt in `ESP32-HVAC/Productie/README.md` §10 (opgesteld 18 okt 2026):
+- **Stappenplan zonder Matter + Sheets enkel via Dashboard** — volledig uitgewerkt in `ESP32-HVAC/README.md` §10 (opgesteld 18 okt 2026):
   1. heap-baseline v1.19 noteren → 2. RPi-bridge biedt de HVAC aan (H-F4/H-F5) → 3. **v2.0** alleen Matter weg + bestandsnaam `ESP32C6_HVAC.ino` → 4. heap-rapport v2.0 → 5. **v2.1** eigen Sheets-push weg (§3.15)
   - daarna, elk apart: v2.2 `Serial0`-keuze · v2.3 mDNS terug · v2.4 AP-mode zonder polling · v2.5 ventilatie-PWM 1 kHz → ~20 kHz (AnaBoX v2.0) · v2.6 firmwareversie zichtbaar op de statuspagina (bij laden, niet in `/json`)
 - **Ventilatie:** Begetube 350 R hangt nu nog aan een Photon + oude AnaBoX (op-amp). Overstap naar IO20 + AnaBoX v2.0 na meting ingangsweerstand klem 7-8 (README §6).
 - **Kleine rechtzettingen voor v2.0:** opstarttekst toont nog "v1.10"; header vermeldt `partitions_16mb.csv` (§2.2).
 - **kWh-berekening**: echte `Q = m × Cp × ΔT / 3600` per pompbeurt implementeren
 - **HTML compressie**: witte pagina op iPhone bij ventilatieslider → heap-krapte bij page reload (past bij largest block ~30 KB, §4.5)
+- **Testopstelling, nog niet in productie** (bevestigd 19 okt 2026): c1-c7 "Een"…"Zeven", 1…7 kW, alle kringen pollen room80. Bij ingebruikname: echte namen BB, WP, BK, ZP, EP, KK, IK, echt vermogen, juiste room controller per kring; WiFi-signaal opnieuw meten op de definitieve plaats
+- **NTP-timeout** bij het opstarten (vast IP, DNS = router?)
 - **Sheets-logging HVAC onbetrouwbaar**: mei–okt slechts 2-45 rijen/dag i.p.v. 288; meeste HTTPS-posts mislukken. Bron van de posts (HVAC of Dashboard) nagaan in stap 5a van het HVAC-plan (§3.15)
 
 ---
@@ -1141,7 +1144,7 @@ De volledige schimmelbeschermingslogica zit in de room controllers — de HVAC i
 |---|---|---|
 | **`ZarlarApp`** (oude namen `Zarlardinge_Dashboards`, `Zarlar` verwijzen hierheen) | GitHub Pages-dashboards · `ESP32_Zarlar/`: dit document, Dashboard-sketch v5.9, `partitions.csv`, `worker-status.js` · `zarlar-rpi/`: RPi portal + `Zarlar_Portal_Plan.md` | ✅ |
 | `ESP32C6_ROOMS` | `TESTROOM/`: ROOM-sketch v2.24, `ROOM_GoogleScript.gs`, `partitions.csv`, `old/` (v2.8 zonder Matter) | ⬜ te vernieuwen (dec 2025) |
-| `ESP32-HVAC` (oude naam `ESP32C6_HVAC`) | `Productie/`: HVAC-sketch v1.19, GAS v5, `partitions.csv`, **`README.md`** · root: oude Photon- en niet-Matter-versies | ✅ herschreven 18 okt 2026 (in `Productie/`) |
+| `ESP32-HVAC` (oude naam `ESP32C6_HVAC`) | root: **`README.md`** · `Productie/`: HVAC-sketch v1.19, GAS v5, `partitions.csv` · root: oude Photon- en niet-Matter-versies | ✅ herschreven 18 okt 2026, naar de root verplaatst 21 okt 2026 |
 | `ESP32C6_ECO-boiler` | `Productie/`: ECO-sketch v1.23 (`ESP32-C6_MATTER_ECO-boiler.ino`), `ECO_GoogleScript.gs` · `S-ECO_SOLAR_Photon/` · `CHANGELOG.md` | ✅ (na te kijken) |
 | `ESP32C6_Smart-Energy` | `Productie/`: S-ENERGY-sketch v1.29 (`ESP32_C6_ENERGY.ino`), `ENERGY_GoogleScript_v1.gs`, `partitions.csv` · `Tesla/TeslaChargeTest.ino` · `Energy_Management_System (Zarlardinge).md`, `Smart_Energy_Zarlardinge (Maarten).md` | ✅ (na te kijken) |
 | Sjalay, … | *nog aan te vullen door FiDel* | ? |
